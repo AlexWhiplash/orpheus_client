@@ -1,6 +1,6 @@
 class AppConfig {
   // Final Release 1.0.0
-  static const String appVersion = "v1.1.5";
+  static const String appVersion = "v1.1.6";
 
   // === HOST ===
   static const String primaryApiHost = 'api.orpheus.click';

@@ -368,6 +368,12 @@ class L10nRu extends L10n {
   String get add => 'Добавить';
 
   @override
+  String get fillAllFields => 'Заполните оба поля';
+
+  @override
+  String get invalidPublicKey => 'Неверный формат ключа';
+
+  @override
   String get contactAdded => 'Контакт добавлен';
 
   @override
@@ -1238,6 +1244,10 @@ class L10nRu extends L10n {
 
   @override
   String get pointCameraAtQr => 'Наведите камеру на QR-код';
+
+  @override
+  String get cameraAccessDenied =>
+      'Нет доступа к камере. Разрешите доступ к камере, чтобы отсканировать QR-код.';
 
   @override
   String get publicKeyAutoRecognized =>

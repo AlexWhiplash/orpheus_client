@@ -176,3 +176,18 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 и показывал ошибку - не трогал.
 
 **Статус:** analyze 0 errors; test 326 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Батч: офлайн-лицензия, QR-камера, диалог контакта (аудит LOGIC-8/UI-3/UI-4/UI-7) [ветка wl/audit-fixes-3]
+
+- **LOGIC-8** (`main.dart`): кэш подтверждённой лицензии в SharedPreferences (`license_active`);
+  `_loadCachedLicense()` пускает офлайн-пользователя сразу (guard `!_isCheckCompleted` - онлайн-ответ
+  в приоритете); `_persistLicense()` на license-status/payment-confirmed/подтверждении на экране.
+- **UI-3** (`qr_scan_screen.dart`): `MobileScanner.errorBuilder` -> экран «нет доступа к камере» +
+  кнопка «Открыть настройки» (`openAppSettings`, permission_handler). l10n: cameraAccessDenied/openSettings.
+- **UI-4/UI-7** (`contacts_screen.dart`): `_AddContactDialog` -> StatefulWidget: валидация (пустые поля /
+  формат ключа base64x32), блокировка кнопок + loading на время сохранения, инлайн-ошибка + try/catch.
+  l10n: fillAllFields/invalidPublicKey.
+
+**Статус:** analyze 0 errors; test 326 passed / 0 failed; flutter build apk --debug OK.

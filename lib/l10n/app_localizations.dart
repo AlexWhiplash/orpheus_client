@@ -727,6 +727,18 @@ abstract class L10n {
   /// **'Add'**
   String get add;
 
+  /// Validation error when a required dialog field is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Please fill in both fields'**
+  String get fillAllFields;
+
+  /// Validation error when the pasted public key is not a valid key
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid key format'**
+  String get invalidPublicKey;
+
   /// Contact added message
   ///
   /// In en, this message translates to:
@@ -1201,10 +1213,10 @@ abstract class L10n {
   /// **'Camera permission required'**
   String get cameraPermissionRequired;
 
-  /// Open settings button
+  /// Button that opens the app system settings
   ///
   /// In en, this message translates to:
-  /// **'Open Settings'**
+  /// **'Open settings'**
   String get openSettings;
 
   /// Help section: Quick start
@@ -2316,6 +2328,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Point camera at QR code'**
   String get pointCameraAtQr;
+
+  /// Shown when camera permission or init fails on the QR scanner
+  ///
+  /// In en, this message translates to:
+  /// **'No camera access. Allow camera access to scan the QR code.'**
+  String get cameraAccessDenied;
 
   /// QR scan hint subtitle
   ///

@@ -363,6 +363,12 @@ class L10nEn extends L10n {
   String get add => 'Add';
 
   @override
+  String get fillAllFields => 'Please fill in both fields';
+
+  @override
+  String get invalidPublicKey => 'Invalid key format';
+
+  @override
   String get contactAdded => 'Contact added';
 
   @override
@@ -613,7 +619,7 @@ class L10nEn extends L10n {
   String get cameraPermissionRequired => 'Camera permission required';
 
   @override
-  String get openSettings => 'Open Settings';
+  String get openSettings => 'Open settings';
 
   @override
   String get helpQuickStart => 'Quick Start';
@@ -1226,6 +1232,10 @@ class L10nEn extends L10n {
 
   @override
   String get pointCameraAtQr => 'Point camera at QR code';
+
+  @override
+  String get cameraAccessDenied =>
+      'No camera access. Allow camera access to scan the QR code.';
 
   @override
   String get publicKeyAutoRecognized =>

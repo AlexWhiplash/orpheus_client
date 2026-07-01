@@ -348,6 +348,10 @@
   "@contactId": {"description": "Contact ID field"},
   
   "add": "Add",
+  "fillAllFields": "Please fill in both fields",
+  "@fillAllFields": {"description": "Validation error when a required dialog field is empty"},
+  "invalidPublicKey": "Invalid key format",
+  "@invalidPublicKey": {"description": "Validation error when the pasted public key is not a valid key"},
   "@add": {"description": "Add button"},
   
   "contactAdded": "Contact added",
@@ -1213,6 +1217,10 @@
   "@sendLogs": {"description": "Send logs tooltip"},
   
   "pointCameraAtQr": "Point camera at QR code",
+  "cameraAccessDenied": "No camera access. Allow camera access to scan the QR code.",
+  "@cameraAccessDenied": {"description": "Shown when camera permission or init fails on the QR scanner"},
+  "openSettings": "Open settings",
+  "@openSettings": {"description": "Button that opens the app system settings"},
   "@pointCameraAtQr": {"description": "QR scan hint title"},
   
   "publicKeyAutoRecognized": "Contact's public key will be recognized automatically",

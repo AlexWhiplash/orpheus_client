@@ -143,6 +143,8 @@
   "contactName": "Имя",
   "contactId": "ID контакта",
   "add": "Добавить",
+  "fillAllFields": "Заполните оба поля",
+  "invalidPublicKey": "Неверный формат ключа",
   "contactAdded": "Контакт добавлен",
   "contactExists": "Контакт уже существует",
   "invalidId": "Неверный формат ID",
@@ -454,6 +456,8 @@
   "sendLogs": "Отправить логи",
   
   "pointCameraAtQr": "Наведите камеру на QR-код",
+  "cameraAccessDenied": "Нет доступа к камере. Разрешите доступ к камере, чтобы отсканировать QR-код.",
+  "openSettings": "Открыть настройки",
   "publicKeyAutoRecognized": "Публичный ключ контакта будет распознан автоматически",
   
   "retentionAll": "Хранить всегда",

@@ -23,6 +23,7 @@ import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/incoming_call_buffer.dart';
 import 'package:orpheus_project/services/incoming_message_handler.dart';
 import 'package:orpheus_project/services/locale_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:orpheus_project/services/pending_call_storage.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
 import 'package:orpheus_project/services/notification_service.dart';
@@ -877,6 +878,31 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isLicensed = false;
   bool _isCheckCompleted = false;
+  static const String _licenseCacheKey = 'license_active';
+
+  /// Кэш подтверждённой лицензии: чтобы офлайн-запуск не запирал уже
+  /// оплатившего пользователя на экране лицензии (аудит LOGIC-8). Применяем
+  /// кэш только если онлайн-проверка ещё не ответила — свежий ответ сервера
+  /// всегда имеет приоритет.
+  Future<void> _loadCachedLicense() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getBool(_licenseCacheKey) ?? false;
+      if (cached && mounted && !_isCheckCompleted) {
+        setState(() {
+          _isLicensed = true;
+          _isCheckCompleted = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistLicense(bool active) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_licenseCacheKey, active);
+    } catch (_) {}
+  }
   late bool _keysExist;
   bool _isLocked = false;
   Timer? _inactivityTimer;
@@ -924,6 +950,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             _isLicensed = (data['status'] == 'active');
             _isCheckCompleted = true;
           });
+          _persistLicense(_isLicensed); // обновляем кэш для офлайн-запусков
           _licenseSubscription?.cancel();
           _licenseSubscription = null;
         } else if (data['type'] == 'payment-confirmed') {
@@ -932,11 +959,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             _isLicensed = true;
             _isCheckCompleted = true;
           });
+          _persistLicense(true);
           _licenseSubscription?.cancel();
           _licenseSubscription = null;
         }
       } catch (_) {}
     });
+
+    // Если лицензия уже подтверждалась ранее — пускаем в приложение сразу
+    // (не запирая офлайн-пользователя), онлайн-проверка идёт в фоне.
+    _loadCachedLicense();
 
     // Таймаут на проверку лицензии (10 секунд)
     // Если за это время не получили ответ — показываем экран лицензии
@@ -1181,6 +1213,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     
     // 5. Нет лицензии — экран лицензии
-    return LicenseScreen(onLicenseConfirmed: () => setState(() => _isLicensed = true));
+    return LicenseScreen(onLicenseConfirmed: () {
+      setState(() => _isLicensed = true);
+      _persistLicense(true);
+    });
   }
 }

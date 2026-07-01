@@ -3,6 +3,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 
 class QrScanScreen extends StatefulWidget {
@@ -89,6 +90,33 @@ class _QrScanScreenState extends State<QrScanScreen> with TickerProviderStateMix
     }
   }
 
+  /// Экран ошибки камеры (нет доступа / сбой инициализации) вместо чёрного тупика.
+  Widget _buildCameraError(L10n l10n) {
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.no_photography, color: Colors.white54, size: 56),
+          const SizedBox(height: 16),
+          Text(
+            l10n.cameraAccessDenied,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white70, fontSize: 15),
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: () => openAppSettings(),
+            icon: const Icon(Icons.settings),
+            label: Text(l10n.openSettings),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -108,6 +136,9 @@ class _QrScanScreenState extends State<QrScanScreen> with TickerProviderStateMix
                     returnImage: false,
                   ),
                   onDetect: _onDetect,
+                  // Отказ в доступе к камере / сбой инициализации: раньше был
+                  // тупик — чёрный экран с анимацией поверх (аудит UI-3).
+                  errorBuilder: (context, error, child) => _buildCameraError(l10n),
                 ),
           
           // Затемнение и рамка

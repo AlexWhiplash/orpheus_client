@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -251,17 +252,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
         nameController: nameController,
         keyController: keyController,
         onAdd: () async {
-          if (nameController.text.isNotEmpty && keyController.text.isNotEmpty) {
-            HapticFeedback.selectionClick();
-            final newContact = Contact(
-              name: nameController.text.trim(),
-              publicKey: keyController.text.trim(),
-            );
-            await DatabaseService.instance.addContact(newContact);
-            if (!context.mounted) return;
-            Navigator.pop(context);
-            _refreshContacts();
-          }
+          // Валидация (пустые поля / формат ключа) — в самом диалоге.
+          HapticFeedback.selectionClick();
+          final newContact = Contact(
+            name: nameController.text.trim(),
+            publicKey: keyController.text.trim(),
+          );
+          await DatabaseService.instance.addContact(newContact);
+          if (!context.mounted) return;
+          Navigator.pop(context);
+          _refreshContacts();
         },
         onScanQR: () async {
           final scannedKey = await Navigator.push(
@@ -517,7 +517,7 @@ class _UnreadPill extends StatelessWidget {
   }
 }
 
-class _AddContactDialog extends StatelessWidget {
+class _AddContactDialog extends StatefulWidget {
   const _AddContactDialog({
     required this.nameController,
     required this.keyController,
@@ -527,8 +527,53 @@ class _AddContactDialog extends StatelessWidget {
 
   final TextEditingController nameController;
   final TextEditingController keyController;
-  final VoidCallback onAdd;
+  final Future<void> Function() onAdd;
   final VoidCallback onScanQR;
+
+  @override
+  State<_AddContactDialog> createState() => _AddContactDialogState();
+}
+
+class _AddContactDialogState extends State<_AddContactDialog> {
+  bool _isSaving = false;
+  String? _error;
+
+  /// Публичный ключ — base64 от 32 байт (X25519). Отсекаем мусор/опечатки,
+  /// чтобы не создавать «битый» контакт, которому нельзя написать (аудит UI-7).
+  bool _isValidPublicKey(String key) {
+    try {
+      return base64.decode(base64.normalize(key)).length == 32;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _submit(L10n l10n) async {
+    final name = widget.nameController.text.trim();
+    final key = widget.keyController.text.trim();
+    if (name.isEmpty || key.isEmpty) {
+      setState(() => _error = l10n.fillAllFields);
+      return;
+    }
+    if (!_isValidPublicKey(key)) {
+      setState(() => _error = l10n.invalidPublicKey);
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await widget.onAdd(); // родитель сохраняет контакт и закрывает диалог
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _error = '${l10n.error}: $e';
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -564,7 +609,7 @@ class _AddContactDialog extends StatelessWidget {
             Text(l10n.contactName, style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(height: 8),
             AppTextField(
-              controller: nameController,
+              controller: widget.nameController,
               hintText: l10n.enterName,
               prefixIcon: Icons.person_outline,
               textCapitalization: TextCapitalization.words,
@@ -574,16 +619,23 @@ class _AddContactDialog extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(height: 8),
             AppTextField(
-              controller: keyController,
+              controller: widget.keyController,
               hintText: l10n.pasteOrScanKey,
               prefixIcon: Icons.key,
               maxLines: 2,
               suffixIcon: IconButton(
                 icon:
                     const Icon(Icons.qr_code_scanner, color: AppColors.accent),
-                onPressed: onScanQR,
+                onPressed: _isSaving ? null : widget.onScanQR,
               ),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 13),
+              ),
+            ],
             const SizedBox(height: 18),
             Row(
               children: [
@@ -591,14 +643,15 @@ class _AddContactDialog extends StatelessWidget {
                   child: AppButton(
                     label: l10n.cancel,
                     variant: AppButtonVariant.secondary,
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: AppButton(
                     label: l10n.add,
-                    onPressed: onAdd,
+                    isLoading: _isSaving,
+                    onPressed: _isSaving ? null : () => _submit(l10n),
                   ),
                 ),
               ],

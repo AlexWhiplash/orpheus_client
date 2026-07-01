@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:orpheus_project/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeLocalBackend implements NotificationLocalBackend {
   final createdChannels = <({String id, String name, String description, Importance importance})>[];
@@ -88,6 +89,9 @@ void main() {
     late _FakeLocalBackend backend;
 
     setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      // Уведомления резолвят язык по сохранённому app_locale (фоновый изолят без контекста).
+      SharedPreferences.setMockInitialValues({'app_locale': 'ru'});
       backend = _FakeLocalBackend();
       NotificationService.debugSetLocalBackendForTesting(backend);
     });

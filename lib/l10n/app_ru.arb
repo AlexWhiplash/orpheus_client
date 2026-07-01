@@ -223,6 +223,10 @@
   "speaker": "Динамик",
   "accept": "Принять",
   "decline": "Отклонить",
+  "answerCall": "Ответить",
+  "microphone": "Микрофон",
+  "newMessage": "Новое сообщение",
+  "unknownCaller": "Неизвестный",
   
   "supportChat": "Чат поддержки",
   "supportWelcome": "Чем можем помочь?",

@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
@@ -15,6 +16,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
+import 'package:orpheus_project/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Обработчик фоновых FCM сообщений (top-level функция)
 /// Вызывается когда приложение убито или в фоне
@@ -466,7 +469,8 @@ class NotificationService {
     // - new_message: sender_name/sender_key
     //
     // Оставляем совместимость со старыми call/message.
-    final callerName = (data['caller_name'] ?? data['sender_name'] ?? 'Неизвестный').toString();
+    final l10n = await notificationL10n();
+    final callerName = (data['caller_name'] ?? data['sender_name'] ?? l10n.unknownCaller).toString();
     final senderName = (data['sender_name'] ??
             data['caller_name'] ??
             data['sender'] ??
@@ -545,6 +549,29 @@ class NotificationService {
 
   // ==================== ПУБЛИЧНЫЕ МЕТОДЫ ====================
 
+  /// Локализация для строк уведомлений.
+  ///
+  /// Уведомления показываются из фонового FCM-изолята, где нет `BuildContext`,
+  /// поэтому язык резолвим по сохранённому выбору пользователя (`app_locale`,
+  /// пишется `LocaleService`), с откатом на системную локаль, затем на английский.
+  /// Так RU-пользователь получает русские уведомления, EN — английские.
+  @visibleForTesting
+  static Future<L10n> notificationL10n() async {
+    String code;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString('app_locale');
+      if (saved != null && saved.isNotEmpty) {
+        code = saved;
+      } else {
+        code = ui.PlatformDispatcher.instance.locale.languageCode == 'ru' ? 'ru' : 'en';
+      }
+    } catch (_) {
+      code = 'en';
+    }
+    return lookupL10n(Locale(code));
+  }
+
   /// Показать уведомление о входящем звонке
   /// Простое, без кнопок, со звуком и вибрацией
   static Future<void> showCallNotification({
@@ -553,12 +580,13 @@ class NotificationService {
   }) async {
     try {
       await _ensureLocalNotificationsInitialized();
+      final l10n = await notificationL10n();
 
       await _localBackend!.show(
         id: _callNotificationId,
         channelId: _incomingCallChannelId,
         channelName: _callChannelName,
-        title: 'Входящий звонок',
+        title: l10n.incomingCall,
         body: callerName,
         category: AndroidNotificationCategory.call,
         androidSmallIcon: _androidSmallIcon,
@@ -596,13 +624,14 @@ class NotificationService {
   }) async {
     try {
       await _ensureLocalNotificationsInitialized();
+      final l10n = await notificationL10n();
 
       await _localBackend!.show(
         id: _messageNotificationId + senderName.hashCode % 1000, // Уникальный ID для разных отправителей
         channelId: _messageChannelId,
         channelName: _messageChannelName,
         title: senderName,
-        body: 'Новое сообщение', // Don't show content for privacy
+        body: l10n.newMessage, // Don't show content for privacy
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
         groupKey: 'orpheus_messages_group',

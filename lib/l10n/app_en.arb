@@ -557,6 +557,18 @@
   
   "decline": "Decline",
   "@decline": {"description": "Decline call button"},
+
+  "answerCall": "Answer",
+  "@answerCall": {"description": "Answer incoming call button"},
+
+  "microphone": "Microphone",
+  "@microphone": {"description": "Microphone control label"},
+
+  "newMessage": "New message",
+  "@newMessage": {"description": "Notification body for a new message (content hidden for privacy)"},
+
+  "unknownCaller": "Unknown",
+  "@unknownCaller": {"description": "Default caller/sender name when none is provided"},
   
   "supportChat": "Support Chat",
   "@supportChat": {"description": "Support chat title"},

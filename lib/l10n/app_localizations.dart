@@ -1123,6 +1123,30 @@ abstract class L10n {
   /// **'Decline'**
   String get decline;
 
+  /// Answer incoming call button
+  ///
+  /// In en, this message translates to:
+  /// **'Answer'**
+  String get answerCall;
+
+  /// Microphone control label
+  ///
+  /// In en, this message translates to:
+  /// **'Microphone'**
+  String get microphone;
+
+  /// Notification body for a new message (content hidden for privacy)
+  ///
+  /// In en, this message translates to:
+  /// **'New message'**
+  String get newMessage;
+
+  /// Default caller/sender name when none is provided
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get unknownCaller;
+
   /// Support chat title
   ///
   /// In en, this message translates to:

@@ -572,6 +572,18 @@ class L10nEn extends L10n {
   String get decline => 'Decline';
 
   @override
+  String get answerCall => 'Answer';
+
+  @override
+  String get microphone => 'Microphone';
+
+  @override
+  String get newMessage => 'New message';
+
+  @override
+  String get unknownCaller => 'Unknown';
+
+  @override
   String get supportChat => 'Support Chat';
 
   @override

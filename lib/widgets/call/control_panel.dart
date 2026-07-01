@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:orpheus_project/l10n/app_localizations.dart';
 
 class CallControlPanel extends StatelessWidget {
   final bool isIncoming;
@@ -22,14 +23,15 @@ class CallControlPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
     if (isIncoming) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 40),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildActionBtn(Icons.call_end, Colors.red, "ОТКЛОНИТЬ", onEndCall),
-            _buildActionBtn(Icons.call, Colors.green, "ОТВЕТИТЬ", onAcceptCall),
+            _buildActionBtn(Icons.call_end, Colors.red, l10n.decline.toUpperCase(), onEndCall),
+            _buildActionBtn(Icons.call, Colors.green, l10n.answerCall.toUpperCase(), onAcceptCall),
           ],
         ),
       );
@@ -43,19 +45,19 @@ class CallControlPanel extends StatelessWidget {
             _buildControlBtn(
               icon: isMicMuted ? Icons.mic_off : Icons.mic,
               isActive: isMicMuted,
-              label: "Микрофон",
+              label: l10n.microphone,
               onTap: onToggleMic,
             ),
             _buildControlBtn(
               icon: isSpeakerOn ? Icons.volume_up : Icons.volume_down,
               isActive: isSpeakerOn,
-              label: "Динамик",
+              label: l10n.speaker,
               onTap: onToggleSpeaker,
             ),
           ],
         ),
         const SizedBox(height: 40),
-        _buildActionBtn(Icons.call_end, Colors.redAccent, "ЗАВЕРШИТЬ", onEndCall),
+        _buildActionBtn(Icons.call_end, Colors.redAccent, l10n.endCall.toUpperCase(), onEndCall),
       ],
     );
   }

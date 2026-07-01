@@ -579,6 +579,18 @@ class L10nRu extends L10n {
   String get decline => 'Отклонить';
 
   @override
+  String get answerCall => 'Ответить';
+
+  @override
+  String get microphone => 'Микрофон';
+
+  @override
+  String get newMessage => 'Новое сообщение';
+
+  @override
+  String get unknownCaller => 'Неизвестный';
+
+  @override
   String get supportChat => 'Чат поддержки';
 
   @override

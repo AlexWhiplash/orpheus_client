@@ -48,10 +48,14 @@
 - самопротиворечивый тест `getWithFallback` (писан под 2 хоста, а остался один).
 
 **Изменения кода:**
-- `lib/services/notification_service.dart` — строки уведомлений по-русски (`Входящий звонок`,
-  `Новое сообщение`, дефолтное имя `Неизвестный`). Идут из фонового FCM-изолята без контекста →
-  заданы напрямую (решение пользователя: RU-версия).
-- `lib/widgets/call/control_panel.dart` — подписи кнопок звонка по-русски.
+- `lib/services/notification_service.dart` — строки уведомлений (`incomingCall`, `newMessage`,
+  `unknownCaller`) двуязычные через gen-l10n. Фоновый FCM-изолят без контекста → добавлен хелпер
+  `notificationL10n()`: резолвит язык по сохранённому `app_locale` → системная локаль → `en`,
+  затем `lookupL10n(Locale)`. RU-юзер получает RU, EN — EN.
+- `lib/widgets/call/control_panel.dart` — подписи кнопок звонка через `L10n.of(context)`
+  (`decline`/`answerCall`/`microphone`/`speaker`/`endCall`).
+- `lib/l10n/app_{en,ru}.arb` — добавлены ключи `answerCall`, `microphone`, `newMessage`,
+  `unknownCaller` (обе локали); перегенерён `app_localizations*.dart`.
 - `lib/updates_screen.dart` — заголовок через `L10n.of(context).updateHistory.toUpperCase()`
   (переиспользован существующий ключ; EN-визуал сохранён).
 - `lib/screens/settings_screen.dart` — `_MenuCard`: Column обёрнут в `Material(transparency)`

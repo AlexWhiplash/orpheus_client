@@ -64,6 +64,34 @@ void main() {
       expect(contacts, isA<List<Contact>>());
     });
 
+    test('updateMessageStatusByMessageId и deleteMessagesByMessageIds (LOGIC-2/3)', () async {
+      const key = 'CONTACT_XYZ';
+      await DatabaseService.instance.addMessage(
+        ChatMessage(
+          messageId: 'mid-1',
+          text: 'привет',
+          isSentByMe: true,
+          status: MessageStatus.sending,
+        ),
+        key,
+      );
+
+      // Статус обновляется по стабильному messageId (LOGIC-3).
+      await DatabaseService.instance
+          .updateMessageStatusByMessageId(key, 'mid-1', MessageStatus.failed);
+      var msgs = await DatabaseService.instance.getMessagesForContact(key);
+      expect(msgs.length, 1);
+      expect(msgs.first.messageId, 'mid-1');
+      expect(msgs.first.status, MessageStatus.failed);
+
+      // Удаление по messageId убирает сообщение (LOGIC-2).
+      final deleted =
+          await DatabaseService.instance.deleteMessagesByMessageIds(key, ['mid-1']);
+      expect(deleted, 1);
+      msgs = await DatabaseService.instance.getMessagesForContact(key);
+      expect(msgs, isEmpty);
+    });
+
     test('Добавление сообщения', () async {
       final message = ChatMessage(
         text: "Test message",

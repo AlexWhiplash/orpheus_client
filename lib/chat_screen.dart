@@ -11,6 +11,7 @@ import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/note_model.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
@@ -97,6 +98,24 @@ class _ChatScreenState extends State<ChatScreen>
     await DatabaseService.instance.markMessagesAsRead(widget.contact.publicKey);
   }
 
+  /// Иконка статуса исходящего сообщения. Раньше всегда показывалась двойная
+  /// галка «доставлено», даже для неотправленных/упавших сообщений (аудит
+  /// LOGIC-3). Теперь отражает реальный статус. Двойная галка (delivered/read)
+  /// пока не используется — сервер это релей без квитанций о доставке.
+  Widget _buildStatusIcon(MessageStatus status) {
+    switch (status) {
+      case MessageStatus.sending:
+        return Icon(Icons.schedule, size: 14, color: AppColors.textTertiary);
+      case MessageStatus.failed:
+        return const Icon(Icons.error_outline, size: 14, color: AppColors.danger);
+      case MessageStatus.delivered:
+      case MessageStatus.read:
+        return Icon(Icons.done_all, size: 14, color: AppColors.info.withOpacity(0.85));
+      case MessageStatus.sent:
+        return Icon(Icons.done, size: 14, color: AppColors.info.withOpacity(0.85));
+    }
+  }
+
   Future<void> _sendMessage() async {
     final messageText = _messageController.text.trim();
     if (messageText.isEmpty) return;
@@ -113,7 +132,7 @@ class _ChatScreenState extends State<ChatScreen>
       messageId: messageId,
       text: messageText,
       isSentByMe: true,
-      status: MessageStatus.sent,
+      status: MessageStatus.sending, // пока не зашифровано и не передано в сеть
       isRead: true,
     );
 
@@ -124,8 +143,15 @@ class _ChatScreenState extends State<ChatScreen>
           await cryptoService.encrypt(widget.contact.publicKey, messageText);
       websocketService.sendChatMessage(widget.contact.publicKey, payload,
           messageId: messageId);
-    } catch (_) {
-      // UI не блокируем — сообщение уже сохранено локально.
+      // Успех: сообщение передано в сеть или поставлено в offline-очередь.
+      await DatabaseService.instance.updateMessageStatusByMessageId(
+          widget.contact.publicKey, messageId, MessageStatus.sent);
+    } catch (e) {
+      // Раньше ошибка молча проглатывалась, и сообщение выглядело отправленным
+      // (аудит LOGIC-4). Теперь помечаем как failed, чтобы показать это пользователю.
+      DebugLogger.error('CHAT', 'Ошибка отправки сообщения: $e');
+      await DatabaseService.instance.updateMessageStatusByMessageId(
+          widget.contact.publicKey, messageId, MessageStatus.failed);
     }
 
     _messageController.clear();
@@ -475,11 +501,7 @@ class _ChatScreenState extends State<ChatScreen>
                       ),
                       if (isMyMessage) ...[
                         const SizedBox(width: 6),
-                        Icon(
-                          Icons.done_all,
-                          size: 14,
-                          color: AppColors.info.withOpacity(0.85),
-                        ),
+                        _buildStatusIcon(message.status),
                       ],
                     ],
                   ),

@@ -366,6 +366,21 @@ class DatabaseService {
     );
   }
 
+  /// Обновить статус сообщения по стабильному messageId (точнее, чем по времени).
+  Future<void> updateMessageStatusByMessageId(
+    String contactKey,
+    String messageId,
+    MessageStatus status,
+  ) async {
+    final db = await instance.database;
+    await db.update(
+      'messages',
+      {'status': status.index},
+      where: 'contactPublicKey = ? AND messageId = ?',
+      whereArgs: [contactKey, messageId],
+    );
+  }
+
   // Получить сообщения (с маппингом новых полей)
   Future<List<ChatMessage>> getMessagesForContact(String contactKey) async {
     // В duress mode возвращаем пустой список

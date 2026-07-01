@@ -148,3 +148,20 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 игнорируют лишнее поле; без id - прежнее окно дедупа.
 
 **Статус:** analyze 0 errors; test 325 passed / 0 failed; flutter build apk --debug OK.
+
+---
+
+## 2026-07-01 - Реальный статус исходящих сообщений (аудит LOGIC-3/LOGIC-4/UI-8) [ветка wl/msg-status]
+
+**Задача:** сообщение всегда показывало двойную галку «доставлено», даже при сбое шифрования/
+отправки (ошибка молча проглатывалась) - баг доверия.
+
+**Сделано:**
+- `chat_screen.dart`: `_sendMessage` теперь стартует со статусом `sending`, при успехе -> `sent`,
+  при ошибке (encrypt/send) -> `failed` (раньше `catch (_)` глотал ошибку). Иконка статуса через
+  `_buildStatusIcon`: часы/одиночная галка/красный error (двойная галка delivered/read пока не
+  используется - сервер релей без квитанций).
+- `database_service.dart`: добавлен `updateMessageStatusByMessageId` (обновление по стабильному id).
+- Тест: DB-тест на `updateMessageStatusByMessageId` + `deleteMessagesByMessageIds`.
+
+**Статус:** analyze 0 errors; test 326 passed / 0 failed.

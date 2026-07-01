@@ -17,9 +17,16 @@ class _FakeDb implements IncomingMessageDatabase {
   final Map<String, String> contactNames = {};
   final List<(ChatMessage message, String contactKey)> saved = [];
 
+  final Set<String> ensuredContacts = {};
+
   @override
   Future<void> addMessage(ChatMessage message, String contactPublicKey) async {
     saved.add((message, contactPublicKey));
+  }
+
+  @override
+  Future<void> addContactIfMissing(String publicKey) async {
+    ensuredContacts.add(publicKey);
   }
 
   @override
@@ -133,6 +140,10 @@ void main() {
       await handler.handleDecoded(
           {'type': 'chat', 'sender_pubkey': sender, 'payload': 'привет', 'message_id': 'id-1'});
       expect(db.saved.length, 2);
+
+      // Неизвестный отправитель авто-добавлен в контакты, иначе сообщение
+      // сохранилось бы, но не показалось в списке чатов (аудит DB-6).
+      expect(db.ensuredContacts, contains(sender));
     });
 
     test('ICE до offer не теряется: буферизуется и сохраняется при приходе offer', () async {

@@ -13,6 +13,7 @@ abstract interface class IncomingMessageCrypto {
 
 abstract interface class IncomingMessageDatabase {
   Future<void> addMessage(ChatMessage message, String contactPublicKey);
+  Future<void> addContactIfMissing(String publicKey);
   Future<String?> getContactName(String publicKey);
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps);
   Future<int> deleteMessagesByMessageIds(String contactKey, List<String> messageIds);
@@ -319,6 +320,9 @@ class IncomingMessageHandler {
         isRead: false,
       );
 
+      // Авто-добавляем неизвестного отправителя в контакты, иначе сообщение
+      // сохранится, но не появится в списке чатов (аудит DB-6).
+      await _db.addContactIfMissing(senderKey);
       await _db.addMessage(receivedMessage, senderKey);
       _emitChatUpdate(senderKey);
 

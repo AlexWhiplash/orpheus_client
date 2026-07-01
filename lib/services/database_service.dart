@@ -252,9 +252,26 @@ class DatabaseService {
   Future<void> addContact(Contact contact) async {
     // В duress mode не добавляем контакты
     if (_isDuressMode) return;
-    
+
     final db = await instance.database;
     await db.insert('contacts', contact.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Добавить контакт, ТОЛЬКО если его ещё нет. Нужно для авто-создания контакта
+  /// при входящем сообщении от неизвестного отправителя: иначе сообщение
+  /// сохраняется, но не появляется в списке чатов (аудит DB-6). Имя по умолчанию —
+  /// префикс публичного ключа (пользователь может переименовать). Duress НЕ
+  /// проверяем — как и addMessage, чтобы реальный набор данных был консистентен
+  /// (в duress-режиме список контактов всё равно пуст на чтении).
+  Future<void> addContactIfMissing(String publicKey) async {
+    if (publicKey.isEmpty) return;
+    final db = await instance.database;
+    final existing = await db.query('contacts',
+        columns: ['id'], where: 'publicKey = ?', whereArgs: [publicKey], limit: 1);
+    if (existing.isNotEmpty) return;
+    final name = publicKey.length >= 8 ? publicKey.substring(0, 8) : publicKey;
+    await db.insert('contacts', {'name': name, 'publicKey': publicKey},
+        conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
   Future<List<Contact>> getContacts() async {

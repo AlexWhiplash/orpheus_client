@@ -826,6 +826,11 @@ class _IncomingDatabaseAdapter implements IncomingMessageDatabase {
   }
 
   @override
+  Future<void> addContactIfMissing(String publicKey) {
+    return _db.addContactIfMissing(publicKey);
+  }
+
+  @override
   Future<String?> getContactName(String publicKey) async {
     try {
       final contact = await _db.getContact(publicKey);

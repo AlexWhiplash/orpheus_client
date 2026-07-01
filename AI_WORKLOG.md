@@ -71,3 +71,34 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 **Статус:** `flutter analyze` → 0 errors; `flutter test` → **324 passed / 0 failed**.
 
 **Команды:** `flutter analyze`, `flutter test`.
+
+---
+
+## 2026-07-01 — Шифрование локальной БД (аудит SEC-1) [ветка wl/db-encryption]
+
+**Задача:** первый заход по ремедиации аудита (`AUDIT_REPORT.md`) — закрыть критическую находку
+`SEC-1`: локальная БД хранилась в открытом виде, из-за чего PIN/duress/panic-wipe были косметикой.
+Директива пользователя: потеря данных допустима (критичных данных нет) → миграцию не делаем.
+
+**Сделано:**
+- `pubspec.yaml`: `sqflite` → `sqflite_sqlcipher ^3.4.0` (drop-in API + пароль/PRAGMA key).
+- `lib/services/database_service.dart`: ключ шифрования БД — 256 случайных бит (`Random.secure`),
+  хранится в Keystore-backed `flutter_secure_storage` (`orpheus_db_key`). `openDatabase(..., password:)`.
+  При первом запуске (нет ключа) старая НЕзашифрованная БД удаляется, создаётся свежая зашифрованная.
+  В `deleteDatabaseFile()` (panic-wipe) ключ БД тоже удаляется → остаточный шифртекст невосстановим,
+  следующий запуск создаёт новый ключ + пустую БД. Логи переведены на `DebugLogger`.
+- `android/app/src/main/AndroidManifest.xml`: `allowBackup="false"` + `dataExtractionRules`.
+- `android/app/src/main/res/xml/data_extraction_rules.xml`: исключить всё из cloud-backup и
+  device-transfer (SEC-7 / DB-2 / OPS-3).
+- `test/services/database_service_test.dart`: убран импорт удалённого `package:sqflite/sqflite.dart`
+  (типы/фабрика берутся из `sqflite_common_ffi`).
+
+**Дизайн-решение:** ключ БД — случайный в Keystore, НЕ из PIN. Причина: приложение принимает и пишет
+сообщения, пока заблокировано (WebSocket под экраном PIN) и в фоне; ключ из PIN там недоступен →
+входящие терялись бы. Компромисс: PIN остаётся UI-замком, данные защищает Keystore-ключ (это огромный
+шаг от plaintext). PIN-деривация — отдельное продуктовое решение (жертва приёмом в фоне).
+
+**Статус:** `flutter analyze` → 0 errors; `flutter test` → **324 passed / 0 failed**.
+Реальная проверка SQLCipher/манифеста — сборка `flutter build apk --debug` (нативные libs + resources).
+
+**Команды:** `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.

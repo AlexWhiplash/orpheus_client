@@ -12,8 +12,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # База данных
-  sqflite: ^2.3.0
+  # База данных (SQLCipher — шифрование БД на устройстве, см. AUDIT_REPORT SEC-1)
+  sqflite_sqlcipher: ^3.4.0
   path: ^1.8.3
 
   # Криптография и безопасность

@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';

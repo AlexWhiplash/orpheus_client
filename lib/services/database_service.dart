@@ -1,17 +1,24 @@
 // lib/services/database_service.dart
 
 import 'dart:io';
-import 'package:sqflite/sqflite.dart';
+import 'dart:convert';
+import 'dart:math';
+import 'package:sqflite_sqlcipher/sqflite.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart';
 import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/services/auth_service.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/models/ai_message_model.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
   static Database? _database;
   static const String _dbFileName = 'orpheus.db';
+  // Ключ шифрования БД (SQLCipher). Хранится в Keystore-backed secure storage.
+  static const String _dbKeyStoreKey = 'orpheus_db_key';
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   bool _isWiping = false;
   DatabaseService._init();
 
@@ -32,24 +39,59 @@ class DatabaseService {
 
   Future<Database> _initDB(String filePath) async {
     try {
-      print("DB: Получение пути к базе данных...");
       final dbPath = await getDatabasesPath();
       final path = join(dbPath, filePath);
-      print("DB: Путь к БД: $path");
 
-      print("DB: Открытие базы данных...");
+      // Ключ шифрования БД из Keystore (при первом запуске генерируется, а старая
+      // НЕзашифрованная БД удаляется — перенос данных не требуется).
+      final dbKey = await _getOrCreateDbKey();
+
       final db = await openDatabase(
         path,
+        password: dbKey,
         version: 6,
-        onCreate: _createDB, 
+        onCreate: _createDB,
         onUpgrade: _upgradeDB,
         singleInstance: true, // Важно для избежания блокировок
       );
-      print("DB: База данных открыта успешно");
+      DebugLogger.success('DB', 'База данных (зашифрованная) открыта');
       return db;
     } catch (e) {
-      print("DB: КРИТИЧЕСКАЯ ОШИБКА инициализации: $e");
+      DebugLogger.error('DB', 'КРИТИЧЕСКАЯ ОШИБКА инициализации: $e');
       rethrow;
+    }
+  }
+
+  /// Возвращает ключ шифрования БД, генерируя его при первом запуске.
+  /// Ключ — 256 случайных бит из [Random.secure], лежит в Keystore-backed
+  /// secure storage. При первой генерации (переход на шифрование) удаляем
+  /// возможную старую НЕзашифрованную БД: критичных данных в приложении нет,
+  /// перенос не требуется (см. AUDIT_REPORT SEC-1).
+  Future<String> _getOrCreateDbKey() async {
+    final existing = await _secureStorage.read(key: _dbKeyStoreKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    await _deletePlainDbFilesIfAny();
+
+    final rnd = Random.secure();
+    final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
+    final key = base64Url.encode(bytes);
+    await _secureStorage.write(key: _dbKeyStoreKey, value: key);
+    DebugLogger.info('DB', 'Сгенерирован новый ключ шифрования БД');
+    return key;
+  }
+
+  /// Удаляет старый файл БД и его sidecar-файлы (journal/wal/shm), если есть.
+  Future<void> _deletePlainDbFilesIfAny() async {
+    try {
+      final path = await _dbPath();
+      for (final suffix in const ['', '-journal', '-wal', '-shm']) {
+        final f = File('$path$suffix');
+        if (await f.exists()) await f.delete();
+      }
+    } catch (_) {
+      // best-effort: если удалить не удалось, открытие зашифрованной БД всё равно
+      // пройдёт (или создаст новую), данные не критичны.
     }
   }
 
@@ -613,11 +655,18 @@ class DatabaseService {
         if (await f.exists()) await f.delete();
       }
 
-      // 5. Verify deletion
+      // 5. Delete the DB encryption key from secure storage, so any residual
+      //    ciphertext is cryptographically unrecoverable and the next launch
+      //    regenerates a fresh key + empty database.
+      try {
+        await _secureStorage.delete(key: _dbKeyStoreKey);
+      } catch (_) {}
+
+      // 6. Verify deletion
       if (await File(path).exists()) {
-        print("DB ERROR: Database file still exists after deletion!");
+        DebugLogger.error('DB', 'Файл БД всё ещё существует после удаления!');
       } else {
-        print("DB: Database deleted and verified");
+        DebugLogger.success('DB', 'БД удалена и проверена');
       }
     } catch (e) {
       print("DB ERROR: Error deleting database: $e");

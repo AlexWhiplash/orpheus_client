@@ -236,3 +236,15 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 - Остальные ~200 операционных `print` (websocket/notification/database/...) - follow-up QUAL-7.
 
 **Статус:** analyze 0 errors; test 327 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Чистка мёртвого кода (аудит ARCH-4/QUAL-2/DEP-9) [ветка wl/deadcode]
+
+Верифицировано grep-ом, что не используется, и удалено:
+- `lib/main_test.dart` (183 строки) - осиротевшее WebRTC-тест-приложение (свой main/runApp) в lib/.
+- `lib/services/call_session_controller.dart`, `chat_session_controller.dart` - пустые заглушки (1 строка),
+  ни одной ссылки (тестов на них тоже нет - docs/testing упоминает их ошибочно).
+- Зависимость `provider` из pubspec (0 импортов; state - через синглтоны).
+
+**Статус:** pub get OK; analyze 0 errors; test 327 passed / 0 failed.

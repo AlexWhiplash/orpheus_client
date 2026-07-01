@@ -584,6 +584,23 @@ class L10nEn extends L10n {
   String get unknownCaller => 'Unknown';
 
   @override
+  String get callBack => 'Call back';
+
+  @override
+  String get newMessageInChat => 'New message in chat';
+
+  @override
+  String get officialOrpheusReply => 'Official Orpheus reply';
+
+  @override
+  String get testNotificationWorks => 'Test notification works! 🔔';
+
+  @override
+  String fromCaller(String name) {
+    return 'From: $name';
+  }
+
+  @override
   String get supportChat => 'Support Chat';
 
   @override

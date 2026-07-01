@@ -297,7 +297,7 @@ class L10nRu extends L10n {
   String get outgoingCall => 'Исходящий звонок';
 
   @override
-  String get missedCall => 'Пропущен звонок';
+  String get missedCall => 'Пропущенный звонок';
 
   @override
   String get callLabel => 'Звонок';
@@ -589,6 +589,23 @@ class L10nRu extends L10n {
 
   @override
   String get unknownCaller => 'Неизвестный';
+
+  @override
+  String get callBack => 'Перезвонить';
+
+  @override
+  String get newMessageInChat => 'Новое сообщение в чате';
+
+  @override
+  String get officialOrpheusReply => 'Официальный ответ Orpheus';
+
+  @override
+  String get testNotificationWorks => 'Тестовое уведомление работает! 🔔';
+
+  @override
+  String fromCaller(String name) {
+    return 'От: $name';
+  }
 
   @override
   String get supportChat => 'Чат поддержки';

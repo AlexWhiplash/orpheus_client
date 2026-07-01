@@ -589,7 +589,7 @@ abstract class L10n {
   /// **'Outgoing call'**
   String get outgoingCall;
 
-  /// Missed call status
+  /// CallKit missed-call subtitle
   ///
   /// In en, this message translates to:
   /// **'Missed call'**
@@ -1146,6 +1146,36 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Unknown'**
   String get unknownCaller;
+
+  /// CallKit call-back action label
+  ///
+  /// In en, this message translates to:
+  /// **'Call back'**
+  String get callBack;
+
+  /// Room/chat message notification body
+  ///
+  /// In en, this message translates to:
+  /// **'New message in chat'**
+  String get newMessageInChat;
+
+  /// Official Orpheus notification body
+  ///
+  /// In en, this message translates to:
+  /// **'Official Orpheus reply'**
+  String get officialOrpheusReply;
+
+  /// Test notification body
+  ///
+  /// In en, this message translates to:
+  /// **'Test notification works! 🔔'**
+  String get testNotificationWorks;
+
+  /// Fallback incoming-call notification body
+  ///
+  /// In en, this message translates to:
+  /// **'From: {name}'**
+  String fromCaller(String name);
 
   /// Support chat title
   ///

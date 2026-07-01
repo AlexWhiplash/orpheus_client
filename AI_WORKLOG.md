@@ -48,10 +48,12 @@
 - самопротиворечивый тест `getWithFallback` (писан под 2 хоста, а остался один).
 
 **Изменения кода:**
-- `lib/services/notification_service.dart` — строки уведомлений (`incomingCall`, `newMessage`,
-  `unknownCaller`) двуязычные через gen-l10n. Фоновый FCM-изолят без контекста → добавлен хелпер
-  `notificationL10n()`: резолвит язык по сохранённому `app_locale` → системная локаль → `en`,
-  затем `lookupL10n(Locale)`. RU-юзер получает RU, EN — EN.
+- `lib/services/notification_service.dart` — ВСЕ строки уведомлений двуязычные через gen-l10n
+  (звонок, сообщение, чат-сообщение, официальный ответ, тестовое, дефолтное имя, а также CallKit:
+  Ответить/Отклонить/Пропущенный/Перезвонить и fallback-уведомление звонка). Фоновый FCM-изолят
+  без контекста → добавлен хелпер `notificationL10n()`: резолвит язык по сохранённому `app_locale`
+  → системная локаль → `en`, затем `lookupL10n(Locale)`. RU-юзер получает RU, EN — EN.
+  (Системные названия Android-каналов не трогаем — регистрируются один раз.)
 - `lib/widgets/call/control_panel.dart` — подписи кнопок звонка через `L10n.of(context)`
   (`decline`/`answerCall`/`microphone`/`speaker`/`endCall`).
 - `lib/l10n/app_{en,ru}.arb` — добавлены ключи `answerCall`, `microphone`, `newMessage`,

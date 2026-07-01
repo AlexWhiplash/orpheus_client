@@ -227,6 +227,12 @@
   "microphone": "Микрофон",
   "newMessage": "Новое сообщение",
   "unknownCaller": "Неизвестный",
+  "missedCall": "Пропущенный звонок",
+  "callBack": "Перезвонить",
+  "newMessageInChat": "Новое сообщение в чате",
+  "officialOrpheusReply": "Официальный ответ Orpheus",
+  "testNotificationWorks": "Тестовое уведомление работает! 🔔",
+  "fromCaller": "От: {name}",
   
   "supportChat": "Чат поддержки",
   "supportWelcome": "Чем можем помочь?",

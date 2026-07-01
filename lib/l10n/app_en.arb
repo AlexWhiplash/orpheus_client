@@ -569,6 +569,27 @@
 
   "unknownCaller": "Unknown",
   "@unknownCaller": {"description": "Default caller/sender name when none is provided"},
+
+  "missedCall": "Missed call",
+  "@missedCall": {"description": "CallKit missed-call subtitle"},
+
+  "callBack": "Call back",
+  "@callBack": {"description": "CallKit call-back action label"},
+
+  "newMessageInChat": "New message in chat",
+  "@newMessageInChat": {"description": "Room/chat message notification body"},
+
+  "officialOrpheusReply": "Official Orpheus reply",
+  "@officialOrpheusReply": {"description": "Official Orpheus notification body"},
+
+  "testNotificationWorks": "Test notification works! 🔔",
+  "@testNotificationWorks": {"description": "Test notification body"},
+
+  "fromCaller": "From: {name}",
+  "@fromCaller": {
+    "description": "Fallback incoming-call notification body",
+    "placeholders": { "name": { "type": "String" } }
+  },
   
   "supportChat": "Support Chat",
   "@supportChat": {"description": "Support chat title"},

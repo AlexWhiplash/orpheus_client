@@ -207,19 +207,21 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
     
     print("📞 CALLKIT: Показываю входящий звонок от $callerName (id=$callId), hasOffer=${offerDataJson != null}");
     
+    final l10n = await NotificationService.notificationL10n();
+
     final params = CallKitParams(
       id: callId,
       nameCaller: callerName,
       appName: 'Orpheus',
       handle: callerKey.toString().substring(0, 8),
       type: 0, // Audio call
-      textAccept: 'Answer',
-      textDecline: 'Decline',
+      textAccept: l10n.answerCall,
+      textDecline: l10n.decline,
       missedCallNotification: NotificationParams(
         showNotification: true,
         isShowCallback: false,
-        subtitle: 'Missed call',
-        callbackText: 'Call back',
+        subtitle: l10n.missedCall,
+        callbackText: l10n.callBack,
       ),
       duration: 45000, // 45 seconds ringtone
       extra: <String, dynamic>{
@@ -270,6 +272,7 @@ Future<void> _showFallbackLocalCallNotification(Map<String, dynamic> data) async
   try {
     final callerKey = data['caller_key'] ?? data['sender_pubkey'] ?? '';
     final callerName = data['caller_name'] ?? data['sender_name'] ?? callerKey.toString().substring(0, 8);
+    final l10n = await NotificationService.notificationL10n();
     final plugin = FlutterLocalNotificationsPlugin();
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidSettings);
@@ -289,8 +292,8 @@ Future<void> _showFallbackLocalCallNotification(Map<String, dynamic> data) async
 
     await plugin.show(
       9901,
-      'Incoming call',
-      'From: $callerName',
+      l10n.incomingCall,
+      l10n.fromCaller(callerName.toString()),
       details,
       payload: json.encode(data),
     );
@@ -653,13 +656,14 @@ class NotificationService {
   }) async {
     try {
       await _ensureLocalNotificationsInitialized();
+      final l10n = await notificationL10n();
 
       await _localBackend!.show(
         id: _messageNotificationId + roomName.hashCode % 1000,
         channelId: _messageChannelId,
         channelName: _messageChannelName,
         title: roomName,
-        body: 'New message in chat',
+        body: l10n.newMessageInChat,
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
         groupKey: 'orpheus_messages_group',
@@ -677,13 +681,14 @@ class NotificationService {
   static Future<void> showOrpheusOfficialNotification() async {
     try {
       await _ensureLocalNotificationsInitialized();
+      final l10n = await notificationL10n();
 
       await _localBackend!.show(
         id: _messageNotificationId + 999,
         channelId: _messageChannelId,
         channelName: _messageChannelName,
         title: 'Orpheus',
-        body: 'Official Orpheus reply',
+        body: l10n.officialOrpheusReply,
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
         groupKey: 'orpheus_messages_group',
@@ -711,13 +716,14 @@ class NotificationService {
   /// Показать тестовое уведомление
   static Future<void> showTestNotification() async {
     await _ensureLocalNotificationsInitialized();
+    final l10n = await notificationL10n();
 
     await _localBackend!.show(
       id: 9999,
       channelId: _messageChannelId,
       channelName: _messageChannelName,
       title: 'Orpheus',
-      body: 'Test notification works! 🔔',
+      body: l10n.testNotificationWorks,
       category: AndroidNotificationCategory.message,
       androidSmallIcon: _androidSmallIcon,
       groupKey: null,

@@ -165,3 +165,14 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 - Тест: DB-тест на `updateMessageStatusByMessageId` + `deleteMessagesByMessageIds`.
 
 **Статус:** analyze 0 errors; test 326 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Экран приветствия: loading/guard при создании аккаунта (аудит UI-5)
+
+**Сделано (welcome_screen.dart):** `_createNewAccount` - guard от двойного тапа (иначе перегенерация
+ключей поверх созданных), `isLoading` на кнопке + блокировка кнопок на время генерации, обработка
+ошибки со SnackBar (раньше без loading и без обработки). Импорт-ключа уже закрывал диалог до await
+и показывал ошибку - не трогал.
+
+**Статус:** analyze 0 errors; test 326 passed / 0 failed.

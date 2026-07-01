@@ -118,10 +118,28 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
+  bool _isCreating = false;
+
   Future<void> _createNewAccount() async {
+    // Guard от двойного тапа: иначе повторный вызов перегенерировал бы ключи
+    // поверх только что созданных (аудит UI-5).
+    if (_isCreating) return;
     HapticFeedback.mediumImpact();
-    await cryptoService.generateNewKeys();
-    widget.onAuthComplete();
+    setState(() => _isCreating = true);
+    try {
+      await cryptoService.generateNewKeys();
+      widget.onAuthComplete();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${L10n.of(context).error}: $e'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreating = false);
+    }
   }
 
   Future<void> _importAccount(String key) async {
@@ -332,14 +350,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               AppButton(
                                 label: l10n.createAccount,
                                 icon: Icons.add_circle_outline,
-                                onPressed: _createNewAccount,
+                                isLoading: _isCreating,
+                                onPressed: _isCreating ? null : _createNewAccount,
                               ),
                               const SizedBox(height: 10),
                               AppButton(
                                 label: l10n.restoreFromKey,
                                 variant: AppButtonVariant.secondary,
                                 icon: Icons.key,
-                                onPressed: _showImportDialog,
+                                onPressed: _isCreating ? null : _showImportDialog,
                               ),
                               const SizedBox(height: 16),
                               AppCard(

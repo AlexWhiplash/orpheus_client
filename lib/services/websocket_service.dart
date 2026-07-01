@@ -252,8 +252,13 @@ class WebSocketService {
     _pingTimer?.cancel();
   }
 
-  void sendChatMessage(String recipientPublicKey, String payload) {
-    final msg = {"recipient_pubkey": recipientPublicKey, "type": "chat", "payload": payload};
+  void sendChatMessage(String recipientPublicKey, String payload, {String? messageId}) {
+    final msg = {
+      "recipient_pubkey": recipientPublicKey,
+      "type": "chat",
+      "payload": payload,
+      if (messageId != null) "message_id": messageId,
+    };
 
     // Если нет соединения - сохраняем в очередь
     if (_channel == null || _statusController.value != ConnectionStatus.Connected) {
@@ -261,6 +266,7 @@ class WebSocketService {
       PendingActionsService.addPendingMessage(
         recipientKey: recipientPublicKey,
         encryptedPayload: payload,
+        messageId: messageId,
       );
       return;
     }
@@ -268,11 +274,16 @@ class WebSocketService {
     _sendMessage(msg);
   }
 
-  void sendDeleteForBoth(String recipientPublicKey, List<int> timestampsMs) {
+  void sendDeleteForBoth(
+    String recipientPublicKey, {
+    required List<int> timestampsMs,
+    List<String> messageIds = const [],
+  }) {
     final msg = {
       "recipient_pubkey": recipientPublicKey,
       "type": "delete-for-both",
       "timestamps_ms": timestampsMs,
+      if (messageIds.isNotEmpty) "message_ids": messageIds,
     };
     _sendMessage(msg);
   }
@@ -296,6 +307,7 @@ class WebSocketService {
         "recipient_pubkey": msg.recipientKey,
         "type": "chat",
         "payload": msg.encryptedPayload,
+        if (msg.messageId != null) "message_id": msg.messageId,
       });
       sentCount++;
 

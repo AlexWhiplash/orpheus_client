@@ -3,7 +3,11 @@
 enum MessageStatus { sending, sent, delivered, read, failed }
 
 class ChatMessage {
-  final int? id; // Добавим ID для точного обновления
+  final int? id; // Локальный автоинкремент БД (для точного обновления строки)
+  /// Стабильный идентификатор сообщения (UUID), одинаковый у отправителя и
+  /// получателя. Используется для дедупликации входящих и «удалить у обоих».
+  /// null для старых сообщений / входящих от старых клиентов.
+  final String? messageId;
   final String text;
   final bool isSentByMe;
   final DateTime timestamp;
@@ -12,6 +16,7 @@ class ChatMessage {
 
   ChatMessage({
     this.id,
+    this.messageId,
     required this.text,
     required this.isSentByMe,
     DateTime? timestamp,
@@ -25,6 +30,7 @@ class ChatMessage {
   Map<String, dynamic> toMap(String contactKey) {
     return {
       'contactPublicKey': contactKey,
+      'messageId': messageId,
       'text': text,
       'isSentByMe': isSentByMe ? 1 : 0,
       'timestamp': timestamp.millisecondsSinceEpoch,

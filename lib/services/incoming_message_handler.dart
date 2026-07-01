@@ -15,6 +15,8 @@ abstract interface class IncomingMessageDatabase {
   Future<void> addMessage(ChatMessage message, String contactPublicKey);
   Future<String?> getContactName(String publicKey);
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps);
+  Future<int> deleteMessagesByMessageIds(String contactKey, List<String> messageIds);
+  Future<bool> messageExistsByMessageId(String contactKey, String messageId);
 }
 
 abstract interface class IncomingMessageNotifications {
@@ -260,6 +262,17 @@ class IncomingMessageHandler {
 
     // === DELETE FOR BOTH ===
     if (type == 'delete-for-both') {
+      // Предпочитаем стабильные messageId; timestamps_ms — fallback для старых клиентов
+      // (по времени приёма матч не срабатывал у получателя — аудит LOGIC-2).
+      final ids = messageData['message_ids'];
+      if (ids is List && ids.isNotEmpty) {
+        final idList = ids.map((e) => '$e').where((s) => s.isNotEmpty).toList();
+        if (idList.isNotEmpty) {
+          await _db.deleteMessagesByMessageIds(senderKey, idList);
+          _emitChatUpdate(senderKey);
+          return;
+        }
+      }
       final timestamps = messageData['timestamps_ms'];
       if (timestamps is List && timestamps.isNotEmpty) {
         final tsInts = timestamps.map((e) => e is int ? e : int.tryParse('$e') ?? 0).where((t) => t > 0).toList();
@@ -276,18 +289,30 @@ class IncomingMessageHandler {
       final payload = messageData['payload'] as String?;
       if (payload == null) return;
 
-      // Dedup: skip if same sender sent a message within the dedup window.
-      // Protects against WS + offline_messages double delivery on reconnect.
-      final now = _nowMs();
-      final lastTs = _lastChatTimestampBySender[senderKey];
-      if (lastTs != null && (now - lastTs) < _chatDedupeWindowMs) {
-        return;
+      final messageId = messageData['message_id'] as String?;
+
+      if (messageId != null && messageId.isNotEmpty) {
+        // Точный дедуп по стабильному id: пропускаем только НАСТОЯЩИЙ дубль
+        // (двойная доставка WS + offline), а не любое сообщение в 5-сек окне,
+        // из-за чего терялись быстрые подряд сообщения (аудит LOGIC-1).
+        if (await _db.messageExistsByMessageId(senderKey, messageId)) {
+          return;
+        }
+      } else {
+        // Старый клиент без message_id — fallback на прежнее окно дедупа
+        // от двойной доставки WS + offline_messages на реконнекте.
+        final now = _nowMs();
+        final lastTs = _lastChatTimestampBySender[senderKey];
+        if (lastTs != null && (now - lastTs) < _chatDedupeWindowMs) {
+          return;
+        }
+        _lastChatTimestampBySender[senderKey] = now;
       }
-      _lastChatTimestampBySender[senderKey] = now;
 
       final decryptedMessage = await _crypto.decrypt(senderKey, payload);
 
       final receivedMessage = ChatMessage(
+        messageId: messageId,
         text: decryptedMessage,
         isSentByMe: false,
         status: MessageStatus.delivered,

@@ -99,14 +99,16 @@ class PendingActionsService {
   static Future<void> addPendingMessage({
     required String recipientKey,
     required String encryptedPayload,
+    String? messageId,
   }) async {
     try {
       final prefs = await _prefs();
       final existing = prefs.getStringList(_pendingMessagesKey) ?? [];
-      
+
       final messageData = json.encode({
         'recipientKey': recipientKey,
         'payload': encryptedPayload,
+        'messageId': messageId,
         'timestamp': DateTime.now().toIso8601String(),
       });
       
@@ -130,6 +132,7 @@ class PendingActionsService {
           return PendingMessage(
             recipientKey: data['recipientKey'] as String,
             encryptedPayload: data['payload'] as String,
+            messageId: data['messageId'] as String?,
             timestamp: DateTime.tryParse(data['timestamp'] as String? ?? '') ?? DateTime.now(),
           );
         } catch (_) {
@@ -186,11 +189,13 @@ class PendingActionsService {
 class PendingMessage {
   final String recipientKey;
   final String encryptedPayload;
+  final String? messageId;
   final DateTime timestamp;
-  
+
   PendingMessage({
     required this.recipientKey,
     required this.encryptedPayload,
+    this.messageId,
     required this.timestamp,
   });
 }

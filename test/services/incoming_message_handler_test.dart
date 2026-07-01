@@ -31,6 +31,16 @@ class _FakeDb implements IncomingMessageDatabase {
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps) async {
     return timestamps.length;
   }
+
+  @override
+  Future<int> deleteMessagesByMessageIds(String contactKey, List<String> messageIds) async {
+    return messageIds.length;
+  }
+
+  @override
+  Future<bool> messageExistsByMessageId(String contactKey, String messageId) async {
+    return saved.any((e) => e.$1.messageId == messageId && e.$2 == contactKey);
+  }
 }
 
 class _FakeNotif implements IncomingMessageNotifications {
@@ -86,6 +96,43 @@ void main() {
       expect(chatUpdates, isEmpty);
       expect(notif.calls, isEmpty);
       expect(db.saved, isEmpty);
+    });
+
+    test('chat: разные message_id в окне не теряются, одинаковый id — дубль отбрасывается (LOGIC-1)', () async {
+      final buffer = IncomingCallBuffer.instance;
+      final db = _FakeDb();
+      final notif = _FakeNotif();
+      var now = 1000;
+
+      final handler = IncomingMessageHandler(
+        crypto: _FakeCrypto((_, payload) async => payload), // "расшифровка" = payload
+        database: db,
+        notifications: notif,
+        callBuffer: buffer,
+        openCallScreen: ({required contactPublicKey, required offer, callId}) {},
+        emitSignaling: (_) {},
+        emitChatUpdate: (_) {},
+        isAppInForeground: () => true,
+        nowMs: () => now, // время не двигаем: оба сообщения "в одну мс"
+      );
+
+      const sender = 'SENDER_KEY';
+
+      // Два РАЗНЫХ сообщения в одну и ту же миллисекунду (внутри старого 5-сек окна).
+      await handler.handleDecoded(
+          {'type': 'chat', 'sender_pubkey': sender, 'payload': 'привет', 'message_id': 'id-1'});
+      await handler.handleDecoded(
+          {'type': 'chat', 'sender_pubkey': sender, 'payload': 'ты тут?', 'message_id': 'id-2'});
+
+      // Оба сохранились (старое 5-сек окно теряло второе — аудит LOGIC-1).
+      expect(db.saved.length, 2);
+      expect(db.saved.map((e) => e.$1.text), containsAll(['привет', 'ты тут?']));
+      expect(db.saved.first.$1.messageId, 'id-1');
+
+      // Повторная доставка того же id (WS + offline) — настоящий дубль, не сохраняется.
+      await handler.handleDecoded(
+          {'type': 'chat', 'sender_pubkey': sender, 'payload': 'привет', 'message_id': 'id-1'});
+      expect(db.saved.length, 2);
     });
 
     test('ICE до offer не теряется: буферизуется и сохраняется при приходе offer', () async {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import 'package:orpheus_project/call_screen.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
@@ -105,7 +106,11 @@ class _ChatScreenState extends State<ChatScreen>
     _encryptionController.reset();
     _encryptionController.forward();
 
+    // Стабильный id: одинаков у нашей копии и у копии получателя →
+    // корректный дедуп и «удалить у обоих» (аудит LOGIC-1/LOGIC-2).
+    final messageId = const Uuid().v4();
     final sentMessage = ChatMessage(
+      messageId: messageId,
       text: messageText,
       isSentByMe: true,
       status: MessageStatus.sent,
@@ -117,7 +122,8 @@ class _ChatScreenState extends State<ChatScreen>
     try {
       final payload =
           await cryptoService.encrypt(widget.contact.publicKey, messageText);
-      websocketService.sendChatMessage(widget.contact.publicKey, payload);
+      websocketService.sendChatMessage(widget.contact.publicKey, payload,
+          messageId: messageId);
     } catch (_) {
       // UI не блокируем — сообщение уже сохранено локально.
     }
@@ -198,10 +204,16 @@ class _ChatScreenState extends State<ChatScreen>
     );
     if (!ok) return;
 
-    await DatabaseService.instance.deleteMessagesByTimestamps(
-      widget.contact.publicKey,
-      [message.timestamp.millisecondsSinceEpoch],
-    );
+    final id = message.messageId;
+    if (id != null) {
+      await DatabaseService.instance
+          .deleteMessagesByMessageIds(widget.contact.publicKey, [id]);
+    } else {
+      await DatabaseService.instance.deleteMessagesByTimestamps(
+        widget.contact.publicKey,
+        [message.timestamp.millisecondsSinceEpoch],
+      );
+    }
     await _loadChatHistory();
   }
 
@@ -218,11 +230,19 @@ class _ChatScreenState extends State<ChatScreen>
     if (!ok) return;
 
     final tsMs = message.timestamp.millisecondsSinceEpoch;
-    websocketService.sendDeleteForBoth(widget.contact.publicKey, [tsMs]);
-    await DatabaseService.instance.deleteMessagesByTimestamps(
+    final id = message.messageId;
+    websocketService.sendDeleteForBoth(
       widget.contact.publicKey,
-      [tsMs],
+      timestampsMs: [tsMs],
+      messageIds: id != null ? [id] : const [],
     );
+    if (id != null) {
+      await DatabaseService.instance
+          .deleteMessagesByMessageIds(widget.contact.publicKey, [id]);
+    } else {
+      await DatabaseService.instance
+          .deleteMessagesByTimestamps(widget.contact.publicKey, [tsMs]);
+    }
     await _loadChatHistory();
   }
 

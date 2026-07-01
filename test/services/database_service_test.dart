@@ -23,7 +23,8 @@ void main() {
     await db.execute('''
       CREATE TABLE messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        contactPublicKey TEXT NOT NULL, 
+        contactPublicKey TEXT NOT NULL,
+        messageId TEXT, 
         text TEXT NOT NULL,
         isSentByMe INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,

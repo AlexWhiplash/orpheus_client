@@ -839,6 +839,16 @@ class _IncomingDatabaseAdapter implements IncomingMessageDatabase {
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps) {
     return _db.deleteMessagesByTimestamps(contactKey, timestamps);
   }
+
+  @override
+  Future<int> deleteMessagesByMessageIds(String contactKey, List<String> messageIds) {
+    return _db.deleteMessagesByMessageIds(contactKey, messageIds);
+  }
+
+  @override
+  Future<bool> messageExistsByMessageId(String contactKey, String messageId) {
+    return _db.messageExistsByMessageId(contactKey, messageId);
+  }
 }
 
 class _IncomingNotificationsAdapter implements IncomingMessageNotifications {

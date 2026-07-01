@@ -49,7 +49,7 @@ class DatabaseService {
       final db = await openDatabase(
         path,
         password: dbKey,
-        version: 6,
+        version: 7,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
         singleInstance: true, // Важно для избежания блокировок
@@ -150,6 +150,30 @@ class DatabaseService {
           print("DB: Ошибка создания индекса: $e");
         }
       }
+      if (oldVersion < 7) {
+        // messageId — стабильный id сообщения для дедупа и «удалить у обоих».
+        // Убираем старый UNIQUE-индекс по timestamp (мог молча терять сообщения
+        // с одинаковой мс — аудит DB-4) и заменяем на индекс по messageId.
+        DebugLogger.info('DB', 'Миграция до версии 7 — messageId');
+        try {
+          await db.execute("ALTER TABLE messages ADD COLUMN messageId TEXT");
+        } catch (_) {}
+        try {
+          await db.execute("DROP INDEX IF EXISTS idx_unique_message");
+        } catch (_) {}
+        try {
+          await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_messages_contact_ts
+            ON messages(contactPublicKey, timestamp)
+          ''');
+          await db.execute('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_message_id
+            ON messages(contactPublicKey, messageId)
+          ''');
+        } catch (e) {
+          DebugLogger.warn('DB', 'Ошибка индексов v7: $e');
+        }
+      }
       print("DB: Миграция завершена");
     } catch (e) {
       print("DB: ОШИБКА миграции: $e");
@@ -172,6 +196,7 @@ class DatabaseService {
       CREATE TABLE messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         contactPublicKey TEXT NOT NULL,
+        messageId TEXT,
         text TEXT NOT NULL,
         isSentByMe INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,
@@ -179,9 +204,16 @@ class DatabaseService {
         isRead INTEGER DEFAULT 1
       )
     ''');
+    // Индекс под горячий запрос чата и агрегат «последнее сообщение».
     await db.execute('''
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_message
-      ON messages(contactPublicKey, timestamp, isSentByMe)
+      CREATE INDEX IF NOT EXISTS idx_messages_contact_ts
+      ON messages(contactPublicKey, timestamp)
+    ''');
+    // Дедуп по стабильному messageId (NULL допускается многократно —
+    // сообщения без id от старых клиентов не считаются дублями).
+    await db.execute('''
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_message_id
+      ON messages(contactPublicKey, messageId)
     ''');
   }
 
@@ -350,6 +382,7 @@ class DatabaseService {
     return List.generate(maps.length, (i) {
       return ChatMessage(
         id: maps[i]['id'] as int,
+        messageId: maps[i]['messageId'] as String?,
         text: maps[i]['text'] as String,
         isSentByMe: (maps[i]['isSentByMe'] as int) == 1,
         timestamp: DateTime.fromMillisecondsSinceEpoch(maps[i]['timestamp'] as int),
@@ -572,6 +605,31 @@ class DatabaseService {
       where: 'contactPublicKey = ? AND timestamp IN ($placeholders)',
       whereArgs: [contactKey, ...timestamps],
     );
+  }
+
+  /// Удалить сообщения по стабильным messageId (для «удалить у обоих»).
+  Future<int> deleteMessagesByMessageIds(String contactKey, List<String> messageIds) async {
+    if (_isDuressMode || messageIds.isEmpty) return 0;
+    final db = await instance.database;
+    final placeholders = List.filled(messageIds.length, '?').join(',');
+    return await db.delete(
+      'messages',
+      where: 'contactPublicKey = ? AND messageId IN ($placeholders)',
+      whereArgs: [contactKey, ...messageIds],
+    );
+  }
+
+  /// Есть ли уже сообщение с таким messageId от этого контакта (для дедупа входящих).
+  Future<bool> messageExistsByMessageId(String contactKey, String messageId) async {
+    final db = await instance.database;
+    final rows = await db.query(
+      'messages',
+      columns: ['id'],
+      where: 'contactPublicKey = ? AND messageId = ?',
+      whereArgs: [contactKey, messageId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 
   /// Удалить все сообщения старше указанной даты.

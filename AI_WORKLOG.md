@@ -119,3 +119,32 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 - `X-Pubkey` оставлен: телеметрия теперь opt-in, владелец включает её для отладки СВОЕГО устройства.
 
 **Статус:** analyze 0 errors; test 324 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Стабильный message_id: дедуп + удалить у обоих (аудит LOGIC-1/2) [ветка wl/audit-fixes]
+
+**Задача:** LOGIC-1 (тихая потеря быстрых входящих из-за 5-сек окна дедупа) и LOGIC-2 («удалить
+у обоих» не срабатывало у получателя из-за матча по метке времени). Решение: стабильный `message_id`
+(UUID) в конверте, одинаковый у обеих сторон.
+
+**Сделано (8 файлов lib + тесты):**
+- `models/chat_message_model.dart`: поле `messageId` (+toMap).
+- `services/database_service.dart`: колонка `messageId`; версия 6->7; убран UNIQUE-индекс по timestamp
+  (DB-4), добавлены индекс `(contactPublicKey,timestamp)` и UNIQUE `(contactPublicKey,messageId)`;
+  методы `deleteMessagesByMessageIds`, `messageExistsByMessageId`; чтение messageId в mapping.
+- `services/incoming_message_handler.dart`: дедуп по `message_id` (точный) с fallback на окно для
+  старых клиентов; delete-for-both по `message_ids` (fallback timestamps_ms); +2 метода в интерфейс.
+- `services/websocket_service.dart`: `message_id` в конверте chat, `message_ids` в delete-for-both,
+  проброс через pending-очередь на реконнекте.
+- `services/pending_actions_service.dart`: `messageId` в PendingMessage/сериализации.
+- `chat_screen.dart`: генерация UUID при отправке (пакет `uuid`, был неиспользуем - DEP-10);
+  delete-for-both/self по id.
+- `main.dart`: адаптер IncomingMessageDatabase - 2 новых метода.
+- Тесты: тест-схемы messages + `messageId`; фейк `_FakeDb` +2 метода; новый тест на LOGIC-1
+  (разные id в окне не теряются, одинаковый id - дубль).
+
+**Обратная совместимость:** message_id в открытом виде рядом с зашифрованным payload; старые клиенты
+игнорируют лишнее поле; без id - прежнее окно дедупа.
+
+**Статус:** analyze 0 errors; test 325 passed / 0 failed; flutter build apk --debug OK.

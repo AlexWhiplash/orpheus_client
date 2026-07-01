@@ -1,6 +1,7 @@
 // lib/theme/app_theme.dart
 // Quiet Premium — серебро + зелёный акцент
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';

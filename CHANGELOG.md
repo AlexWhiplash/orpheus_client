@@ -5,16 +5,16 @@
 
 ## [Unreleased]
 ### Added
--
+- CI (GitHub Actions): `flutter analyze` (жёсткий гейт на ошибки) + `flutter test` на пуш в ветки `wl/**` и на pull request.
 
 ### Changed
--
+- JDK для Gradle резолвится через flutter/JAVA_HOME, без жёстко прописанного пути.
 
 ### Fixed
--
+- Компиляция на актуальном Flutter (3.44.x): `CupertinoPageTransitionsBuilder` импортируется из `package:flutter/cupertino.dart` (перестал реэкспортироваться из `material`).
 
 ### Removed
--
+- Машинно-специфичный `org.gradle.java.home` из `android/gradle.properties` (был жёстко прописан путь другого разработчика, ломал сборку на других машинах).
 
 ## [1.1.1] - 2026-01-05
 ### Added

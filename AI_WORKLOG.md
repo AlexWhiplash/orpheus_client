@@ -219,3 +219,20 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 - Тест: DB-тест на `getMessagesForContactAfter`.
 
 **Статус:** analyze 0 errors; test 327 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Гигиена логирования в release (аудит QUAL-1/OPS-6) [ветка wl/log-hygiene]
+
+**Задача:** структурированные логи и голые print уходили в системный logcat в release, включая
+события безопасности (duress/wipe/неверный PIN) и дамп security-конфига с хэшами.
+
+**Сделано:**
+- `debug_logger_service.dart`: `print` в `DebugLogger.log` обёрнут в `if (kDebugMode)` - в release
+  логи не идут в logcat (остаются в RAM-буфере для in-app экрана + телеметрии). Гейтит 218 лог-сайтов.
+- `auth_service.dart`: 10 чувствительных `print` -> `DebugLogger` (гейтнуто). Дамп `$_config`
+  (хэши/соль) убран полностью - не пишем даже в буфер.
+- `main.dart`: убраны из логов префикс публичного ключа и состояние PIN при старте.
+- Остальные ~200 операционных `print` (websocket/notification/database/...) - follow-up QUAL-7.
+
+**Статус:** analyze 0 errors; test 327 passed / 0 failed.

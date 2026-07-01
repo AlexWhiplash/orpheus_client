@@ -9,6 +9,7 @@ import 'package:crypto/crypto.dart';
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/models/message_retention_policy.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -79,7 +80,7 @@ class AuthService {
       if (configJson != null) {
         final map = json.decode(configJson) as Map<String, dynamic>;
         _config = SecurityConfig.fromMap(map);
-        print("AUTH: Config loaded: $_config");
+        DebugLogger.info('AUTH', 'Config loaded'); // без дампа конфига (хэши/соль)
       } else {
         _config = SecurityConfig.empty;
         print("AUTH: Config not found, using empty");
@@ -194,7 +195,7 @@ class AuthService {
       final wipeHash = _hashPin(pin, _config.wipeCodeSalt!);
       if (wipeHash == _config.wipeCodeHash) {
         _resetFailedAttempts();
-        print("AUTH: 🗑️ Wipe code entered (${_config.pinLength}-digit) — confirmation required");
+        DebugLogger.warn('AUTH', 'Wipe code entered — confirmation required');
         return PinVerifyResult.wipeCode;
       }
     }
@@ -206,7 +207,7 @@ class AuthService {
         _resetFailedAttempts();
         _isUnlocked = true;
         _isDuressMode = true;
-        print("AUTH: 🎭 Duress code entered (${_config.pinLength}-digit), empty profile activated");
+        DebugLogger.warn('AUTH', 'Duress code entered, empty profile activated');
         return PinVerifyResult.duress;
       }
     }
@@ -216,7 +217,7 @@ class AuthService {
     
     // Проверка автоматического wipe
     if (_config.shouldAutoWipe) {
-      print("AUTH: ⚠️ Attempt limit exceeded (${_config.failedAttempts}/${_config.autoWipeAttempts}), auto-wipe required");
+      DebugLogger.warn('AUTH', 'Attempt limit exceeded, auto-wipe required');
       return PinVerifyResult.autoWipe;
     }
 
@@ -239,7 +240,7 @@ class AuthService {
       lastFailedAttempt: _now(),
     );
     await _saveConfig();
-    print("AUTH: Wrong PIN, attempt ${_config.failedAttempts}");
+    DebugLogger.warn('AUTH', 'Wrong PIN attempt');
   }
 
   // === УПРАВЛЕНИЕ DURESS CODE ===
@@ -267,7 +268,7 @@ class AuthService {
     );
     
     await _saveConfig();
-    print("AUTH: 🎭 Duress code set (${_config.pinLength}-digit)");
+    DebugLogger.info('AUTH', 'Duress code set');
     return true;
   }
 
@@ -311,7 +312,7 @@ class AuthService {
     );
 
     await _saveConfig();
-    print("AUTH: 🗑️ Wipe code set (${_config.pinLength}-digit)");
+    DebugLogger.info('AUTH', 'Wipe code set');
     return true;
   }
 
@@ -425,7 +426,7 @@ class AuthService {
 
   /// Полный wipe — удаление всех данных
   Future<void> performWipe() async {
-    print("AUTH: ⚠️ PERFORMING FULL WIPE...");
+    DebugLogger.warn('AUTH', 'Performing full wipe');
     
     try {
       // 1. Удаляем криптоключи
@@ -452,9 +453,9 @@ class AuthService {
       // 6. Notify _AppState to reset navigation
       onWipeCompleted?.call();
 
-      print("AUTH: ✅ WIPE completed");
+      DebugLogger.success('AUTH', 'Wipe completed');
     } catch (e) {
-      print("AUTH ERROR: Wipe error: $e");
+      DebugLogger.error('AUTH', 'Wipe error: $e');
       rethrow;
     }
   }

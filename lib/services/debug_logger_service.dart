@@ -1,6 +1,7 @@
 // lib/services/debug_logger_service.dart
 
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 /// Глобальный сервис логирования для отладки на реальных устройствах
 /// 
@@ -54,9 +55,13 @@ class DebugLogger {
     // Уведомляем UI и телеметрию
     _updateController.add(null);
     _entryController.add(entry);
-    
-    // Также выводим в консоль для ADB logcat
-    print('[${entry.levelIcon}] [${entry.tag}] ${entry.message}');
+
+    // В release НЕ пишем в системный logcat (утечка метаданных/событий
+    // безопасности на рутованном устройстве / в bug-report — аудит QUAL-1/OPS-6).
+    // Логи по-прежнему доступны в in-app экране отладки (RAM-буфер) и телеметрии.
+    if (kDebugMode) {
+      print('[${entry.levelIcon}] [${entry.tag}] ${entry.message}');
+    }
   }
 
   /// Информационный лог

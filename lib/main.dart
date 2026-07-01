@@ -950,8 +950,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     };
     
-    print("🔑 Keys exist: $_keysExist | Public key: ${cryptoService.publicKeyBase64?.substring(0, 20) ?? 'NULL'}...");
-    print("🔒 Locked: $_isLocked | PIN enabled: ${authService.config.isPinEnabled}");
+    // Не пишем в logcat префикс публичного ключа и состояние PIN (аудит QUAL-1/OPS-6).
+    DebugLogger.info('APP', 'Keys exist: $_keysExist');
+    DebugLogger.info('APP', 'Locked: $_isLocked');
 
     // Слушаем статус лицензии
     _licenseSubscription = websocketService.stream.listen((message) {

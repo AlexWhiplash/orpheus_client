@@ -129,6 +129,9 @@ void main() {
       await tester.runAsync(() async {
         await tester.pumpWidget(
           const MaterialApp(
+            localizationsDelegates: L10n.localizationsDelegates,
+            supportedLocales: L10n.supportedLocales,
+            locale: Locale('ru'),
             home: ContactsScreen(enableUnreadCounters: false),
           ),
         );
@@ -151,6 +154,9 @@ void main() {
 
         await tester.pumpWidget(
           const MaterialApp(
+            localizationsDelegates: L10n.localizationsDelegates,
+            supportedLocales: L10n.supportedLocales,
+            locale: Locale('ru'),
             home: ContactsScreen(enableUnreadCounters: false),
           ),
         );

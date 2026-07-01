@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:orpheus_project/config.dart';
+import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/services/release_notes_service.dart';
 
 class UpdatesScreen extends StatefulWidget {
@@ -117,7 +118,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
               },
             ),
             const SizedBox(width: 12),
-            const Text("UPDATE HISTORY"),
+            Text(L10n.of(context).updateHistory.toUpperCase()),
           ],
         ),
       ),

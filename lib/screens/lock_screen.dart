@@ -635,9 +635,10 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final locale = LocaleService.instance.effectiveLocale.languageCode;
-    final isRu = locale == 'ru';
-    
+    // Язык берём из виджет-дерева (как и l10n выше), а не из глобального синглтона —
+    // в проде MaterialApp.locale резолвится из того же LocaleService.effectiveLocale.
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+
     return AlertDialog(
       backgroundColor: const Color(0xFF120505),
       shape: RoundedRectangleBorder(

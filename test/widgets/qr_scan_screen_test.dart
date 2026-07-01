@@ -30,7 +30,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('СКАНИРОВАНИЕ QR'), findsOneWidget);
+      expect(find.text('СКАНИРОВАТЬ QR-КОД'), findsOneWidget);
       expect(find.text('Наведите камеру на QR-код'), findsOneWidget);
     });
 
@@ -73,7 +73,7 @@ void main() {
       // Экран содержит бесконечные анимации, поэтому pumpAndSettle() будет таймаутиться.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
-      expect(find.text('СКАНИРОВАНИЕ QR'), findsOneWidget);
+      expect(find.text('СКАНИРОВАТЬ QR-КОД'), findsOneWidget);
 
       // В реальности значение прилетает из камеры. В тесте вызываем callback напрямую.
       onQrValue('PUBLIC_KEY_ABC');

@@ -62,8 +62,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final dismissed = await _isBetaDisclaimerDismissed();
     if (dismissed || !mounted) return;
 
-    final locale = LocaleService.instance.effectiveLocale.languageCode;
-    final isRu = locale == 'ru';
+    // Берём язык из виджет-дерева (Localizations), а не из глобального синглтона:
+    // в проде MaterialApp.locale резолвится из того же LocaleService.effectiveLocale,
+    // так что поведение идентично, но диалог корректно следует за локалью дерева.
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
 
     bool dontShowAgain = false;
     await showDialog<void>(

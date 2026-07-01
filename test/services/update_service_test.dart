@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:orpheus_project/services/update_service.dart';
 import 'package:orpheus_project/config.dart';
+import 'package:orpheus_project/l10n/app_localizations.dart';
 
 void main() {
   group('UpdateService Tests', () {
@@ -20,14 +21,10 @@ void main() {
       expect(UpdateService.resolveDownloadUrl(path), equals(AppConfig.httpUrl(path)));
     });
 
-    test('getWithFallback: при ошибке первого хоста пробует следующий и возвращает ответ', () async {
+    test('getWithFallback: возвращает ответ основного хоста', () async {
       final called = <Uri>[];
       UpdateService.debugHttpGet = (uri) async {
         called.add(uri);
-        // Первый хост (api.orpheus.click) "падает"
-        if (uri.host == AppConfig.primaryApiHost) {
-          throw http.ClientException('boom');
-        }
         return http.Response('ok', 200);
       };
 
@@ -36,7 +33,21 @@ void main() {
       expect(resp!.statusCode, equals(200));
       expect(resp.body, equals('ok'));
 
-      // Проверяем что запрос ушёл на primary host
+      // Список хостов сейчас единственный (legacy-домен убран ради приватности),
+      // поэтому запрос уходит только на primary host.
+      expect(called.map((u) => u.host).toList(), equals([AppConfig.primaryApiHost]));
+    });
+
+    test('getWithFallback: возвращает null, когда все хосты недоступны', () async {
+      final called = <Uri>[];
+      UpdateService.debugHttpGet = (uri) async {
+        called.add(uri);
+        throw http.ClientException('boom');
+      };
+
+      final resp = await UpdateService.debugGetWithFallbackForTesting('/api/check-update');
+      expect(resp, isNull);
+      // Перебирает все известные хосты (сейчас — один) и сдаётся.
       expect(called.map((u) => u.host).toList(), equals([AppConfig.primaryApiHost]));
     });
 
@@ -53,6 +64,9 @@ void main() {
       late BuildContext ctx;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: const Locale('ru'),
           home: Builder(
             builder: (context) {
               ctx = context;
@@ -65,14 +79,14 @@ void main() {
       await UpdateService.checkForUpdate(ctx);
       await tester.pumpAndSettle();
 
-      expect(find.text('ДОСТУПНО ОБНОВЛЕНИЕ'), findsOneWidget);
-      expect(find.text('ПОЗЖЕ'), findsOneWidget);
-      expect(find.text('СКАЧАТЬ'), findsOneWidget);
+      expect(find.text('Доступно обновление'), findsOneWidget);
+      expect(find.text('Позже'), findsOneWidget);
+      expect(find.text('Скачать'), findsOneWidget);
 
-      await tester.tap(find.text('ПОЗЖЕ'));
+      await tester.tap(find.text('Позже'));
       await tester.pumpAndSettle();
 
-      expect(find.text('ДОСТУПНО ОБНОВЛЕНИЕ'), findsNothing);
+      expect(find.text('Доступно обновление'), findsNothing);
     });
 
     testWidgets('checkForUpdate: required=true скрывает кнопку "ПОЗЖЕ"', (tester) async {
@@ -88,6 +102,9 @@ void main() {
       late BuildContext ctx;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: const Locale('ru'),
           home: Builder(
             builder: (context) {
               ctx = context;
@@ -100,9 +117,9 @@ void main() {
       await UpdateService.checkForUpdate(ctx);
       await tester.pumpAndSettle();
 
-      expect(find.text('ДОСТУПНО ОБНОВЛЕНИЕ'), findsOneWidget);
-      expect(find.text('ПОЗЖЕ'), findsNothing);
-      expect(find.text('СКАЧАТЬ'), findsOneWidget);
+      expect(find.text('Доступно обновление'), findsOneWidget);
+      expect(find.text('Позже'), findsNothing);
+      expect(find.text('Скачать'), findsOneWidget);
     });
 
     testWidgets('checkForUpdate: не показывает диалог, когда serverBuild <= currentBuild', (tester) async {
@@ -118,6 +135,9 @@ void main() {
       late BuildContext ctx;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: const Locale('ru'),
           home: Builder(
             builder: (context) {
               ctx = context;
@@ -130,7 +150,7 @@ void main() {
       await UpdateService.checkForUpdate(ctx);
       await tester.pumpAndSettle();
 
-      expect(find.text('ДОСТУПНО ОБНОВЛЕНИЕ'), findsNothing);
+      expect(find.text('Доступно обновление'), findsNothing);
     });
   });
 }

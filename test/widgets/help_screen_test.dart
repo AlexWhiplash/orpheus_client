@@ -15,7 +15,7 @@ void main() {
 
     expect(find.text('Как пользоваться'), findsOneWidget);
     expect(find.text('Быстрый старт'), findsOneWidget);
-    expect(find.text('PIN‑код'), findsOneWidget);
-    expect(find.text('Auto‑wipe'), findsOneWidget);
+    expect(find.text('PIN-код'), findsOneWidget);
+    expect(find.text('Автоудаление (Auto-wipe)'), findsOneWidget);
   });
 }

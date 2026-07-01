@@ -466,7 +466,7 @@ class NotificationService {
     // - new_message: sender_name/sender_key
     //
     // Оставляем совместимость со старыми call/message.
-    final callerName = (data['caller_name'] ?? data['sender_name'] ?? 'Unknown').toString();
+    final callerName = (data['caller_name'] ?? data['sender_name'] ?? 'Неизвестный').toString();
     final senderName = (data['sender_name'] ??
             data['caller_name'] ??
             data['sender'] ??
@@ -558,7 +558,7 @@ class NotificationService {
         id: _callNotificationId,
         channelId: _incomingCallChannelId,
         channelName: _callChannelName,
-        title: 'Incoming call',
+        title: 'Входящий звонок',
         body: callerName,
         category: AndroidNotificationCategory.call,
         androidSmallIcon: _androidSmallIcon,
@@ -602,7 +602,7 @@ class NotificationService {
         channelId: _messageChannelId,
         channelName: _messageChannelName,
         title: senderName,
-        body: 'New message', // Don't show content for privacy
+        body: 'Новое сообщение', // Don't show content for privacy
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
         groupKey: 'orpheus_messages_group',

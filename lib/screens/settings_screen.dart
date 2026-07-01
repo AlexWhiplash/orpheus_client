@@ -565,10 +565,15 @@ class _MenuCard extends StatelessWidget {
         borderRadius: AppRadii.lg,
         border: Border.all(color: AppColors.outline),
       ),
-      child: Column(
-        children: [
-          _tile(context, Icons.security, l10n.security, l10n.securityDesc,
-              onSecurity),
+      // Material-предок между декорированным Container и ListTile'ами:
+      // без него Flutter 3.44 бросает debug-ассерт "ink splashes may be invisible"
+      // (ripple рисуется под непрозрачным фоном карточки). transparency сохраняет фон.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          children: [
+            _tile(context, Icons.security, l10n.security, l10n.securityDesc,
+                onSecurity),
           _divider(),
           // Выбор языка
           LanguageSelector(
@@ -596,6 +601,7 @@ class _MenuCard extends StatelessWidget {
             onNotifications,
           ),
         ],
+        ),
       ),
     );
   }

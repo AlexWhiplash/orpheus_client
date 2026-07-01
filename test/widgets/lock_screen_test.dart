@@ -187,7 +187,7 @@ void main() {
       await _enterPin(tester, '000000');
       await tester.pump(const Duration(milliseconds: 350));
 
-      expect(find.text('Неверный PIN-код'), findsOneWidget);
+      expect(find.text('Неверный PIN'), findsOneWidget);
     });
   });
 }

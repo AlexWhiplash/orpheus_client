@@ -181,7 +181,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     // Небольшая задержка для UX
     await Future.delayed(const Duration(milliseconds: 300));
     
-    final result = _auth.verifyPin(_enteredPin);
+    final result = await _auth.verifyPin(_enteredPin);
     
     if (!mounted) return;
     

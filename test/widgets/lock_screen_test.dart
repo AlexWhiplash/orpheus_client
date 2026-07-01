@@ -44,7 +44,8 @@ void main() {
       binding.window.physicalSizeTestValue = const Size(1080, 1920);
       binding.window.devicePixelRatioTestValue = 1.0;
 
-      auth = AuthService.createForTesting(secureStorage: _MemSecureStorage());
+      auth = AuthService.createForTesting(
+          secureStorage: _MemSecureStorage(), fastHash: true);
       await auth.init();
     });
 

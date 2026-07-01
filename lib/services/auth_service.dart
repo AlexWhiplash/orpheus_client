@@ -6,6 +6,8 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
+import 'package:cryptography/cryptography.dart' as kdf;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/models/message_retention_policy.dart';
 import 'package:orpheus_project/services/database_service.dart';
@@ -55,22 +57,33 @@ class AuthService {
   static VoidCallback? onWipeStarted;
 
   /// Создать отдельный экземпляр (в тестах), чтобы не трогать singleton и не зависеть от плагинов.
+  ///
+  /// [fastHash] — использовать быстрый синхронный хэш вместо Argon2id. Нужен
+  /// ТОЛЬКО виджет-тестам: реальный Argon2id async не завершается под fake-clock
+  /// `WidgetTester.pump`. Прод и обычные (await) тесты используют Argon2id.
   static AuthService createForTesting({
     required AuthSecureStorage secureStorage,
     DateTime Function()? now,
+    bool fastHash = false,
   }) {
-    return AuthService._(secureStorage: secureStorage, now: now);
+    return AuthService._(
+        secureStorage: secureStorage, now: now, fastHashForTesting: fastHash);
   }
 
   AuthService._({
     AuthSecureStorage? secureStorage,
     DateTime Function()? now,
+    bool fastHashForTesting = false,
   })  : _secureStorage =
             secureStorage ?? FlutterAuthSecureStorage(const FlutterSecureStorage()),
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        // Сим fastHash действует ТОЛЬКО в debug (тесты): в release всегда Argon2id,
+        // даже если кто-то по ошибке создаст сервис через createForTesting.
+        _fastHashForTesting = fastHashForTesting && kDebugMode;
 
   final AuthSecureStorage _secureStorage;
   final DateTime Function() _now;
+  final bool _fastHashForTesting;
   static const _configKey = 'orpheus_security_config';
 
   /// Текущая конфигурация безопасности
@@ -124,8 +137,8 @@ class AuthService {
   /// [pinLength] — длина PIN-кода (4 или 6), используется для UI и валидации
   Future<void> setPin(String pin, {int pinLength = 6}) async {
     final salt = _generateSalt();
-    final hash = _hashPin(pin, salt);
-    
+    final hash = await _computeHash(pin, salt);
+
     _config = _config.copyWith(
       isPinEnabled: true,
       pinLength: pinLength,
@@ -143,7 +156,7 @@ class AuthService {
   /// Изменить PIN-код (требует текущий PIN)
   /// При изменении PIN сохраняется текущая длина
   Future<bool> changePin(String currentPin, String newPin) async {
-    final result = verifyPin(currentPin);
+    final result = await verifyPin(currentPin);
     if (result != PinVerifyResult.success) {
       return false;
     }
@@ -155,7 +168,7 @@ class AuthService {
 
   /// Отключить PIN-код (требует текущий PIN)
   Future<bool> disablePin(String currentPin) async {
-    final result = verifyPin(currentPin);
+    final result = await verifyPin(currentPin);
     if (result != PinVerifyResult.success) {
       return false;
     }
@@ -179,7 +192,7 @@ class AuthService {
   }
 
   /// Проверить PIN-код
-  PinVerifyResult verifyPin(String pin) {
+  Future<PinVerifyResult> verifyPin(String pin) async {
     if (!_config.isPinEnabled || _config.pinHash == null) {
       _isUnlocked = true;
       return PinVerifyResult.success;
@@ -192,11 +205,13 @@ class AuthService {
     }
 
     // Проверка основного PIN
-    final hash = _hashPin(pin, _config.pinSalt!);
-    if (hash == _config.pinHash) {
-      _resetFailedAttempts();
+    if (await _verifyHash(pin, _config.pinSalt!, _config.pinHash!)) {
+      await _resetFailedAttempts();
       _isUnlocked = true;
       _isDuressMode = false;
+      // legacy → Argon2id при первом входе
+      await _maybeUpgradeLegacyHash(pin, _config.pinSalt, _config.pinHash,
+          (h) => _config.copyWith(pinHash: h));
       DebugLogger.info('AUTH', 'PIN correct, unlocked');
       return PinVerifyResult.success;
     }
@@ -204,29 +219,31 @@ class AuthService {
     // Проверка кода удаления (wipe code)
     // ВАЖНО: возвращаем wipeCode без инкремента попыток — это сознательное действие.
     if (_config.isWipeCodeEnabled && _config.wipeCodeHash != null && _config.wipeCodeSalt != null) {
-      final wipeHash = _hashPin(pin, _config.wipeCodeSalt!);
-      if (wipeHash == _config.wipeCodeHash) {
-        _resetFailedAttempts();
+      if (await _verifyHash(pin, _config.wipeCodeSalt!, _config.wipeCodeHash!)) {
+        await _resetFailedAttempts();
         DebugLogger.warn('AUTH', 'Wipe code entered — confirmation required');
         return PinVerifyResult.wipeCode;
       }
     }
 
     // Проверка duress кода
-    if (_config.isDuressEnabled && _config.duressHash != null) {
-      final duressHash = _hashPin(pin, _config.duressSalt!);
-      if (duressHash == _config.duressHash) {
-        _resetFailedAttempts();
+    if (_config.isDuressEnabled && _config.duressHash != null && _config.duressSalt != null) {
+      if (await _verifyHash(pin, _config.duressSalt!, _config.duressHash!)) {
+        await _resetFailedAttempts();
         _isUnlocked = true;
         _isDuressMode = true;
+        await _maybeUpgradeLegacyHash(pin, _config.duressSalt, _config.duressHash,
+            (h) => _config.copyWith(duressHash: h));
         DebugLogger.warn('AUTH', 'Duress code entered, empty profile activated');
         return PinVerifyResult.duress;
       }
     }
 
     // Неверный PIN
-    _incrementFailedAttempts();
-    
+    // Счётчик попыток пишем durable ДО реакции UI, иначе force-kill сбрасывает
+    // прогресс блокировки/авто-wipe (аудит LOGIC-5).
+    await _incrementFailedAttempts();
+
     // Проверка автоматического wipe
     if (_config.shouldAutoWipe) {
       DebugLogger.warn('AUTH', 'Attempt limit exceeded, auto-wipe required');
@@ -234,6 +251,26 @@ class AuthService {
     }
 
     return PinVerifyResult.invalid;
+  }
+
+  /// Апгрейд legacy SHA-256 хэша в Argon2id при первом удачном вводе кода —
+  /// чтобы старые PIN/коды принуждения не оставались слабо захэшированными
+  /// (аудит SEC-8). [code] — введённый (правильный) код, [apply] проставляет
+  /// новый Argon2id-хэш в конфиг.
+  Future<void> _maybeUpgradeLegacyHash(String code, String? salt,
+      String? stored, SecurityConfig Function(String newHash) apply) async {
+    if (_fastHashForTesting) return; // в тестах хэш и так legacy — не переписываем
+    if (stored == null || salt == null || stored.startsWith(_argon2Prefix)) {
+      return;
+    }
+    try {
+      final upgraded = await _computeHash(code, salt);
+      _config = apply(upgraded);
+      await _saveConfig();
+      DebugLogger.info('AUTH', 'Legacy hash upgraded to Argon2id');
+    } catch (_) {
+      // Апгрейд не критичен: при неудаче код продолжит работать по legacy-пути.
+    }
   }
 
   /// Сбросить счётчик неудачных попыток
@@ -260,8 +297,8 @@ class AuthService {
   /// Установить код принуждения (требует основной PIN)
   Future<bool> setDuressCode(String mainPin, String duressCode) async {
     // Проверяем основной PIN
-    final hash = _hashPin(mainPin, _config.pinSalt!);
-    if (hash != _config.pinHash) {
+    if (_config.pinHash == null || _config.pinSalt == null) return false;
+    if (!await _verifyHash(mainPin, _config.pinSalt!, _config.pinHash!)) {
       return false;
     }
 
@@ -271,7 +308,7 @@ class AuthService {
     }
 
     final salt = _generateSalt();
-    final duressHash = _hashPin(duressCode, salt);
+    final duressHash = await _computeHash(duressCode, salt);
     
     _config = _config.copyWith(
       isDuressEnabled: true,
@@ -286,8 +323,8 @@ class AuthService {
 
   /// Отключить код принуждения (требует основной PIN)
   Future<bool> disableDuressCode(String mainPin) async {
-    final hash = _hashPin(mainPin, _config.pinSalt!);
-    if (hash != _config.pinHash) {
+    if (_config.pinHash == null || _config.pinSalt == null) return false;
+    if (!await _verifyHash(mainPin, _config.pinSalt!, _config.pinHash!)) {
       return false;
     }
     
@@ -308,14 +345,13 @@ class AuthService {
   Future<bool> setWipeCode(String mainPin, String wipeCode) async {
     if (_config.pinHash == null || _config.pinSalt == null) return false;
 
-    final hash = _hashPin(mainPin, _config.pinSalt!);
-    if (hash != _config.pinHash) return false;
+    if (!await _verifyHash(mainPin, _config.pinSalt!, _config.pinHash!)) return false;
 
     // Код удаления не должен совпадать с основным PIN
     if (wipeCode == mainPin) return false;
 
     final salt = _generateSalt();
-    final wipeHash = _hashPin(wipeCode, salt);
+    final wipeHash = await _computeHash(wipeCode, salt);
 
     _config = _config.copyWith(
       isWipeCodeEnabled: true,
@@ -332,8 +368,7 @@ class AuthService {
   Future<bool> disableWipeCode(String mainPin) async {
     if (_config.pinHash == null || _config.pinSalt == null) return false;
 
-    final hash = _hashPin(mainPin, _config.pinSalt!);
-    if (hash != _config.pinHash) return false;
+    if (!await _verifyHash(mainPin, _config.pinSalt!, _config.pinHash!)) return false;
 
     _config = _config.copyWith(
       isWipeCodeEnabled: false,
@@ -416,7 +451,7 @@ class AuthService {
 
   /// Выйти из duress mode (требует основной PIN)
   Future<bool> exitDuressMode(String mainPin) async {
-    final result = verifyPin(mainPin);
+    final result = await verifyPin(mainPin);
     if (result == PinVerifyResult.success) {
       _isDuressMode = false;
       return true;
@@ -505,18 +540,55 @@ class AuthService {
     return base64.encode(saltBytes);
   }
 
-  /// Хеширование PIN с солью (PBKDF2-like с SHA-256)
-  String _hashPin(String pin, String salt) {
-    // Простая схема: SHA-256(salt + pin + salt) повторенная несколько раз
-    // Для production рекомендуется Argon2id, но для мобильного приложения это достаточно
+  /// Параметры Argon2id для хэширования PIN/кодов (memory-hard — аудит SEC-8).
+  /// `memory` — число 1 КБ-блоков (≈19 МБ) = минимум OWASP (m=19456, t=2, p=1).
+  /// Для 4–6-значного PIN вся стойкость к перебору украденного конфига держится
+  /// на цене KDF, поэтому берём рекомендованный минимум. Значения — тюнингуемы:
+  /// при заметной задержке разблокировки на слабом устройстве уменьшить memory
+  /// или нарастить iterations (замерять на реальном железе).
+  static final kdf.Argon2id _argon2id = kdf.Argon2id(
+    parallelism: 1,
+    memory: 19456,
+    iterations: 2,
+    hashLength: 32,
+  );
+
+  /// Префикс-тег нового формата хэша. Legacy-хэши (10000×SHA-256) его не имеют,
+  /// по этому и различаем формат при проверке.
+  static const String _argon2Prefix = 'argon2id\$';
+
+  /// Хэширует PIN/код через Argon2id. Соль — base64 (как и раньше).
+  Future<String> _computeHash(String pin, String salt) async {
+    // Тест-режим: быстрый синхронный хэш (untagged) — verify пойдёт по legacy-пути.
+    if (_fastHashForTesting) return _hashPinLegacy(pin, salt);
+    final key = await _argon2id.deriveKey(
+      secretKey: kdf.SecretKey(utf8.encode(pin)),
+      nonce: base64.decode(salt),
+    );
+    final bytes = await key.extractBytes();
+    return '$_argon2Prefix${base64.encode(bytes)}';
+  }
+
+  /// Проверяет PIN/код против сохранённого хэша, поддерживая ОБА формата:
+  /// новый Argon2id и legacy SHA-256 — иначе PIN, заданные до обновления,
+  /// заблокировались бы (аудит SEC-8).
+  Future<bool> _verifyHash(String pin, String salt, String storedHash) async {
+    if (storedHash.startsWith(_argon2Prefix)) {
+      final computed = await _computeHash(pin, salt);
+      return computed == storedHash;
+    }
+    return _hashPinLegacy(pin, salt) == storedHash;
+  }
+
+  /// LEGACY-хэш (10000×SHA-256). Оставлен ТОЛЬКО для проверки PIN/кодов,
+  /// заданных до перехода на Argon2id; все новые хэши считаются через
+  /// [_computeHash] и при первой удачной проверке апгрейдятся (см. verifyPin).
+  String _hashPinLegacy(String pin, String salt) {
     final saltBytes = base64.decode(salt);
     var data = [...saltBytes, ...utf8.encode(pin), ...saltBytes];
-    
-    // 10000 итераций для замедления brute-force
     for (var i = 0; i < 10000; i++) {
       data = sha256.convert(data).bytes;
     }
-    
     return base64.encode(data);
   }
 

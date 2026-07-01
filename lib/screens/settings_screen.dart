@@ -193,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (pin == null || !mounted) return false;
 
-    final result = authService.verifyPin(pin);
+    final result = await authService.verifyPin(pin);
     if (result == PinVerifyResult.success) return true;
 
     if (mounted) {

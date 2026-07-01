@@ -237,7 +237,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
     final l10n = L10n.of(context);
     if (_step == 0) {
       // Проверяем текущий PIN
-      final result = _auth.verifyPin(_enteredPin);
+      final result = await _auth.verifyPin(_enteredPin);
       if (result == PinVerifyResult.success) {
         _currentPin = _enteredPin;
         setState(() {
@@ -287,7 +287,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
     final l10n = L10n.of(context);
     if (_step == 0) {
       // Проверяем основной PIN
-      final result = _auth.verifyPin(_enteredPin);
+      final result = await _auth.verifyPin(_enteredPin);
       if (result == PinVerifyResult.success) {
         _currentPin = _enteredPin;
         setState(() {
@@ -340,7 +340,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
   Future<void> _processSetWipeCode() async {
     final l10n = L10n.of(context);
     if (_step == 0) {
-      final result = _auth.verifyPin(_enteredPin);
+      final result = await _auth.verifyPin(_enteredPin);
       if (result == PinVerifyResult.success) {
         _currentPin = _enteredPin;
         setState(() {

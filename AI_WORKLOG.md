@@ -102,3 +102,20 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 Реальная проверка SQLCipher/манифеста — сборка `flutter build apk --debug` (нативные libs + resources).
 
 **Команды:** `flutter pub get`, `flutter analyze`, `flutter test`, `flutter build apk --debug`.
+
+---
+
+## 2026-07-01 - Телеметрия opt-in + без метаданных (аудит SEC-2) [ветка wl/audit-fixes]
+
+**Задача:** закрыть SEC-2 - телеметрия была включена по умолчанию и слала на сервер публичные
+ключи контактов (граф общения) и отпечаток устройства.
+
+**Сделано (lib/services/telemetry_service.dart, переписан):**
+- `_enabled = false` по умолчанию; флаг persist в SharedPreferences; `setEnabled()` + `isEnabled`.
+- Из выгрузки убраны `peer_pubkey` и `device_info` (отпечаток); `device_info_plus` больше не
+  используется в телеметрии. `os` оставлен грубым (android/ios).
+- `_sanitizeContext()` вырезает из context ключи-личности контактов перед отправкой.
+- Тумблер включения добавлен в скрытый экран отладочных логов (lib/screens/debug_logs_screen.dart).
+- `X-Pubkey` оставлен: телеметрия теперь opt-in, владелец включает её для отладки СВОЕГО устройства.
+
+**Статус:** analyze 0 errors; test 324 passed / 0 failed.

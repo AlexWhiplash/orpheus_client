@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
+import 'package:orpheus_project/services/telemetry_service.dart';
 import 'package:share_plus/share_plus.dart';
 
 class DebugLogsScreen extends StatefulWidget {
@@ -116,6 +117,30 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
         backgroundColor: const Color(0xFF1A0000),
         foregroundColor: Colors.red,
         actions: [
+          // Тумблер отправки телеметрии на сервер (opt-in, только для отладки).
+          // Даже включённая, телеметрия НЕ шлёт личности контактов и отпечаток
+          // устройства (см. AUDIT_REPORT SEC-2).
+          IconButton(
+            icon: Icon(
+              TelemetryService.instance.isEnabled ? Icons.cloud_upload : Icons.cloud_off,
+              color: TelemetryService.instance.isEnabled ? Colors.orange : Colors.grey,
+            ),
+            tooltip: 'Отправка телеметрии на сервер (для отладки)',
+            onPressed: () async {
+              final newValue = !TelemetryService.instance.isEnabled;
+              await TelemetryService.instance.setEnabled(newValue);
+              if (!mounted) return;
+              setState(() {});
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(newValue
+                      ? 'Телеметрия включена (без данных контактов и устройства)'
+                      : 'Телеметрия выключена'),
+                  backgroundColor: newValue ? Colors.orange : Colors.grey,
+                ),
+              );
+            },
+          ),
           // Кнопка автоскролла
           IconButton(
             icon: Icon(

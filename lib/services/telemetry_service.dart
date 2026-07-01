@@ -1,13 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/main.dart' show cryptoService, isAppInForeground;
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
 
+/// Отправка клиентских логов на сервер для отладки.
+///
+/// ВЫКЛЮЧЕНА по умолчанию (opt-in): включается только явно через [setEnabled]
+/// (например, из скрытого экрана отладочных логов). Даже во включённом виде
+/// НЕ выгружает личности контактов (`peer_pubkey` и т.п.) и отпечаток устройства —
+/// см. AUDIT_REPORT SEC-2.
 class TelemetryService {
   TelemetryService._();
   static final TelemetryService instance = TelemetryService._();
@@ -15,6 +21,20 @@ class TelemetryService {
   static const int _maxQueueSize = 5000;
   static const int _batchSize = 50;
   static const Duration _flushInterval = Duration(seconds: 5);
+  static const String _prefsKey = 'telemetry_enabled';
+
+  /// Ключи контекста, идентифицирующие контактов пользователя (граф общения).
+  /// Никогда не покидают устройство в телеметрии.
+  static const Set<String> _sensitiveContextKeys = {
+    'peer_pubkey',
+    'caller_key',
+    'caller_pubkey',
+    'sender_key',
+    'sender_pubkey',
+    'recipient_pubkey',
+    'pubkey',
+    'public_key',
+  };
 
   final http.Client _httpClient = http.Client();
   final List<LogEntry> _queue = [];
@@ -22,18 +42,47 @@ class TelemetryService {
   Timer? _flushTimer;
   bool _sending = false;
 
-  String? _deviceInfo;
   String? _osName;
 
-  bool _enabled = true;
+  bool _enabled = false;
+  bool get isEnabled => _enabled;
 
   Future<void> init() async {
-    if (!_enabled) return;
-    _deviceInfo = await _getDeviceInfo();
-    _osName = _detectOs();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _enabled = prefs.getBool(_prefsKey) ?? false;
+    } catch (_) {
+      _enabled = false;
+    }
+    if (_enabled) _start();
+  }
 
-    _entrySubscription = DebugLogger.onEntry.listen(_onLogEntry);
-    _flushTimer = Timer.periodic(_flushInterval, (_) => flush());
+  /// Включить/выключить отправку телеметрии. Значение сохраняется.
+  Future<void> setEnabled(bool value) async {
+    _enabled = value;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsKey, value);
+    } catch (_) {}
+    if (value) {
+      _start();
+    } else {
+      _stop();
+    }
+  }
+
+  void _start() {
+    _osName ??= _detectOs();
+    _entrySubscription ??= DebugLogger.onEntry.listen(_onLogEntry);
+    _flushTimer ??= Timer.periodic(_flushInterval, (_) => flush());
+  }
+
+  void _stop() {
+    _entrySubscription?.cancel();
+    _entrySubscription = null;
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _queue.clear();
   }
 
   void _onLogEntry(LogEntry entry) {
@@ -48,7 +97,7 @@ class TelemetryService {
   }
 
   Future<void> flush() async {
-    if (_sending || _queue.isEmpty) return;
+    if (!_enabled || _sending || _queue.isEmpty) return;
     final pubkey = cryptoService.publicKeyBase64;
     if (pubkey == null || pubkey.isEmpty) return;
 
@@ -75,22 +124,32 @@ class TelemetryService {
   }
 
   Map<String, dynamic> _serializeEntry(LogEntry entry) {
-    final context = entry.context ?? const {};
+    final context = entry.context;
     return {
       'timestamp': entry.timestamp.toIso8601String(),
       'level': entry.level.name,
       'tag': entry.tag,
       'category': entry.tag,
       'message': entry.message,
-      'details': context,
-      'call_id': context['call_id'],
-      'peer_pubkey': context['peer_pubkey'],
-      'device_info': _deviceInfo,
+      // details очищены от личностей контактов; peer_pubkey и отпечаток
+      // устройства (device_info) больше НЕ отправляются (AUDIT_REPORT SEC-2).
+      'details': _sanitizeContext(context),
+      'call_id': (context ?? const {})['call_id'],
       'app_version': AppConfig.appVersion,
       'os': _osName,
       'network': NetworkMonitorService.instance.currentState.name,
       'app_state': isAppInForeground ? 'foreground' : 'background',
     };
+  }
+
+  /// Убирает из контекста ключи, идентифицирующие контактов пользователя.
+  Map<String, dynamic> _sanitizeContext(Map<String, dynamic>? context) {
+    if (context == null || context.isEmpty) return const {};
+    final out = <String, dynamic>{};
+    context.forEach((k, v) {
+      if (!_sensitiveContextKeys.contains(k)) out[k] = v;
+    });
+    return out;
   }
 
   Future<bool> _trySend(String url, String pubkey, String body) async {
@@ -118,36 +177,8 @@ class TelemetryService {
     return Platform.operatingSystem;
   }
 
-  Future<String> _getDeviceInfo() async {
-    try {
-      final deviceInfo = DeviceInfoPlugin();
-      if (Platform.isAndroid) {
-        final info = await deviceInfo.androidInfo;
-        return 'Android ${info.version.release} • ${info.manufacturer} ${info.model}';
-      }
-      if (Platform.isIOS) {
-        final info = await deviceInfo.iosInfo;
-        return 'iOS ${info.systemVersion} • ${info.model}';
-      }
-      if (Platform.isWindows) {
-        final info = await deviceInfo.windowsInfo;
-        return 'Windows ${info.productName} ${info.buildNumber}';
-      }
-      if (Platform.isMacOS) {
-        final info = await deviceInfo.macOsInfo;
-        return 'macOS ${info.osRelease}';
-      }
-      if (Platform.isLinux) {
-        final info = await deviceInfo.linuxInfo;
-        return 'Linux ${info.prettyName}';
-      }
-    } catch (_) {}
-    return Platform.operatingSystem;
-  }
-
   void dispose() {
-    _entrySubscription?.cancel();
-    _flushTimer?.cancel();
+    _stop();
     _httpClient.close();
   }
 }

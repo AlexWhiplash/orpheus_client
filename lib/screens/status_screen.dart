@@ -157,7 +157,7 @@ class _StatusScreenState extends State<StatusScreen>
 
   Future<void> _loadSecurity() async {
     try {
-      final crypto = CryptoService();
+      final crypto = CryptoService.instance;
       await crypto.init();
 
       final pubKey = widget.debugPublicKeyBase64 ?? crypto.publicKeyBase64;

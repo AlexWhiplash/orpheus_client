@@ -13,6 +13,11 @@ class _MemSecureStorage implements AuthSecureStorage {
   }
 
   @override
+  Future<void> deleteAll() async {
+    _m.clear();
+  }
+
+  @override
   Future<String?> read({required String key}) async {
     return _m[key];
   }

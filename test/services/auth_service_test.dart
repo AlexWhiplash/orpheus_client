@@ -19,6 +19,11 @@ class _InMemoryAuthStorage implements AuthSecureStorage {
   Future<void> delete({required String key}) async {
     _kv.remove(key);
   }
+
+  @override
+  Future<void> deleteAll() async {
+    _kv.clear();
+  }
 }
 
 void main() {

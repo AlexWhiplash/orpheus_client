@@ -304,4 +304,9 @@ class _MockAuthStorage implements AuthSecureStorage {
   Future<void> delete({required String key}) async {
     _storage.remove(key);
   }
+
+  @override
+  Future<void> deleteAll() async {
+    _storage.clear();
+  }
 }

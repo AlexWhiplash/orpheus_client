@@ -18,6 +18,9 @@ abstract class AuthSecureStorage {
   Future<String?> read({required String key});
   Future<void> write({required String key, required String value});
   Future<void> delete({required String key});
+
+  /// Полная очистка secure storage (для исчерпывающего panic-wipe — аудит SEC-5).
+  Future<void> deleteAll();
 }
 
 /// Прод-реализация secure storage через `flutter_secure_storage`.
@@ -33,6 +36,9 @@ class FlutterAuthSecureStorage implements AuthSecureStorage {
 
   @override
   Future<void> delete({required String key}) => _inner.delete(key: key);
+
+  @override
+  Future<void> deleteAll() => _inner.deleteAll();
 }
 
 class AuthService {
@@ -41,6 +47,12 @@ class AuthService {
   /// Callback for notifying _AppState that wipe completed.
   /// Set by _AppState.initState() to reset navigation state.
   static VoidCallback? onWipeCompleted;
+
+  /// Вызывается в САМОМ начале wipe (до удаления данных), чтобы _AppState мог
+  /// остановить сетевой конвейер (websocket): иначе входящее сообщение может
+  /// пересоздать БД + ключ во время очистки, а сокет остаться подключённым под
+  /// стёртой личностью.
+  static VoidCallback? onWipeStarted;
 
   /// Создать отдельный экземпляр (в тестах), чтобы не трогать singleton и не зависеть от плагинов.
   static AuthService createForTesting({
@@ -175,7 +187,7 @@ class AuthService {
 
     // Проверка блокировки
     if (_config.isLockedOut) {
-      print("AUTH: ⛔ Login attempt during lockout (pinLength: ${_config.pinLength})");
+      DebugLogger.warn('AUTH', 'Login attempt during lockout');
       return PinVerifyResult.lockedOut;
     }
 
@@ -185,7 +197,7 @@ class AuthService {
       _resetFailedAttempts();
       _isUnlocked = true;
       _isDuressMode = false;
-      print("AUTH: ✅ PIN correct (${_config.pinLength}-digit), unlocked");
+      DebugLogger.info('AUTH', 'PIN correct, unlocked');
       return PinVerifyResult.success;
     }
 
@@ -424,39 +436,63 @@ class AuthService {
     print("AUTH: Auto-wipe ${enabled ? 'enabled ($attempts attempts)' : 'disabled'}");
   }
 
-  /// Полный wipe — удаление всех данных
+  /// Полный wipe — удаление всех данных.
+  ///
+  /// Best-effort: каждый шаг в своём try/catch, чтобы сбой одного не отменял
+  /// остальные (аудит LOGIC-7). Secure storage чистится ПОЛНОСТЬЮ (`deleteAll`),
+  /// а не по списку ключей, чтобы не оставить desktop-link сессию, ключ БД и
+  /// любые будущие ключи (аудит SEC-5). Состояние и `onWipeCompleted`
+  /// сбрасываются всегда, даже при частичных ошибках.
   Future<void> performWipe() async {
     DebugLogger.warn('AUTH', 'Performing full wipe');
-    
+    // Останавливаем сеть ДО деструктивных шагов (см. onWipeStarted).
+    onWipeStarted?.call();
+    final errors = <String>[];
+
+    // 1. Криптоключи — на ЖИВОМ синглтоне, чтобы очистились и ключи в памяти,
+    //    и reconnect не поднялся под стёртой личностью (publicKeyBase64 → null).
     try {
-      // 1. Удаляем криптоключи
-      final cryptoService = CryptoService();
-      await cryptoService.deleteAccount();
-      
-      // 2. Закрываем и удаляем базу данных
-      await DatabaseService.instance.deleteDatabaseFile();
-      
-      // 3. Удаляем локальные настройки (SharedPreferences)
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
-      } catch (_) {}
-
-      // 4. Удаляем конфигурацию безопасности
-      await _secureStorage.delete(key: _configKey);
-      
-      // 5. Сбрасываем состояние
-      _config = SecurityConfig.empty;
-      _isUnlocked = false;
-      _isDuressMode = false;
-
-      // 6. Notify _AppState to reset navigation
-      onWipeCompleted?.call();
-
-      DebugLogger.success('AUTH', 'Wipe completed');
+      await CryptoService.instance.deleteAccount();
     } catch (e) {
-      DebugLogger.error('AUTH', 'Wipe error: $e');
-      rethrow;
+      errors.add('crypto: $e');
+    }
+
+    // 2. База данных (в т.ч. удаляет ключ шифрования БД)
+    try {
+      await DatabaseService.instance.deleteDatabaseFile();
+    } catch (e) {
+      errors.add('db: $e');
+    }
+
+    // 3. ВСЁ secure storage: крипто-ключи, security-config, desktop-link сессия,
+    //    ключ БД и любые будущие ключи — исчерпывающе (аудит SEC-5).
+    try {
+      await _secureStorage.deleteAll();
+    } catch (e) {
+      errors.add('secure_storage: $e');
+    }
+
+    // 4. Локальные настройки
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (e) {
+      errors.add('prefs: $e');
+    }
+
+    // 5. Сброс состояния (всегда)
+    _config = SecurityConfig.empty;
+    _isUnlocked = false;
+    _isDuressMode = false;
+
+    // 6. Всегда уведомляем UI (даже при частичных ошибках), чтобы навигация
+    //    сбросилась и не осталась на «полу-стёртом» состоянии (аудит LOGIC-7).
+    onWipeCompleted?.call();
+
+    if (errors.isEmpty) {
+      DebugLogger.success('AUTH', 'Wipe completed');
+    } else {
+      DebugLogger.error('AUTH', 'Wipe finished with errors: ${errors.join('; ')}');
     }
   }
 

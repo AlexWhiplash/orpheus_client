@@ -248,3 +248,25 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 - Зависимость `provider` из pubspec (0 импортов; state - через синглтоны).
 
 **Статус:** pub get OK; analyze 0 errors; test 327 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Защита аварийного wipe: исчерпывающий + best-effort + живой ключ (аудит SEC-5/LOGIC-7 + ARCH-7) [ветка wl/wipe-harden]
+
+**Задача:** SEC-5 (wipe стирал не всё secure storage - оставались desktop-link сессия и ключ БД) +
+LOGIC-7 (wipe прерывался на первом сбое, onWipeCompleted не звался).
+
+**Сделано (после адверсариал-верификации воркфлоу - 3 линзы):**
+- `auth_service.dart`: `AuthSecureStorage.deleteAll()` (+ прод + 5 тест-моков); performWipe переписан
+  best-effort (каждый шаг в try/catch, состояние/навигация сбрасываются всегда), secure storage чистится
+  целиком через `deleteAll`. Ещё 2 голых auth-принта -> DebugLogger.
+- **Верификация нашла HIGH:** wipe звал `CryptoService().deleteAccount()` на ОДНОРАЗОВОМ экземпляре,
+  а живой `cryptoService` держал приватный ключ в памяти + сокет оставался под стёртой личностью.
+  Фикс: `CryptoService` -> синглтон (ARCH-7); performWipe зовёт `CryptoService.instance.deleteAccount()`
+  (чистит ключи в памяти; reconnect не поднимется - publicKeyBase64 == null).
+- **Верификация нашла MEDIUM:** `_isWiping` снимается после шага 2 -> входящее могло пересоздать БД+ключ.
+  Фикс: добавлен `onWipeStarted` (main.dart разрывает websocket В НАЧАЛЕ wipe) + разрыв в onWipeCompleted.
+- Обновлены 3 вызова `CryptoService()` -> `.instance` (main, status_screen, auth performWipe).
+- LOW (APK-updates не чистятся - не секрет; нет сигнала об ошибке wipe в UI) - отмечено как follow-up.
+
+**Статус:** analyze 0 errors; test 327 passed / 0 failed; сборка APK - в процессе.

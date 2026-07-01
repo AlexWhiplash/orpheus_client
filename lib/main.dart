@@ -39,7 +39,7 @@ import 'package:orpheus_project/welcome_screen.dart';
 import 'package:orpheus_project/screens/home_screen.dart';
 
 // Глобальные сервисы
-final cryptoService = CryptoService();
+final cryptoService = CryptoService.instance;
 final websocketService = WebSocketService();
 final presenceService = PresenceService(websocketService);
 final notificationService = NotificationService();
@@ -937,9 +937,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Подписываемся на изменения локали
     LocaleService.instance.addListener(_onLocaleChanged);
     
+    // Останавливаем сеть В НАЧАЛЕ wipe: иначе входящее сообщение может
+    // пересоздать БД+ключ во время очистки, а сокет остаться под стёртой личностью.
+    AuthService.onWipeStarted = () {
+      try {
+        websocketService.disconnect();
+      } catch (_) {}
+    };
+
     // Central wipe handler — called from ALL wipe paths
     // (delete account, wipe code, auto-wipe, panic wipe)
     AuthService.onWipeCompleted = () {
+      // Сеть уже остановлена в onWipeStarted; на всякий случай закрываем ещё раз.
+      try {
+        websocketService.disconnect();
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _keysExist = false;

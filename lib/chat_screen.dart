@@ -65,9 +65,32 @@ class _ChatScreenState extends State<ChatScreen>
     _messageUpdateSubscription =
         messageUpdateController.stream.listen((senderKey) {
       if (senderKey == widget.contact.publicKey) {
-        _loadChatHistory();
+        // Дописываем только НОВЫЕ сообщения, а не перечитываем всю историю
+        // на каждое входящее (аудит PERF-1).
+        _appendNewMessages();
         _markAsRead();
       }
+    });
+  }
+
+  /// Инкрементально дописывает сообщения новее последнего известного, без
+  /// перезапроса всей переписки. Дедуп по messageId на случай пересечений.
+  Future<void> _appendNewMessages() async {
+    final lastMs = _chatHistory.isEmpty
+        ? 0
+        : _chatHistory.last.timestamp.millisecondsSinceEpoch;
+    final newer = await DatabaseService.instance
+        .getMessagesForContactAfter(widget.contact.publicKey, lastMs);
+    if (!mounted || newer.isEmpty) return;
+    final existingIds =
+        _chatHistory.map((m) => m.messageId).whereType<String>().toSet();
+    final toAdd = newer
+        .where((m) => m.messageId == null || !existingIds.contains(m.messageId))
+        .toList();
+    if (toAdd.isEmpty) return;
+    setState(() => _chatHistory = [..._chatHistory, ...toAdd]);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0.0);
     });
   }
 

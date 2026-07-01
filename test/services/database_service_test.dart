@@ -92,6 +92,32 @@ void main() {
       expect(msgs, isEmpty);
     });
 
+    test('getMessagesForContactAfter возвращает только новые сообщения (PERF-1)', () async {
+      const key = 'C_AFTER';
+      await DatabaseService.instance.addMessage(
+        ChatMessage(
+          messageId: 'a',
+          text: 'старое',
+          isSentByMe: false,
+          timestamp: DateTime.fromMillisecondsSinceEpoch(1000),
+        ),
+        key,
+      );
+      await DatabaseService.instance.addMessage(
+        ChatMessage(
+          messageId: 'b',
+          text: 'новое',
+          isSentByMe: false,
+          timestamp: DateTime.fromMillisecondsSinceEpoch(2000),
+        ),
+        key,
+      );
+
+      final after =
+          await DatabaseService.instance.getMessagesForContactAfter(key, 1000);
+      expect(after.map((m) => m.text).toList(), ['новое']);
+    });
+
     test('Добавление сообщения', () async {
       final message = ChatMessage(
         text: "Test message",

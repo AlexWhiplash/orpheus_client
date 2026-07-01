@@ -36,14 +36,17 @@ class _ContactsScreenState extends State<ContactsScreen> {
       _modelFuture;
   StreamSubscription? _updateSubscription;
   Timer? _updateCheckTimer;
+  Timer? _refreshDebounce;
 
   @override
   void initState() {
     super.initState();
 
     _modelFuture = _loadModel();
+    // Debounce: при пачке входящих (напр. бэклог на реконнекте) не пере-агрегируем
+    // всю таблицу и не перерисовываем список на каждое сообщение (аудит PERF-3).
     _updateSubscription =
-        messageUpdateController.stream.listen((_) => _refreshContacts());
+        messageUpdateController.stream.listen((_) => _scheduleRefresh());
 
     // В тестах не запускаем фоновые проверки обновлений (иначе появятся таймеры/сетевые запросы).
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
@@ -58,8 +61,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
   @override
   void dispose() {
     _updateCheckTimer?.cancel();
+    _refreshDebounce?.cancel();
     _updateSubscription?.cancel();
     super.dispose();
+  }
+
+  /// Коалесцируем частые события обновления (входящие сообщения) в один refresh.
+  void _scheduleRefresh() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(milliseconds: 400), _refreshContacts);
   }
 
   void _refreshContacts() {

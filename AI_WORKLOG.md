@@ -205,3 +205,17 @@ pump'ы (contacts, диалог обновления), переписан `getWi
 (перезапись кэша на inactive), вечно-офлайн отозванная лицензия запрётся максимум через 21 день.
 
 **Статус:** analyze 0 errors; test 326 passed / 0 failed.
+
+---
+
+## 2026-07-01 - Производительность: инкрементальный чат + debounce контактов (аудит PERF-1/PERF-3) [ветка wl/perf]
+
+- **PERF-1** (`chat_screen.dart` + `database_service.dart`): вместо перечитывания всей переписки на
+  каждое входящее - `getMessagesForContactAfter(afterMs)` + `_appendNewMessages()` дописывают только
+  новое (дедуп по messageId). Вынесен общий маппер строки `_rowToMessage`. Пагинация начальной
+  загрузки (скролл вверх) - отдельный follow-up.
+- **PERF-3** (`contacts_screen.dart`): обновление списка на события `messageUpdateController`
+  debounce-ится (400мс) через `_scheduleRefresh` - пачка входящих не пере-агрегирует всю таблицу.
+- Тест: DB-тест на `getMessagesForContactAfter`.
+
+**Статус:** analyze 0 errors; test 327 passed / 0 failed.

@@ -394,17 +394,35 @@ class DatabaseService {
       orderBy: 'timestamp ASC',
     );
 
-    return List.generate(maps.length, (i) {
-      return ChatMessage(
-        id: maps[i]['id'] as int,
-        messageId: maps[i]['messageId'] as String?,
-        text: maps[i]['text'] as String,
-        isSentByMe: (maps[i]['isSentByMe'] as int) == 1,
-        timestamp: DateTime.fromMillisecondsSinceEpoch(maps[i]['timestamp'] as int),
-        status: MessageStatus.values[(maps[i]['status'] as int?) ?? 1],
-        isRead: ((maps[i]['isRead'] as int?) ?? 1) == 1,
-      );
-    });
+    return maps.map(_rowToMessage).toList();
+  }
+
+  /// Сообщения контакта СТРОГО новее указанной метки времени (ASC).
+  /// Для инкрементальной подгрузки новых сообщений без перечитывания всей
+  /// истории на каждое входящее (аудит PERF-1).
+  Future<List<ChatMessage>> getMessagesForContactAfter(
+      String contactKey, int afterMs) async {
+    if (_isDuressMode) return [];
+    final db = await instance.database;
+    final maps = await db.query(
+      'messages',
+      where: 'contactPublicKey = ? AND timestamp > ?',
+      whereArgs: [contactKey, afterMs],
+      orderBy: 'timestamp ASC',
+    );
+    return maps.map(_rowToMessage).toList();
+  }
+
+  ChatMessage _rowToMessage(Map<String, Object?> row) {
+    return ChatMessage(
+      id: row['id'] as int?,
+      messageId: row['messageId'] as String?,
+      text: row['text'] as String,
+      isSentByMe: (row['isSentByMe'] as int) == 1,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(row['timestamp'] as int),
+      status: MessageStatus.values[(row['status'] as int?) ?? 1],
+      isRead: ((row['isRead'] as int?) ?? 1) == 1,
+    );
   }
 
   // --- AI Assistant ---

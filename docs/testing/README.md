@@ -14,14 +14,17 @@ flutter test
 .\quick_test.ps1
 ```
 
-### Прогон с сохранением отчётов
+### Прогон с выводом отчёта в консоль
 ```powershell
 .\test_runner.ps1
 ```
+Печатает форматированную сводку в консоль (файлы не создаёт).
 
-Отчёты сохраняются в `test_reports/`:
-- `test_report_YYYY-MM-DD_HH-mm-ss.txt`
-- `test_report_YYYY-MM-DD_HH-mm-ss.json`
+### Прогон с сохранением отчёта в файл
+```powershell
+.\test_runner_clean.ps1
+```
+Сохраняет отчёт в `test_reports/clean_report_<дата-время>.txt` (папка создаётся автоматически).
 
 ## Что именно тесты гарантируют (контракты)
 

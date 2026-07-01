@@ -60,7 +60,7 @@
   - `network`, `app_state`
 - Фоновый FCM handler также отправляет базовую телеметрию (с `recipient_pubkey` из push data).
 
-### Сервер (репозиторий `D:\Programs\orpheus`)
+### Сервер (серверный репозиторий — вне этого репозитория)
 - Таблица: `telemetry_logs`
 - Логируются:
   - все HTTP запросы/ответы (middleware),

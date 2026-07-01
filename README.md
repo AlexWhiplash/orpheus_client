@@ -5,8 +5,15 @@
 ## Быстрый старт
 
 ### Требования
-- Flutter SDK (см. `environment` в `pubspec.yaml`)
+- Flutter SDK 3.44.x (проект разрабатывается на 3.44.4, канал stable). В `pubspec.yaml` → `environment`
+  зафиксирован только Dart SDK.
 - Android SDK / Android Studio (для Android)
+
+> **Firebase настраивать не нужно:** `android/app/google-services.json` уже закоммичен, поэтому
+> debug-сборка собирается сразу после `flutter pub get`, без дополнительных секретов.
+>
+> **Ветка:** активная разработка этого клиента идёт в изолированном треке `wl/dev` (форк
+> `AlexWhiplash/orpheus_client`); ветку `master` не трогаем.
 
 ### Установка зависимостей
 ```powershell
@@ -17,6 +24,15 @@ flutter pub get
 ```powershell
 flutter run
 ```
+
+### Сборка APK (релиз)
+```powershell
+flutter build apk --release
+```
+Готовый файл: `build/app/outputs/flutter-apk/app-release.apk`.
+
+> Примечание: сейчас release подписывается debug-ключом — для публичной раздачи нужен собственный
+> keystore (см. `AUDIT_REPORT.md`, находка `OPS-1`).
 
 ## Тесты и отчёты
 

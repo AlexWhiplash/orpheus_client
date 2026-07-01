@@ -31,7 +31,7 @@
 - AuthService - аутентификация, PIN, duress mode, auto-lock
 - CryptoService - E2E шифрование (X25519 + ChaCha20-Poly1305)
 - WebSocketService - real-time messaging с автореконнектом
-- DatabaseService - SQLite, версия 5, поддержка duress mode
+- DatabaseService - SQLite, версия 6, поддержка duress mode
 - NotificationService - FCM + local notifications
 - CallStateService - WebRTC звонки
 - AiAssistantService - Oracle of Orpheus AI
@@ -70,8 +70,9 @@
 ## Локализация
 - Английский (EN) имеет приоритет
 - Русский (RU) как второй язык
-- Все строки UI через AppLocalizations
-- Файлы: lib/l10n/app_localizations_en.dart, app_localizations_ru.dart
+- Все строки UI через AppLocalizations (класс `L10n`, `L10n.of(context)`)
+- Редактируемые ИСТОЧНИКИ переводов: `lib/l10n/app_en.arb` (шаблон) и `lib/l10n/app_ru.arb`.
+  Файлы `lib/l10n/app_localizations*.dart` — СГЕНЕРИРОВАННЫЕ (`flutter gen-l10n`), править их вручную нельзя.
 
 ## Чеклист релиза (ОБЯЗАТЕЛЬНО)
 Перед каждым патчем или релизом агент ОБЯЗАН пройти все пункты по порядку.

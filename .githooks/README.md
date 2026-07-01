@@ -1,24 +1,6 @@
 # Git hooks (orpheus_client)
 
-Этот репозиторий использует hooks из папки `.githooks/` (а не из `.git/hooks`).
-
-## Установка
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install-hooks.ps1
-```
-
-Проверка:
-
-```powershell
-git config --get core.hooksPath
-```
-
-Должно вернуть: `.githooks`
-
-# Git hooks
-
-Этот репозиторий использует локальный путь hooks через `core.hooksPath`.
+Этот репозиторий использует локальный путь hooks через `core.hooksPath` (папка `.githooks/`, а не `.git/hooks`).
 
 ## Установка (Windows / PowerShell)
 

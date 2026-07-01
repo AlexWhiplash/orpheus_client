@@ -31,6 +31,15 @@ class WebSocketService {
   Timer? _reconnectTimer;
   Timer? _pingTimer;
   bool _isDisconnectingIntentional = false;
+  // Поколение попытки подключения: защищает от гонки, когда _initConnection
+  // запускается повторно (реконнект/сеть/lifecycle), пока предыдущий
+  // WebSocket.connect ещё в полёте. Сокет устаревшего поколения закрывается и
+  // не подписывается — иначе получаются два живых сокета и двойная доставка
+  // (аудит LOGIC-9).
+  int _connectionGeneration = 0;
+  // Защита от параллельного слива очереди pending-сообщений (быстрый реконнект
+  // мог запустить второй проход → дубли/потери в очереди).
+  bool _sendingPending = false;
 
   // Подписка на изменения сети
   StreamSubscription? _networkSubscription;
@@ -111,6 +120,7 @@ class WebSocketService {
   void _initConnection() {
     if (_currentPublicKey == null) return;
 
+    final gen = ++_connectionGeneration;
     final uri = Uri.parse(AppConfig.webSocketUrl(_currentPublicKey!, host: currentHost));
     _statusController.add(ConnectionStatus.Connecting);
     print("WS: Попытка подключения к $uri...");
@@ -118,8 +128,20 @@ class WebSocketService {
 
     try {
       WebSocket.connect(uri.toString()).then((ws) {
+        // Пока подключались, стартовал более новый connect — этот сокет лишний:
+        // закрываем и НЕ подписываемся, иначе будет второй живой сокет (LOGIC-9).
+        if (gen != _connectionGeneration) {
+          try {
+            ws.close();
+          } catch (_) {}
+          return;
+        }
         ws.pingInterval = const Duration(seconds: 10);
 
+        // Закрываем прежний канал, если он вдруг ещё открыт.
+        try {
+          _channel?.sink.close();
+        } catch (_) {}
         _channel = IOWebSocketChannel(ws);
         _statusController.add(ConnectionStatus.Connected);
         _reconnectAttempt = 0; // Сброс backoff при успешном подключении
@@ -145,17 +167,25 @@ class WebSocketService {
             } catch (_) {}
           },
           onDone: () {
+            // Событие от УСТАРЕВШЕГО сокета (его закрыл более новый connect) —
+            // игнорируем: иначе закрытие живого предшественника дёрнет
+            // _handleDisconnect и вызовет лишний цикл реконнектов при живом
+            // соединении (регресс, найденный при верификации LOGIC-9).
+            if (gen != _connectionGeneration) return;
             print("WS: Соединение закрыто (onDone).");
             DebugLogger.warn('WS', 'Соединение закрыто (onDone)');
             _handleDisconnect();
           },
           onError: (error) {
+            if (gen != _connectionGeneration) return;
             print("WS ERROR: Socket error: $error");
             DebugLogger.error('WS', 'Socket error: $error');
             _handleDisconnect();
           },
         );
       }).catchError((e) {
+        // Устаревшая попытка (уже стартовал новый connect) — не трогаем состояние.
+        if (gen != _connectionGeneration) return;
         print("WS FATAL: Не удалось подключиться: $e");
         DebugLogger.error('WS', 'FATAL: Не удалось подключиться: $e');
         _rotateHost();
@@ -215,6 +245,10 @@ class WebSocketService {
 
   void disconnect() {
     _isDisconnectingIntentional = true;
+    // Инвалидируем любой connect «в полёте»: если WebSocket.connect завершится
+    // уже после намеренного disconnect, его поколение не совпадёт и сокет будет
+    // закрыт, а не установлен (LOGIC-9).
+    _connectionGeneration++;
     _reconnectTimer?.cancel();
     _stopPingPong();
     _networkSubscription?.cancel();
@@ -291,36 +325,44 @@ class WebSocketService {
   /// Отправить все pending сообщения после восстановления соединения.
   /// Удаляет из очереди ТОЛЬКО те, что реально ушли в канал.
   Future<void> _sendPendingMessages() async {
-    final pending = await PendingActionsService.getPendingMessages();
-    if (pending.isEmpty) return;
+    // Не допускаем два параллельных слива очереди (иначе removeFirstMessages/
+    // clearPendingMessages двух проходов передерутся → дубли/потери).
+    if (_sendingPending) return;
+    _sendingPending = true;
+    try {
+      final pending = await PendingActionsService.getPendingMessages();
+      if (pending.isEmpty) return;
 
-    DebugLogger.info('WS', '📤 Отправка ${pending.length} pending сообщений...');
+      DebugLogger.info('WS', '📤 Отправка ${pending.length} pending сообщений...');
 
-    var sentCount = 0;
-    for (final msg in pending) {
-      if (_channel == null || _statusController.value != ConnectionStatus.Connected) {
-        DebugLogger.warn('WS', 'Соединение потеряно при отправке pending сообщений, отправлено $sentCount из ${pending.length}');
-        break;
+      var sentCount = 0;
+      for (final msg in pending) {
+        if (_channel == null || _statusController.value != ConnectionStatus.Connected) {
+          DebugLogger.warn('WS', 'Соединение потеряно при отправке pending сообщений, отправлено $sentCount из ${pending.length}');
+          break;
+        }
+
+        _sendMessage({
+          "recipient_pubkey": msg.recipientKey,
+          "type": "chat",
+          "payload": msg.encryptedPayload,
+          if (msg.messageId != null) "message_id": msg.messageId,
+        });
+        sentCount++;
+
+        // Небольшая задержка между сообщениями
+        await Future.delayed(const Duration(milliseconds: 50));
       }
 
-      _sendMessage({
-        "recipient_pubkey": msg.recipientKey,
-        "type": "chat",
-        "payload": msg.encryptedPayload,
-        if (msg.messageId != null) "message_id": msg.messageId,
-      });
-      sentCount++;
-
-      // Небольшая задержка между сообщениями
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
-
-    if (sentCount == pending.length) {
-      await PendingActionsService.clearPendingMessages();
-      DebugLogger.success('WS', 'Все $sentCount pending сообщений отправлены');
-    } else if (sentCount > 0) {
-      await PendingActionsService.removeFirstMessages(sentCount);
-      DebugLogger.warn('WS', 'Отправлено $sentCount из ${pending.length}, остальные остались в очереди');
+      if (sentCount == pending.length) {
+        await PendingActionsService.clearPendingMessages();
+        DebugLogger.success('WS', 'Все $sentCount pending сообщений отправлены');
+      } else if (sentCount > 0) {
+        await PendingActionsService.removeFirstMessages(sentCount);
+        DebugLogger.warn('WS', 'Отправлено $sentCount из ${pending.length}, остальные остались в очереди');
+      }
+    } finally {
+      _sendingPending = false;
     }
   }
 

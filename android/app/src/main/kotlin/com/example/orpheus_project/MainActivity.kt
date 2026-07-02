@@ -118,8 +118,41 @@ class MainActivity: FlutterFragmentActivity() {
                     disableCallMode()
                     result.success(true)
                 }
+                "startCallAudio" -> {
+                    startCallAudioService(call.argument<String>("title"))
+                    result.success(true)
+                }
+                "stopCallAudio" -> {
+                    stopCallAudioService()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    /// Поднимает микрофонный foreground-сервис на время звонка. Вызывается из
+    /// видимого CallScreen (foreground), чтобы старт microphone-FGS был легален
+    /// по правилам Android 14. Best-effort: сбой не роняет звонок.
+    private fun startCallAudioService(title: String?) {
+        try {
+            val intent = Intent(this, CallAudioService::class.java).apply {
+                putExtra(CallAudioService.EXTRA_TITLE, title ?: "Orpheus")
+            }
+            androidx.core.content.ContextCompat.startForegroundService(this, intent)
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "startCallAudioService failed: ${e.message}")
+        }
+    }
+
+    private fun stopCallAudioService() {
+        try {
+            val intent = Intent(this, CallAudioService::class.java).apply {
+                action = CallAudioService.ACTION_STOP
+            }
+            startService(intent)
+        } catch (e: Exception) {
+            android.util.Log.w("MainActivity", "stopCallAudioService failed: ${e.message}")
         }
     }
 

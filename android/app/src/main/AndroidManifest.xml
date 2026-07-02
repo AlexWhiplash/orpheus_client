@@ -107,6 +107,14 @@
                 android:value="Maintains an end-to-end-encrypted realtime WebSocket to deliver incoming calls and messages without Google/FCM on de-Googled devices." />
         </service>
 
+        <!-- Короткоживущий микрофонный сервис на время звонка: держит микрофон,
+             когда приложение свёрнуто во время разговора. Запускается из видимого
+             CallScreen (иначе microphone-FGS нельзя стартовать по правилам Android 14). -->
+        <service
+            android:name=".CallAudioService"
+            android:foregroundServiceType="microphone"
+            android:exported="false" />
+
         <!-- FileProvider для безопасной передачи APK файлов (установка обновлений) -->
         <provider
             android:name="androidx.core.content.FileProvider"

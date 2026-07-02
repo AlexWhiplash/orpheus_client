@@ -23,6 +23,26 @@ class CallNativeUiService {
       // best-effort
     }
   }
+
+  /// Поднять нативный микрофонный foreground-сервис на время звонка (Android).
+  /// Держит микрофон, когда приложение свёрнуто во время разговора. Вызывать из
+  /// видимого CallScreen (иначе старт microphone-FGS отклонят правила Android 14).
+  static Future<void> startCallAudio({String? title}) async {
+    try {
+      await _callChannel.invokeMethod('startCallAudio', {'title': title});
+    } catch (_) {
+      // best-effort: обычный звонок при видимом экране и так получает микрофон.
+    }
+  }
+
+  /// Остановить микрофонный сервис (звонок завершён).
+  static Future<void> stopCallAudio() async {
+    try {
+      await _callChannel.invokeMethod('stopCallAudio');
+    } catch (_) {
+      // best-effort
+    }
+  }
 }
 
 

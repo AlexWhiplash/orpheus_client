@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-07-02 — Микрофон при свёрнутом приложении во время звонка
+
+**Задача:** восстановить поведение «говорить, когда приложение свёрнуто во время
+звонка». После отказа от FCM единый постоянный сервис стал `specialUse` и по
+правилам Android 14 (while-in-use, boot/background-старт) не может держать
+микрофон. Решение — отдельный короткоживущий нативный `microphone`-сервис,
+запускаемый из видимой Activity ответа (паттерн Signal/Molly WebRtcCallService).
+
+**Сделано:**
+- Нативный `android/.../CallAudioService.kt` — foreground-сервис типа `microphone`:
+  `startForeground(..., FOREGROUND_SERVICE_TYPE_MICROPHONE)` на API 29+, с
+  try/catch (сбой старта не роняет звонок), канал `orpheus_call_audio` (LOW),
+  `STOP`-экшен. Держит микрофон, пока приложение свёрнуто во время разговора.
+- `MainActivity.kt`: в `CALL_CHANNEL` добавлены `startCallAudio(title)` /
+  `stopCallAudio` (через `ContextCompat.startForegroundService`, best-effort).
+- Манифест: `<service .CallAudioService foregroundServiceType="microphone" exported=false>`
+  (permission `FOREGROUND_SERVICE_MICROPHONE` уже был).
+- Dart: `CallNativeUiService.startCallAudio/stopCallAudio`; вызовы в
+  `call_screen.dart` — старт в `initState` (видимая Activity → старт mic-FGS
+  легален), стоп в `dispose`.
+
+**Почему из CallScreen:** microphone-FGS можно стартовать ТОЛЬКО из foreground
+(видимый экран). CallScreen при ответе — видимая Activity, поэтому старт легален
+и сервис НЕ «прилипает» как запрещённый. Если старт всё же отклонён — тихий
+фолбэк: обычный звонок при видимом экране получает микрофон и без FGS.
+
+**ТРЕБУЕТ ПРОВЕРКИ НА УСТРОЙСТВЕ:** реально ли микрофон продолжает работать при
+сворачивании во время звонка на Android 12/13/14/15 и на строгих OEM.
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 328 passed;
+`flutter build apk` (debug) — успешно (Kotlin-сервис компилируется, манифест
+сливается).
+
+---
+
 ## 2026-07-02 — Лицензия: убран grace-период кэша (по решению)
 
 **Задача:** упростить модель офлайн-лицензии. Раньше офлайн-доступ давался только

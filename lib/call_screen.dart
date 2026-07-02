@@ -108,6 +108,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     CallNativeUiService.enableCallMode();
 
     _displayName = widget.contactPublicKey.substring(0, 8);
+    // Поднимаем микрофонный foreground-сервис из видимого CallScreen — тогда
+    // микрофон переживёт сворачивание приложения во время разговора (Android 14).
+    CallNativeUiService.startCallAudio(title: _displayName);
     _resolveContactName();
 
     // Единый call_id для корреляции логов
@@ -796,6 +799,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   void dispose() {
     CallStateService.instance.setCallActive(false);
     CallNativeUiService.disableCallMode();
+    // Останавливаем микрофонный сервис — звонок завершён.
+    CallNativeUiService.stopCallAudio();
 
     // 0. Скрываем CallKit UI если он был показан
     FlutterCallkitIncoming.endAllCalls();

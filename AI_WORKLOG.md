@@ -351,3 +351,13 @@ short-circuit апгрейда в fast-тестах (LOW). Constant-time compare
 ротирует хост, зовёт `_handleDisconnect` (реконнект). Отменяется на успехе/ошибке/disconnect.
 
 **Статус:** analyze 0 errors; test 327 passed / 0 failed.
+
+---
+
+## 2026-07-02 - Дедуп in-flight запросов бейджей (аудит PERF-4) [wl/dev]
+
+`badge_service.dart`: `getBadge` без дедупа плодил параллельные HTTP на один pubkey (preloadBadges
+зовётся на каждый refresh контактов). Добавлен `_inFlight` (pubkey -> Future) + `putIfAbsent` со
+self-clean `whenComplete`; логика запроса вынесена в `_fetchAndCache`.
+
+**Статус:** analyze 0 errors; test 327 passed / 0 failed.

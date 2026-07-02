@@ -96,6 +96,10 @@ class BadgeService {
   
   /// Время последнего запроса для каждого pubkey (для избежания частых запросов)
   final Map<String, DateTime> _lastFetch = {};
+
+  /// Запросы «в полёте»: pubkey -> Future, чтобы одновременные вызовы по одному
+  /// ключу переиспользовали один сетевой запрос, а не плодили дубли (аудит PERF-4).
+  final Map<String, Future<BadgeInfo?>> _inFlight = {};
   
   /// Минимальный интервал между запросами для одного pubkey
   static const Duration _cacheDuration = Duration(minutes: 5);
@@ -108,14 +112,24 @@ class BadgeService {
     // Проверяем кеш
     if (_badgeCache.containsKey(pubkey)) {
       final lastFetch = _lastFetch[pubkey];
-      if (lastFetch != null && 
+      if (lastFetch != null &&
           DateTime.now().difference(lastFetch) < _cacheDuration) {
         // Возвращаем из кеша
         return BadgeInfo.fromString(_badgeCache[pubkey]);
       }
     }
 
-    // Запрашиваем с сервера
+    // Дедуп: если запрос по этому pubkey уже идёт — переиспользуем его,
+    // не создавая второй сетевой запрос (аудит PERF-4).
+    return _inFlight.putIfAbsent(
+      pubkey,
+      () => _fetchAndCache(pubkey).whenComplete(() => _inFlight.remove(pubkey)),
+    );
+  }
+
+  /// Запрос бейджа с сервера + запись в кеш. При ошибке возвращает то, что было
+  /// в кеше (или null).
+  Future<BadgeInfo?> _fetchAndCache(String pubkey) async {
     try {
       final badgeType = await _fetchBadgeFromServer(pubkey);
       _badgeCache[pubkey] = badgeType;
@@ -123,7 +137,6 @@ class BadgeService {
       return BadgeInfo.fromString(badgeType);
     } catch (e) {
       print('[BADGE] Error fetching badge for ${pubkey.substring(0, 16)}...: $e');
-      // При ошибке возвращаем кешированное значение или null
       return BadgeInfo.fromString(_badgeCache[pubkey]);
     }
   }

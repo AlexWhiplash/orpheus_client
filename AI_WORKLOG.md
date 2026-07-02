@@ -361,3 +361,15 @@ short-circuit апгрейда в fast-тестах (LOW). Constant-time compare
 self-clean `whenComplete`; логика запроса вынесена в `_fetchAndCache`.
 
 **Статус:** analyze 0 errors; test 327 passed / 0 failed.
+
+---
+
+## 2026-07-02 - Синхронизация документации с изменениями сессии [wl/dev]
+
+Параллельный аудит 11 doc-файлов (воркфлоу) нашёл 22 устаревших утверждения в 6 файлах; исправлено:
+- README: подпись release (OPS-1) — key.properties вместо "debug-ключ".
+- SECURITY_REVIEW: находки P0 wipe / P2 PIN / P2 логи помечены ✅ устранёнными (SEC-1/5, SEC-8, SEC-2/QUAL-1).
+- FEATURES_AND_LIMITATIONS: пп.1 (хранение) и 5 (логи/телеметрия) → закрыто.
+- ARCHITECTURE / FUNCTIONAL_PRINCIPLES / PROJECT_STRUCTURE: БД → SQLCipher/зашифрована; телеметрия → opt-in,
+  выключена по умолчанию, санитизирована.
+5 файлов (PROJECT_OVERVIEW, GETTING_STARTED, PHILOSOPHY, DEVELOPMENT_GUIDE, docs/README) — без устаревшего.

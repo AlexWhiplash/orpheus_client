@@ -31,8 +31,9 @@ flutter build apk --release
 ```
 Готовый файл: `build/app/outputs/flutter-apk/app-release.apk`.
 
-> Примечание: сейчас release подписывается debug-ключом — для публичной раздачи нужен собственный
-> keystore (см. `AUDIT_REPORT.md`, находка `OPS-1`).
+> Подпись release: если создан `android/key.properties` (см. `android/key.properties.example`), сборка
+> подписывается **вашим keystore**; если файла нет — фолбэк на debug-ключ, чтобы сборка работала без секретов
+> (`OPS-1`). Для публичной раздачи сгенерируйте свой keystore и заполните `key.properties` (инструкция — в примере).
 
 ## Тесты и отчёты
 

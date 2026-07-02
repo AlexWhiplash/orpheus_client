@@ -55,7 +55,7 @@
 - **`lib/services/incoming_message_handler.dart`**: единая точка обработки входящих WS сообщений (чат/звонки); TTL/дедуп для call-offer; порядок “сначала в CallScreen, потом hide notification”.
 - **`lib/services/network_monitor_service.dart`**: монитор сети (события network switch/reconnect/disconnect), триггеры реконнекта.
 - **`lib/services/presence_service.dart`**: online‑статусы; subscribe/unsubscribe на pubkeys; resubscribe при реконнекте WS.
- - **`lib/services/telemetry_service.dart`**: сбор полной телеметрии клиента и отправка батчей на сервер.
+ - **`lib/services/telemetry_service.dart`**: сбор санитизированной телеметрии (opt-in, по умолчанию выключена) и отправка батчей на сервер.
  - **`lib/services/locale_service.dart`**: выбор/сохранение локали и поддержка мультиязычности.
 
 #### Звонки и медиа

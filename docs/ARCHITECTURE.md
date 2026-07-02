@@ -45,20 +45,20 @@
 6. `NetworkMonitorService.init()` (события сети)
 7. `WebSocketService.connect(pubkey)` (если ключи есть)
 8. Подписка на WS‑стрим и обработка через `IncomingMessageHandler`
-9. `TelemetryService.init()` (полные логи в БД в режиме разработки)
+9. `TelemetryService.init()` (opt-in, по умолчанию выключена; санитизированные логи в БД)
 
-## Телеметрия (режим разработки, временно)
-Цель: видеть **полный цикл жизни клиента** и события сервера в БД, включая звонки, WS/HTTP, FCM background.
+## Телеметрия (opt-in, по умолчанию выключена)
+Цель: при явном включении пользователем (тумблер в экране отладочных логов) видеть **санитизированный** цикл жизни клиента в БД для диагностики. По умолчанию сбор и отправка выключены (`SEC-2`).
 
 ### Клиент
 - Источник событий: `DebugLogger` + перехват `debugPrint` и `FlutterError`.
 - Сервис: `lib/services/telemetry_service.dart`
-- Транспорт: HTTP батчи на `/api/logs/batch`
-- Контекст событий:
-  - `pubkey`, `peer_pubkey`, `call_id` (если есть)
-  - `app_version`, `device_info`, `os`
+- Транспорт: HTTP батчи на `/api/logs/batch` (только при включённой телеметрии)
+- Контекст событий (**санитизирован** — ключи/pubkey/device_info удаляются):
+  - `pubkey`, `call_id` (если есть)
+  - `app_version`, `os`
   - `network`, `app_state`
-- Фоновый FCM handler также отправляет базовую телеметрию (с `recipient_pubkey` из push data).
+- Фоновый FCM handler не отправляет ключи: телеметрия санитизирована (`recipient_pubkey` убран).
 
 ### Сервер (серверный репозиторий — вне этого репозитория)
 - Таблица: `telemetry_logs`

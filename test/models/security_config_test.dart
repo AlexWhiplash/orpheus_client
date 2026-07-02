@@ -105,6 +105,56 @@ void main() {
       });
     });
 
+    group('isLockedOutMonotonic (тамперо-устойчивая блокировка, LOGIC-6)', () {
+      SecurityConfig cfg({required int attempts, required int failedElapsedMs}) {
+        return SecurityConfig(
+          isPinEnabled: true,
+          pinHash: 'h',
+          pinSalt: 's',
+          failedAttempts: attempts,
+          // wall-clock ставим "давно", чтобы fallback НЕ маскировал монотонную логику
+          lastFailedAttempt:
+              DateTime.now().subtract(const Duration(hours: 1)),
+          lastFailedElapsedMs: failedElapsedMs,
+        );
+      }
+
+      test('монотонно: внутри окна — заблокировано, после — нет', () {
+        // 5 попыток → 30с. Сбой на elapsed=1_000_000.
+        final c = cfg(attempts: 5, failedElapsedMs: 1000000);
+        // now через 10с — заблокировано
+        expect(c.isLockedOutMonotonic(1000000 + 10000), isTrue);
+        // now через 31с — разблокировано
+        expect(c.isLockedOutMonotonic(1000000 + 31000), isFalse);
+      });
+
+      test('перевод wall-clock вперёд НЕ снимает блокировку (монотонные часы честны)',
+          () {
+        // wall-clock уже "час назад" (был бы разблокирован по wall), но монотонно
+        // прошло всего 5с из 30с → всё ещё заблокировано.
+        final c = cfg(attempts: 5, failedElapsedMs: 1000000);
+        expect(c.isLockedOutMonotonic(1000000 + 5000), isTrue);
+      });
+
+      test('nowElapsedMs == null (недоступны монотонные часы) → fallback на wall-clock',
+          () {
+        // wall-clock "час назад" → по fallback разблокировано.
+        final c = cfg(attempts: 5, failedElapsedMs: 1000000);
+        expect(c.isLockedOutMonotonic(null), isFalse);
+      });
+
+      test('ребут (now < сохранённого elapsed) → fallback на wall-clock', () {
+        final c = cfg(attempts: 5, failedElapsedMs: 1000000);
+        // now меньше сохранённого (elapsedRealtime сбросился) → wall fallback (час назад → false)
+        expect(c.isLockedOutMonotonic(500), isFalse);
+      });
+
+      test('до 5 попыток монотонной блокировки нет', () {
+        expect(cfg(attempts: 4, failedElapsedMs: 1000000)
+            .isLockedOutMonotonic(1000000 + 1000), isFalse);
+      });
+    });
+
     test('shouldAutoWipe: true когда isAutoWipeEnabled и failedAttempts >= autoWipeAttempts', () {
       const base = SecurityConfig(isAutoWipeEnabled: true, autoWipeAttempts: 10);
       expect(base.copyWith(failedAttempts: 9).shouldAutoWipe, isFalse);

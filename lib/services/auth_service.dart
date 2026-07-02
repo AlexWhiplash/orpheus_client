@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:orpheus_project/services/secure_storage_options.dart';
+import 'package:orpheus_project/services/monotonic_clock.dart';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' as kdf;
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -65,25 +66,33 @@ class AuthService {
   static AuthService createForTesting({
     required AuthSecureStorage secureStorage,
     DateTime Function()? now,
+    Future<int?> Function()? monotonicNow,
     bool fastHash = false,
   }) {
     return AuthService._(
-        secureStorage: secureStorage, now: now, fastHashForTesting: fastHash);
+        secureStorage: secureStorage,
+        now: now,
+        monotonicNow: monotonicNow,
+        fastHashForTesting: fastHash);
   }
 
   AuthService._({
     AuthSecureStorage? secureStorage,
     DateTime Function()? now,
+    Future<int?> Function()? monotonicNow,
     bool fastHashForTesting = false,
   })  : _secureStorage =
             secureStorage ?? FlutterAuthSecureStorage(appSecureStorage),
         _now = now ?? DateTime.now,
+        _monotonicNow = monotonicNow ?? MonotonicClock.elapsedRealtimeMs,
         // Сим fastHash действует ТОЛЬКО в debug (тесты): в release всегда Argon2id,
         // даже если кто-то по ошибке создаст сервис через createForTesting.
         _fastHashForTesting = fastHashForTesting && kDebugMode;
 
   final AuthSecureStorage _secureStorage;
   final DateTime Function() _now;
+  // Монотонные часы (elapsedRealtime) для тамперо-устойчивой блокировки (LOGIC-6).
+  final Future<int?> Function() _monotonicNow;
   final bool _fastHashForTesting;
   static const _configKey = 'orpheus_security_config';
 
@@ -199,8 +208,10 @@ class AuthService {
       return PinVerifyResult.success;
     }
 
-    // Проверка блокировки
-    if (_config.isLockedOut) {
+    // Проверка блокировки — по монотонным часам, чтобы её нельзя было обойти
+    // переводом системного времени вперёд (аудит LOGIC-6). Fallback на wall-clock
+    // внутри isLockedOutMonotonic, если монотонные часы недоступны.
+    if (_config.isLockedOutMonotonic(await _monotonicNow())) {
       DebugLogger.warn('AUTH', 'Login attempt during lockout');
       return PinVerifyResult.lockedOut;
     }
@@ -285,9 +296,12 @@ class AuthService {
 
   /// Увеличить счётчик неудачных попыток
   Future<void> _incrementFailedAttempts() async {
+    // Пишем и wall-clock (для отображения/fallback), и монотонное время
+    // (тамперо-устойчивый источник блокировки, LOGIC-6).
     _config = _config.copyWith(
       failedAttempts: _config.failedAttempts + 1,
       lastFailedAttempt: _now(),
+      lastFailedElapsedMs: await _monotonicNow(),
     );
     await _saveConfig();
     DebugLogger.warn('AUTH', 'Wrong PIN attempt');

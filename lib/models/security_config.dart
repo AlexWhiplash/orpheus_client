@@ -29,9 +29,13 @@ class SecurityConfig {
   /// Количество неудачных попыток ввода PIN
   final int failedAttempts;
   
-  /// Время последней неудачной попытки (для rate limiting)
+  /// Время последней неудачной попытки (wall-clock; для отображения/fallback)
   final DateTime? lastFailedAttempt;
-  
+
+  /// Монотонное время (elapsedRealtime, мс с загрузки) последней неудачной
+  /// попытки — тамперо-устойчивый источник для блокировки (аудит LOGIC-6).
+  final int? lastFailedElapsedMs;
+
   /// Включена ли биометрия
   final bool isBiometricEnabled;
   
@@ -74,6 +78,7 @@ class SecurityConfig {
     this.duressSalt,
     this.failedAttempts = 0,
     this.lastFailedAttempt,
+    this.lastFailedElapsedMs,
     this.isBiometricEnabled = false,
     this.isWipeCodeEnabled = false,
     this.wipeCodeHash,
@@ -100,6 +105,7 @@ class SecurityConfig {
     String? duressSalt,
     int? failedAttempts,
     DateTime? lastFailedAttempt,
+    int? lastFailedElapsedMs,
     bool? isBiometricEnabled,
     bool? isWipeCodeEnabled,
     String? wipeCodeHash,
@@ -126,6 +132,7 @@ class SecurityConfig {
       duressSalt: clearDuressHash ? null : (duressSalt ?? this.duressSalt),
       failedAttempts: failedAttempts ?? this.failedAttempts,
       lastFailedAttempt: clearLastFailedAttempt ? null : (lastFailedAttempt ?? this.lastFailedAttempt),
+      lastFailedElapsedMs: clearLastFailedAttempt ? null : (lastFailedElapsedMs ?? this.lastFailedElapsedMs),
       isBiometricEnabled: isBiometricEnabled ?? this.isBiometricEnabled,
       isWipeCodeEnabled: isWipeCodeEnabled ?? this.isWipeCodeEnabled,
       wipeCodeHash: clearWipeCodeHash ? null : (wipeCodeHash ?? this.wipeCodeHash),
@@ -151,6 +158,7 @@ class SecurityConfig {
       'duressSalt': duressSalt,
       'failedAttempts': failedAttempts,
       'lastFailedAttempt': lastFailedAttempt?.toIso8601String(),
+      'lastFailedElapsedMs': lastFailedElapsedMs,
       'isBiometricEnabled': isBiometricEnabled,
       'isWipeCodeEnabled': isWipeCodeEnabled,
       'wipeCodeHash': wipeCodeHash,
@@ -176,9 +184,10 @@ class SecurityConfig {
       duressHash: map['duressHash'],
       duressSalt: map['duressSalt'],
       failedAttempts: map['failedAttempts'] ?? 0,
-      lastFailedAttempt: map['lastFailedAttempt'] != null 
-          ? DateTime.tryParse(map['lastFailedAttempt']) 
+      lastFailedAttempt: map['lastFailedAttempt'] != null
+          ? DateTime.tryParse(map['lastFailedAttempt'])
           : null,
+      lastFailedElapsedMs: map['lastFailedElapsedMs'] as int?,
       isBiometricEnabled: map['isBiometricEnabled'] ?? false,
       isWipeCodeEnabled: map['isWipeCodeEnabled'] ?? false,
       wipeCodeHash: map['wipeCodeHash'],
@@ -207,6 +216,29 @@ class SecurityConfig {
     
     final unlockTime = lastFailedAttempt!.add(lockDuration);
     return DateTime.now().isBefore(unlockTime);
+  }
+
+  /// Тамперо-устойчивая проверка блокировки (аудит LOGIC-6).
+  ///
+  /// Считает по МОНОТОННЫМ часам ([nowElapsedMs] = elapsedRealtime), которые
+  /// нельзя сдвинуть сменой системного времени — поэтому блокировку нельзя
+  /// «промотать», переведя часы вперёд. Если монотонная база недоступна
+  /// ([nowElapsedMs] == null или после ребута, когда elapsedRealtime сбросился и
+  /// стал меньше сохранённого) — откат на wall-clock [isLockedOut], т.е. поведение
+  /// не хуже прежнего.
+  bool isLockedOutMonotonic(int? nowElapsedMs) {
+    if (lastFailedAttempt == null) return false;
+    final lockDuration = _getLockDuration(failedAttempts);
+    if (lockDuration == null) return false;
+
+    if (nowElapsedMs != null &&
+        lastFailedElapsedMs != null &&
+        nowElapsedMs >= lastFailedElapsedMs!) {
+      final elapsed = nowElapsedMs - lastFailedElapsedMs!;
+      return elapsed < lockDuration.inMilliseconds;
+    }
+    // Нет монотонной базы / ребут → wall-clock fallback.
+    return isLockedOut;
   }
 
   /// Получить время до разблокировки

@@ -38,7 +38,9 @@ void main() {
       binding.window.devicePixelRatioTestValue = 1.0;
 
       auth = AuthService.createForTesting(
-          secureStorage: _MemSecureStorage(), fastHash: true);
+          secureStorage: _MemSecureStorage(),
+          fastHash: true,
+          monotonicNow: () async => 0);
       await auth.init();
     });
 

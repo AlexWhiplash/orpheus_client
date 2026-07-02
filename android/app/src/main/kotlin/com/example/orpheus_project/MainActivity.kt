@@ -80,6 +80,11 @@ class MainActivity: FlutterFragmentActivity() {
                 "getDeviceManufacturer" -> {
                     result.success(Build.MANUFACTURER.lowercase())
                 }
+                "getElapsedRealtime" -> {
+                    // Монотонное время с загрузки (мс), неуязвимое к смене системных
+                    // часов — для тамперо-устойчивой блокировки от брутфорса PIN.
+                    result.success(android.os.SystemClock.elapsedRealtime())
+                }
                 "openAutoStartSettings" -> {
                     openAutoStartSettings()
                     result.success(true)

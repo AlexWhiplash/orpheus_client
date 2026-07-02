@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-02 — LOGIC-6: блокировка брутфорса по монотонным часам
+
+**Задача:** прогрессивная блокировка PIN считалась по `DateTime.now()` — обходится
+переводом системных часов вперёд.
+
+**Сделано (минимальный, низкорисковый фикс — хардним только сам гейт):**
+- Нативно: `MainActivity` → метод `getElapsedRealtime` в settings-канале
+  (`SystemClock.elapsedRealtime`). Dart-обёртка `lib/services/monotonic_clock.dart`
+  (`MonotonicClock.elapsedRealtimeMs()` → int?, null при ошибке).
+- `security_config.dart`: поле `lastFailedElapsedMs` (persist) + метод
+  `isLockedOutMonotonic(nowElapsedMs)` — по монотонным часам, с fallback на wall-clock
+  `isLockedOut` (если null или ребут: nowElapsed < сохранённого).
+- `auth_service.dart`: инъекция `monotonicNow` (тест-seam), запись elapsedRealtime в
+  `_incrementFailedAttempts`, гейт `verifyPin` → `isLockedOutMonotonic(await _monotonicNow())`.
+- lock_screen НЕ трогали: его `isLockedOut` для UI (косметика) — под тампером покажет
+  клавиатуру, но verifyPin отклонит; для обычного юзера wall==mono, консистентно.
+- Тесты: 5 новых на `isLockedOutMonotonic` (тампер/ребут/fallback); в 3 виджет-теста
+  добавлен `monotonicNow: () async => 0` (реальный канал не резолвится под fake-async).
+
+**Проверки:** analyze 0 ошибок; test 330 passed (+5); debug APK — ок.
+
+---
+
 ## 2026-07-02 — DEP-3: flutter_markdown → flutter_markdown_plus
 
 `flutter_markdown` заброшен (Flutter-команда прекратила поддержку). Заменён на

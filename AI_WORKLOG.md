@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-02 — Де-гуглизация: шрифты Inter забандлены локально
+
+**Задача:** курс на клиент без сервисов Google (решение владельца). Первый шаг —
+убрать рантайм-загрузку шрифтов с серверов Google; параллельно запущен полный
+аудит проприетарных зависимостей (multi-agent workflow).
+
+**Сделано:**
+- Пакет `google_fonts` удалён из `pubspec.yaml`. Раньше Inter мог тянуться в
+  рантайме с `fonts.gstatic.com` — сетевой след к Google для privacy-мессенджера.
+- Inter 4.1 (официальный релиз rsms/inter, лицензия OFL) забандлен статикой:
+  `assets/fonts/Inter-{Regular,Medium,SemiBold,Bold}.ttf` + `OFL.txt`, объявлен
+  в `pubspec.yaml` (`family: Inter`, веса 400/500/600/700 — все, что использует тема).
+- `lib/theme/app_theme.dart`, `lib/theme/app_tokens.dart` — `GoogleFonts.inter(...)`
+  → `TextStyle(fontFamily: 'Inter', ...)`; `GoogleFonts.interTextTheme(base)` →
+  `base.apply(fontFamily: 'Inter')` (двойное применение family устранено).
+
+**Проверки:** `flutter analyze` — 0 ошибок (616 issues, было 638); `flutter test` —
+327 passed / 0 failed.
+
+---
+
 ## 2026-07-01 — Bootstrap среды и guardrails (Фаза 0–1)
 
 **Задача:** поднять рабочую среду для нового участника, собрать/запустить клиент,

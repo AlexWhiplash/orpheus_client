@@ -3,7 +3,6 @@
 
 import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 
 class AppTheme {
@@ -26,7 +25,7 @@ class AppTheme {
       ),
 
       // ТИПОГРАФИКА
-      textTheme: AppTypography.textTheme(GoogleFonts.interTextTheme(baseTheme.textTheme)),
+      textTheme: AppTypography.textTheme(baseTheme.textTheme),
 
       // APP BAR — чистый, без лишнего
       appBarTheme: AppBarTheme(
@@ -35,7 +34,8 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: const TextStyle(
+          fontFamily: 'Inter',
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w600,
           fontSize: 17,
@@ -61,12 +61,14 @@ class AppTheme {
           borderRadius: AppRadii.lg,
           side: BorderSide(color: AppColors.outline),
         ),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: const TextStyle(
+          fontFamily: 'Inter',
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w600,
           fontSize: 18,
         ),
-        contentTextStyle: GoogleFonts.inter(
+        contentTextStyle: const TextStyle(
+          fontFamily: 'Inter',
           color: AppColors.textSecondary,
           fontSize: 14,
           height: 1.5,
@@ -77,7 +79,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface2,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         hintStyle: TextStyle(color: AppColors.textTertiary),
         border: OutlineInputBorder(
           borderRadius: AppRadii.md,
@@ -89,7 +92,8 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadii.md,
-          borderSide: BorderSide(color: AppColors.action.withOpacity(0.6), width: 1.5),
+          borderSide:
+              BorderSide(color: AppColors.action.withOpacity(0.6), width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: AppRadii.md,
@@ -106,7 +110,8 @@ class AppTheme {
           minimumSize: const Size(double.infinity, 52),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: AppRadii.md),
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
             fontWeight: FontWeight.w700,
             fontSize: 15,
             letterSpacing: 0.3,
@@ -117,7 +122,8 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.action,
-          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          textStyle:
+              const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
         ),
       ),
 
@@ -128,7 +134,8 @@ class AppTheme {
           minimumSize: const Size(double.infinity, 52),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: AppRadii.md),
-          textStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
             fontWeight: FontWeight.w600,
             fontSize: 15,
           ),
@@ -150,13 +157,15 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.inter(
+            return const TextStyle(
+              fontFamily: 'Inter',
               color: AppColors.action,
               fontSize: 11,
               fontWeight: FontWeight.w600,
             );
           }
-          return GoogleFonts.inter(
+          return const TextStyle(
+            fontFamily: 'Inter',
             color: AppColors.textTertiary,
             fontSize: 11,
             fontWeight: FontWeight.w500,
@@ -176,7 +185,8 @@ class AppTheme {
       // SNACKBAR
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.surface2,
-        contentTextStyle: GoogleFonts.inter(color: AppColors.textPrimary),
+        contentTextStyle:
+            const TextStyle(fontFamily: 'Inter', color: AppColors.textPrimary),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: AppRadii.sm),
       ),

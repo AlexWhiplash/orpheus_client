@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Единые UI-токены Orpheus — Quiet Premium.
 ///
@@ -12,7 +11,8 @@ class AppColors {
   static const Color bg = Color(0xFF0B0D10);
   static const Color surface = Color(0xFF12161C);
   static const Color surface2 = Color(0xFF171D25);
-  static const Color surfaceElevated = Color(0xFF1C222B); // Для карточек с фокусом
+  static const Color surfaceElevated =
+      Color(0xFF1C222B); // Для карточек с фокусом
 
   // ═══════════════════════════════════════════════════════════════
   // TEXT — тёплое серебро, не холодный серый
@@ -26,8 +26,10 @@ class AppColors {
   // Не мёртвый серый, а "лунное серебро" с лёгким тёплым оттенком
   // ═══════════════════════════════════════════════════════════════
   static const Color primary = Color(0xFFCDD6E0); // Тёплое серебро
-  static const Color primaryLight = Color(0xFFE2E8F0); // Светлое серебро для hover
-  static const Color primaryDark = Color(0xFFA8B5C4); // Приглушённое для disabled
+  static const Color primaryLight =
+      Color(0xFFE2E8F0); // Светлое серебро для hover
+  static const Color primaryDark =
+      Color(0xFFA8B5C4); // Приглушённое для disabled
 
   // ═══════════════════════════════════════════════════════════════
   // ACTION — зелёный для ключевых CTA
@@ -76,7 +78,7 @@ class AppSpacing {
 
 class AppTypography {
   static TextTheme textTheme(TextTheme base) {
-    final t = GoogleFonts.interTextTheme(base);
+    final t = base.apply(fontFamily: 'Inter');
     return t.copyWith(
       // Titles
       titleLarge: t.titleLarge?.copyWith(
@@ -169,11 +171,14 @@ class AppShadows {
 class AppAvatarColors {
   /// Генерирует цвет на основе имени контакта.
   static Color fromName(String name) {
-    if (name.isEmpty) return AppColors.surface2;    final hash = name.hashCode;
+    if (name.isEmpty) return AppColors.surface2;
+    final hash = name.hashCode;
     final hue = (hash.abs() % 360).toDouble();
     // Приглушённая насыщенность и средняя яркость — не кричит
     return HSLColor.fromAHSL(1.0, hue, 0.40, 0.42).toColor();
-  }  /// Возвращает пару цветов для градиента.
+  }
+
+  /// Возвращает пару цветов для градиента.
   static List<Color> gradientFromName(String name) {
     final baseColor = fromName(name);
     final hsl = HSLColor.fromColor(baseColor);

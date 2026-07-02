@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:orpheus_project/services/secure_storage_options.dart';
 import 'package:path/path.dart';
 import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
@@ -18,7 +19,7 @@ class DatabaseService {
   static const String _dbFileName = 'orpheus.db';
   // Ключ шифрования БД (SQLCipher). Хранится в Keystore-backed secure storage.
   static const String _dbKeyStoreKey = 'orpheus_db_key';
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final FlutterSecureStorage _secureStorage = appSecureStorage;
   bool _isWiping = false;
   DatabaseService._init();
 

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:orpheus_project/services/secure_storage_options.dart';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' as kdf;
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -75,7 +76,7 @@ class AuthService {
     DateTime Function()? now,
     bool fastHashForTesting = false,
   })  : _secureStorage =
-            secureStorage ?? FlutterAuthSecureStorage(const FlutterSecureStorage()),
+            secureStorage ?? FlutterAuthSecureStorage(appSecureStorage),
         _now = now ?? DateTime.now,
         // Сим fastHash действует ТОЛЬКО в debug (тесты): в release всегда Argon2id,
         // даже если кто-то по ошибке создаст сервис через createForTesting.

@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-07-02 — DEP-1: flutter_secure_storage 9 → 10 (безопасный мост)
+
+**Задача:** подготовить апгрейд самого security-критичного пакета (хранит
+X25519-ключи, хэши PIN/duress/wipe, ключ шифрования БД) с чеклистом под девайс.
+
+**Research (multi-agent, по source-тегам v9.2.4/v10.3.1 + live GitHub issues):**
+v10 стабилен (10.3.1), но ДЕФОЛТНЫЙ путь 9→10 = документированная потеря данных
+для нашей конфигурации (дефолтные опции, невосстановимые ключи): v10 сменил шифры
+(ключ PKCS1→OAEP, данные CBC→GCM) и по умолчанию `resetOnError: true` +
+`migrateWithBackup: false` → сбой авто-миграции безвозвратно стирает storage
+(issues #1043, #1079 — в проде, unrecoverable). Мы использовали
+`const FlutterSecureStorage()` без опций — худший случай.
+
+**Сделано (Option A — мост на старых шифрах):**
+- `pubspec.yaml`: `^9.0.0` → `^10.3.1`.
+- Новый `lib/services/secure_storage_options.dart`: единые `AndroidOptions`
+  (`RSA_ECB_PKCS1Padding` + `AES_CBC_PKCS7Padding`, `migrateOnAlgorithmChange: false`,
+  `resetOnError: false`) + общий `appSecureStorage`. Совпадение с форматом v9 →
+  миграция не запускается, авто-wipe отключён, риск потери — нулевой.
+- Все 3 места (crypto_service, auth_service, database_service) → `appSecureStorage`.
+- API read/write/delete/deleteAll не менялся; `minSdk` 23 (v10 требует 23) — без бампа.
+- `docs/SECURE_STORAGE_V10_CHECKLIST.md`: девайс-чеклист (главное — обновление
+  v9→v10 ПОВЕРХ, не uninstall, на реальных OEM).
+
+**Мост ВРЕМЕННЫЙ:** старые шифры @Deprecated в v10, удалены в v11. Полноценный
+переход на новые шифры — ТОЛЬКО после экспорта/импорта ключа в приложении, затем
+`migrateWithBackup: true` + `resetOnError: false`. См. [[secure-storage-v10-bridge]].
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 325 passed; `flutter
+build apk` (debug) — успешно (нативный v10.3.1, compileSdk 36). Чтение данных v9 на
+v10 подтверждается ТОЛЬКО на реальном устройстве (чеклист) — до этого не релизить.
+
+---
+
 ## 2026-07-02 — PERF-1 (финал): пагинация начальной загрузки чата
 
 **Задача:** остаток PERF-1 — при открытии чата грузилась вся история. Инкрементальный

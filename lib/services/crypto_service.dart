@@ -2,8 +2,8 @@
 
 import 'dart:convert';
 import 'package:flutter/foundation.dart'; // Для compute
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:cryptography/cryptography.dart';
+import 'package:orpheus_project/services/secure_storage_options.dart';
 
 class CryptoService {
   // Общий экземпляр приложения: main/performWipe работают с ним, чтобы состояние
@@ -11,7 +11,7 @@ class CryptoService {
   // SEC-5). Конструктор оставлен публичным — тестам нужны отдельные экземпляры.
   static final CryptoService instance = CryptoService();
 
-  final _secureStorage = const FlutterSecureStorage();
+  final _secureStorage = appSecureStorage;
 
   static const _privateKeyStoreKey = 'orpheus_private_key_data';
   static const _publicKeyStoreKey = 'orpheus_public_key_data';

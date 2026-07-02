@@ -9,8 +9,9 @@
   зафиксирован только Dart SDK.
 - Android SDK / Android Studio (для Android)
 
-> **Firebase настраивать не нужно:** `android/app/google-services.json` уже закоммичен, поэтому
-> debug-сборка собирается сразу после `flutter pub get`, без дополнительных секретов.
+> **Без сервисов Google:** клиент не использует Firebase/FCM/ML Kit — сборка идёт сразу после
+> `flutter pub get`, никаких `google-services.json` или секретов Google не нужно. Пуши доставляет
+> собственный постоянный foreground-сервис поверх WebSocket (см. `PushConnectionService`).
 >
 > **Ветка:** активная разработка этого клиента идёт в изолированном треке `wl/dev` (форк
 > `AlexWhiplash/orpheus_client`); ветку `master` не трогаем.

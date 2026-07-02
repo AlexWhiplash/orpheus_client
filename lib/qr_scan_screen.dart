@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 
 class QrScanScreen extends StatefulWidget {
-  /// Для widget-тестов: позволяет подменить виджет камеры (mobile_scanner),
+  /// Для widget-тестов: позволяет подменить виджет камеры (QR-сканер),
   /// чтобы тесты не падали на отсутствии platform plugin.
   ///
   /// Callback `onQrValue` нужно вызвать с распознанной строкой (publicKey).

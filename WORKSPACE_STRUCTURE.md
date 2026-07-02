@@ -63,7 +63,8 @@ The workspace is defined in [orpheus_project.code-workspace](orpheus_project.cod
 - Zero-knowledge architecture (server never decrypts messages)
 - WebSocket server for real-time messaging
 - Multi-node scaling via Redis pub/sub
-- Firebase Cloud Messaging (FCM) for push notifications
+- Push delivery over the persistent WebSocket (client migrated off Firebase/FCM to a
+  persistent foreground service; the backend FCM path is being deprecated)
 - TRON blockchain payment processing
 - Oracle AI integration (support chat)
 - PostgreSQL for user data, messages, rooms

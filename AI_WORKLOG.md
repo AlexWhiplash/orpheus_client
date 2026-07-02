@@ -64,8 +64,13 @@ QR-сканере и Firebase Cloud Messaging (пуши). Курс: клиент
   (запуск из видимой Activity ответа) — задокументированный follow-up.
 
 **Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 328 passed; `flutter build apk`
-(debug) — успешно (нативные `camera_android_camerax`, слияние манифеста `specialUse`,
-Gradle без google-services).
+(debug и release) — успешно (нативные `camera_android_camerax`, слияние манифеста `specialUse`,
+Gradle без google-services). Проверено: release-APK содержит **ноль** классов
+`com.google.firebase` / `com.google.mlkit` / `com.google.android.gms`.
+
+**Синхронизация доков:** обновлены README (нет google-services.json), docs/ARCHITECTURE.md
+(boot sequence без Firebase + раздел «Пуши без Google»), WORKSPACE_STRUCTURE.md, CLAUDE.md и
+устаревшие комментарии «FCM-изолят» → «сервисный изолят».
 
 ---
 

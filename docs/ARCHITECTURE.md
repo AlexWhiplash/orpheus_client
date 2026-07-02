@@ -37,15 +37,23 @@
 
 ## Схема запуска (boot sequence)
 Текущая последовательность инициализации (см. `lib/main.dart`):
-1. Firebase + FCM background handler
-2. `NotificationService.init()`
-3. `CryptoService.init()` (ключи из secure storage)
-4. `AuthService.init()` (security config из secure storage)
-5. `PanicWipeService.init()` (наблюдение lifecycle)
-6. `NetworkMonitorService.init()` (события сети)
-7. `WebSocketService.connect(pubkey)` (если ключи есть)
-8. Подписка на WS‑стрим и обработка через `IncomingMessageHandler`
-9. `TelemetryService.init()` (opt-in, по умолчанию выключена; санитизированные логи в БД)
+1. `NotificationService.init()` (локальные уведомления, без Google/FCM)
+2. `CryptoService.init()` (ключи из secure storage)
+3. `AuthService.init()` (security config из secure storage)
+4. `PanicWipeService.init()` (наблюдение lifecycle)
+5. `NetworkMonitorService.init()` (события сети)
+6. `WebSocketService.connect(pubkey)` (если ключи есть)
+7. Подписка на WS‑стрим и обработка через `IncomingMessageHandler`
+8. `TelemetryService.init()` (opt-in, по умолчанию выключена; санитизированные логи в БД)
+9. `PushConnectionService.start()` + heartbeat (постоянный foreground-сервис доставки
+   пушей при убитом приложении — замена FCM; только если есть ключи)
+
+## Пуши без Google
+Вместо Firebase Cloud Messaging входящие при убитом приложении будит собственный постоянный
+foreground-сервис `PushConnectionService` (`flutter_background_service`, тип Android `specialUse`).
+Он держит WebSocket в отдельном isolate и показывает CallKit/уведомления через
+`handleBackgroundPush`. Пока UI жив (heartbeat свежий) — сервис молчит; при убитом приложении
+берёт доставку на себя. Дедуп пересечений — по `call_id`/`message_id`.
 
 ## Телеметрия (opt-in, по умолчанию выключена)
 Цель: при явном включении пользователем (тумблер в экране отладочных логов) видеть **санитизированный** цикл жизни клиента в БД для диагностики. По умолчанию сбор и отправка выключены (`SEC-2`).

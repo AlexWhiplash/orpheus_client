@@ -132,8 +132,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
 
   Future<void> _toggleBiometrics(bool enabled) async {
     final l10n = L10n.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     if (enabled) {
-      // Проверяем, что биометрия доступна
+      // Включение требует подтверждения биометрией (иначе кто угодно с
+      // разблокированным экраном включит вход по своему отпечатку).
       try {
         final didAuth = await _localAuth.authenticate(
           localizedReason: l10n.confirmForBiometry,
@@ -142,18 +144,26 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             biometricOnly: true,
           ),
         );
-        
-        if (didAuth) {
-          // TODO: Сохранить настройку биометрии в AuthService
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.biometryEnabled)),
-          );
+
+        if (!didAuth) {
+          // Не подтвердил — тумблер вернётся в «выкл» (config не менялся).
+          _refresh();
+          return;
         }
+
+        // Реально сохраняем флаг: теперь lock_screen предложит вход по биометрии.
+        await _auth.setBiometricEnabled(true);
+        messenger.showSnackBar(
+          SnackBar(content: Text(l10n.biometryEnabled)),
+        );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(content: Text(l10n.biometryFailed)),
         );
       }
+    } else {
+      // Выключение — без биометрического запроса.
+      await _auth.setBiometricEnabled(false);
     }
     _refresh();
   }

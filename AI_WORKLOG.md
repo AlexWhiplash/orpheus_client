@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-07-02 — PROD-2/QUAL-3: тумблер биометрии сделан настоящим
+
+**Задача:** тумблер биометрии показывал «включено», но ничего не сохранял
+(`// TODO` в `_toggleBiometrics`), значение отскакивало на перерисовке.
+
+**Сделано:**
+- `auth_service.dart`: добавлен `setBiometricEnabled(bool)` (по паттерну
+  `setPanicGestureEnabled`) — пишет `isBiometricEnabled` в `SecurityConfig` и
+  сохраняет через `_saveConfig()`.
+- `security_settings_screen.dart._toggleBiometrics`: при включении после успешной
+  биометрии сохраняет флаг (`setBiometricEnabled(true)`), при отказе — тумблер
+  остаётся выключенным; при выключении — `setBiometricEnabled(false)`.
+- Разблокировка уже читала `config.isBiometricEnabled` (`lock_screen._tryBiometricAuth`),
+  поэтому фича работает end-to-end без правок экрана блокировки.
+
+**Проверки:** `flutter analyze` — 0 ошибок; auth-тесты зелёные.
+
+---
+
 ## 2026-07-02 — PERF-2: индекс messages.timestamp
 
 **Задача:** авто-очистка истории (`WHERE timestamp < ?`) делала полный скан —

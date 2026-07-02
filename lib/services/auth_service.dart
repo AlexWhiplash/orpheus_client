@@ -388,6 +388,14 @@ class AuthService {
     print("AUTH: Panic gesture ${enabled ? 'enabled' : 'disabled'}");
   }
 
+  // === БИОМЕТРИЯ (вход по отпечатку/лицу) ===
+
+  Future<void> setBiometricEnabled(bool enabled) async {
+    _config = _config.copyWith(isBiometricEnabled: enabled);
+    await _saveConfig();
+    print("AUTH: Biometric ${enabled ? 'enabled' : 'disabled'}");
+  }
+
   // === БЛОКИРОВКА ПО ТАЙМАУТУ НЕАКТИВНОСТИ ===
 
   int get inactivityLockSeconds => _config.inactivityLockSeconds;

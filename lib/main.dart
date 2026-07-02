@@ -933,44 +933,30 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isLicensed = false;
   bool _isCheckCompleted = false;
   static const String _licenseCacheKey = 'license_active';
-  static const String _licenseCheckedAtKey = 'license_checked_at';
 
-  /// Grace-период офлайн-доступа: если последняя ОНЛАЙН-проверка лицензии была
-  /// не старше этого срока, офлайн-запуск пускает пользователя без сети. Онлайн
-  /// отзыв применяется мгновенно (см. WS-листенер), а вечно-офлайн устройство
-  /// с отозванной лицензией запрётся максимум через этот срок.
-  static const Duration _licenseGrace = Duration(days: 21);
-
-  /// Кэш подтверждённой лицензии, чтобы офлайн-запуск не запирал уже оплатившего
-  /// пользователя на экране лицензии (аудит LOGIC-8). Применяем кэш только если
-  /// (а) онлайн-проверка ещё не ответила — свежий ответ сервера в приоритете, и
-  /// (б) кэш не старше grace-периода.
+  /// Кэш последнего ПОДТВЕРЖДЁННОГО сервером статуса лицензии — без срока
+  /// давности (аудит LOGIC-8). Модель простая: лицензия проверяется на сервере;
+  /// если отозвана — WS-листенер мгновенно выставит `_isLicensed=false`, а если
+  /// сети нет — приложение доступно по кэшу. Никакого учёта времени/grace-периода:
+  /// не тратим ресурсы и батарею на постоянную слежку за возрастом кэша.
   Future<void> _loadCachedLicense() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final active = prefs.getBool(_licenseCacheKey) ?? false;
-      final checkedAt = prefs.getInt(_licenseCheckedAtKey) ?? 0;
-      final ageMs = DateTime.now().millisecondsSinceEpoch - checkedAt;
-      final fresh = ageMs <= _licenseGrace.inMilliseconds;
-      if (active && fresh && mounted && !_isCheckCompleted) {
+      if (active && mounted && !_isCheckCompleted) {
         setState(() {
           _isLicensed = true;
           _isCheckCompleted = true;
         });
       }
-      // Если кэш устарел (> grace), офлайн-доступ не выдаём: обычный поток
-      // (спиннер → WS-ответ / 10с таймаут → экран лицензии) заставит
-      // переподключиться и подтвердить лицензию онлайн.
     } catch (_) {}
   }
 
-  /// Сохраняет статус лицензии и отметку времени свежей ОНЛАЙН-проверки.
+  /// Сохраняет последний подтверждённый сервером статус лицензии (без отметки времени).
   Future<void> _persistLicense(bool active) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_licenseCacheKey, active);
-      await prefs.setInt(
-          _licenseCheckedAtKey, DateTime.now().millisecondsSinceEpoch);
     } catch (_) {}
   }
   late bool _keysExist;

@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-07-02 — DEP-3: flutter_markdown → flutter_markdown_plus
+
+`flutter_markdown` заброшен (Flutter-команда прекратила поддержку). Заменён на
+поддерживаемый форк `flutter_markdown_plus` ^1.0.7 (drop-in: `MarkdownBody`/
+`MarkdownStyleSheet`/`onTapLink` идентичны, сменился только импорт в
+`ai_assistant_chat_screen.dart`). Убрано единственное discontinued-предупреждение.
+Проверки: analyze 0 ошибок, test 325 passed.
+
+---
+
 ## 2026-07-02 — Обновление всех зависимостей + ADR по secure_storage
 
 Задача владельца: зафиксировать решение по secure_storage в доках и обновить ВСЕ

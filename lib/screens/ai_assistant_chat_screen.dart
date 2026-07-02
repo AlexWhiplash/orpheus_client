@@ -6,7 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/models/ai_message_model.dart';

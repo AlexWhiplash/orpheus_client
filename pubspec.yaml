@@ -54,8 +54,8 @@ dependencies:
   # Авторизация
   local_auth: ^3.0.1
 
-  # Markdown для AI чата
-  flutter_markdown: ^0.7.4+3
+  # Markdown для AI чата (flutter_markdown заброшен → поддерживаемый форк)
+  flutter_markdown_plus: ^1.0.7
 
   # Инструменты
   share_plus: ^13.2.0

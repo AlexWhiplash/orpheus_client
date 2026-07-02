@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-02 — Обновление всех зависимостей + ADR по secure_storage
+
+Задача владельца: зафиксировать решение по secure_storage в доках и обновить ВСЕ
+зависимости.
+
+**ADR:** `docs/DECISIONS/0004-secure-storage-v10-migration.md` — зафиксирован выбор
+(честный переход на современные шифры v10, данные v9 в жертву).
+
+**Фаза 1 (в пределах мажоров, `flutter pub upgrade`, без ломающих изменений):**
+flutter_webrtc 1.2→1.5.2 (DEP-12), cryptography 2.7→2.9, dio 5.9→5.10, http 1.5→1.6,
+audioplayers 6.5→6.8, path_provider/shared_preferences/uuid/cupertino_icons/
+flutter_native_splash — патчи; dev: build_runner 2.10→2.15, mockito 5.6→5.7,
+sqflite_common_ffi 2.3→2.4. Проверки: analyze 0 ошибок, test 325 passed, debug APK — ок.
+
+**Фаза 2 (мажоры — отдельными коммитами, см. ниже по мере выполнения):** callkit 2→3,
+flutter_local_notifications 17→22, local_auth 2→3, permission_handler 11→12,
+sentry_flutter 8→9, connectivity_plus 6→7, device_info_plus 10→13, package_info_plus
+8→10, share_plus 10→13, rxdart 0.27→0.28, flutter_lints 3→6. Каждый device-gated.
+
+---
+
 ## 2026-07-02 — DEP-1: flutter_secure_storage 9 → 10 (безопасный мост)
 
 **Задача:** подготовить апгрейд самого security-критичного пакета (хранит

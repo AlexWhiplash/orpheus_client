@@ -26,7 +26,6 @@
 - **Oracle of Orpheus (AI)**: `lib/services/ai_assistant_service.dart`, UI: `lib/screens/ai_assistant_chat_screen.dart`
 - **Notes Vault (заметки)**: `lib/screens/notes_vault_screen.dart`, модель: `lib/models/note_model.dart`
 - **Rooms (групповые чаты)**: `lib/services/rooms_service.dart`
-- **Desktop Link (QR‑pairing)**: `lib/services/desktop_link_service.dart`, сервер: `lib/services/desktop_link_server.dart`
 - **Очистка сообщений**: `lib/services/message_cleanup_service.dart`
 - **Настройки уведомлений**: `lib/services/notification_prefs_service.dart`
 
@@ -161,10 +160,11 @@ ICE кандидаты:
 - **Panic clear**: безвозвратное удаление всей истории комнаты
 - **Orpheus Room**: официальная комната (скрыта до релиза); `asOrpheus` флаг для официальных сообщений
 
-### 10) Desktop Link (QR‑сопряжение, в разработке)
-- **Сервисы**: `lib/services/desktop_link_service.dart`, `lib/services/desktop_link_server.dart`
-- **Протокол**: мобильное устройство сканирует QR от десктопа → подтверждает с OTP и session token → запускает локальный WebSocket-сервер → десктоп подключается по LAN
-- **Безопасность**: QR с `expires`, OTP (4 цифры), session token (32 random bytes), хранение сессии в `FlutterSecureStorage`
+### 10) Desktop Link — УДАЛЁН из клиента
+Паринг телефон↔десктоп по LAN удалён (недостижимый мёртвый код + небезопасный
+протокол: открытый HTTP-обмен токеном, WS-сервер без аутентификации, неиспользуемый
+`desktop_pubkey`). Вернём безопасно после доработки клиента и сервера, когда
+десктоп-приложение дозреет (история в git; план — в памяти проекта).
 
 ### 11) Автоблокировка и очистка сообщений
 - **Автоблокировка по неактивности**: `AuthService` отслеживает время последней активности; не блокируется во время активного звонка (`CallStateService`)

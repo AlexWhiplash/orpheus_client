@@ -1547,46 +1547,4 @@ class L10nRu extends L10n {
 
   @override
   String get notesFromOracle => 'Из чата с Оракулом';
-
-  @override
-  String get desktopLinkTitle => 'Связь с ПК';
-
-  @override
-  String get desktopLinkScanQr => 'Сканировать QR-код';
-
-  @override
-  String get desktopLinkReset => 'Сбросить сессию';
-
-  @override
-  String get desktopLinkStatusTitle => 'Статус подключения';
-
-  @override
-  String get desktopLinkConnecting => 'Подключение...';
-
-  @override
-  String get desktopLinkNotPaired =>
-      'Не привязан. Отсканируйте QR-код из приложения на ПК.';
-
-  @override
-  String get desktopLinkPaired => 'Успешно привязан';
-
-  @override
-  String get desktopLinkOtpLabel => 'Одноразовый пароль';
-
-  @override
-  String get desktopLinkOtpHint =>
-      'Введите этот код в приложении на ПК для подтверждения.';
-
-  @override
-  String get desktopLinkExpired => 'Сессия истекла. Отсканируйте снова.';
-
-  @override
-  String get desktopLinkInvalidQr => 'Неверный QR-код.';
-
-  @override
-  String get desktopLinkNetworkError => 'Ошибка сети. Проверьте подключение.';
-
-  @override
-  String get desktopLinkUnknownError =>
-      'Что-то пошло не так. Попробуйте снова.';
 }

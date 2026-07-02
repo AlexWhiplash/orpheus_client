@@ -557,19 +557,5 @@
   "notesDeleteDesc": "Заметка будет удалена безвозвратно.",
   "notesFromContact": "Из чата с {name}",
   "notesFromRoom": "Из комнаты {name}",
-  "notesFromOracle": "Из чата с Оракулом",
-
-  "desktopLinkTitle": "Связь с ПК",
-  "desktopLinkScanQr": "Сканировать QR-код",
-  "desktopLinkReset": "Сбросить сессию",
-  "desktopLinkStatusTitle": "Статус подключения",
-  "desktopLinkConnecting": "Подключение...",
-  "desktopLinkNotPaired": "Не привязан. Отсканируйте QR-код из приложения на ПК.",
-  "desktopLinkPaired": "Успешно привязан",
-  "desktopLinkOtpLabel": "Одноразовый пароль",
-  "desktopLinkOtpHint": "Введите этот код в приложении на ПК для подтверждения.",
-  "desktopLinkExpired": "Сессия истекла. Отсканируйте снова.",
-  "desktopLinkInvalidQr": "Неверный QR-код.",
-  "desktopLinkNetworkError": "Ошибка сети. Проверьте подключение.",
-  "desktopLinkUnknownError": "Что-то пошло не так. Попробуйте снова."
+  "notesFromOracle": "Из чата с Оракулом"
 }

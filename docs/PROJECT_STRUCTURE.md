@@ -72,9 +72,9 @@
 - **`lib/services/notification_prefs_service.dart`**: локальные настройки уведомлений (Orpheus Official toggle) через SharedPreferences.
 - **`lib/services/message_cleanup_service.dart`**: автоматическая очистка старых сообщений по политике (retention policy); триггеры: запуск, таймер, смена политики.
 
-#### Desktop Link (в разработке)
-- **`lib/services/desktop_link_service.dart`**: QR‑pairing с десктопом; валидация QR, генерация OTP/session token, HTTP confirm, хранение сессии в secure storage.
-- **`lib/services/desktop_link_server.dart`**: локальный WebSocket‑сервер для подключения десктопа по LAN; привязка к IPv4, автоопределение IP.
+#### Desktop Link — УДАЛЁН
+Паринг телефон↔десктоп по LAN удалён из клиента (мёртвый код + небезопасный протокол).
+Вернём безопасно после клиента+сервера, когда десктоп дозреет.
 
 #### Звонки (дополнительно)
 - **`lib/services/call_native_ui_service.dart`**: мост Flutter ↔ Android для управления экраном при звонке (show when locked, keep awake); best‑effort.

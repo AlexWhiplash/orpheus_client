@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-02 — Desktop Link удалён (PROD-1/ARCH-5/SEC-9), вариант A
+
+**Задача:** решить судьбу Desktop Link. Решение владельца — удалить сейчас (вариант A),
+переделать безопасно потом, после клиента и сервера.
+
+**Сделано:**
+- Удалены `lib/screens/desktop_link_screen.dart`, `lib/services/desktop_link_service.dart`,
+  `lib/services/desktop_link_server.dart`, `lib/models/desktop_session_model.dart`,
+  `test/services/desktop_link_service_test.dart`.
+- Убраны 13 l10n-ключей `desktopLink*` из `app_en.arb`/`app_ru.arb`, перегенерирован l10n.
+- Доки обновлены: CLAUDE.md, docs/ARCHITECTURE.md, docs/PROJECT_STRUCTURE.md.
+- В памяти проекта — план возврата (безопасный протокол) в `desktop-link-future`.
+
+**Почему:** экран был недостижим из UI (мёртвый груз в каждой сборке), протокол
+небезопасен (открытый HTTP-обмен токеном, WS-сервер без auth на anyIPv4:8765,
+неиспользуемый desktop_pubkey). Десктоп-приложение само ещё «в разработке» — паринговать
+не с чем. panic-wipe остаток сессии уже чистил (deleteAll).
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 325 passed (−3 теста
+удалённого сервиса); висячих ссылок на desktop_link в коде нет.
+
+---
+
 ## 2026-07-02 — PROD-6: онбординг при первом запуске
 
 **Задача:** новый пользователь попадал на пустой экран без объяснения, как

@@ -1535,45 +1535,4 @@ class L10nEn extends L10n {
 
   @override
   String get notesFromOracle => 'From Oracle chat';
-
-  @override
-  String get desktopLinkTitle => 'Desktop Link';
-
-  @override
-  String get desktopLinkScanQr => 'Scan QR Code';
-
-  @override
-  String get desktopLinkReset => 'Reset Session';
-
-  @override
-  String get desktopLinkStatusTitle => 'Connection Status';
-
-  @override
-  String get desktopLinkConnecting => 'Connecting...';
-
-  @override
-  String get desktopLinkNotPaired =>
-      'Not paired. Scan a QR code from the desktop app.';
-
-  @override
-  String get desktopLinkPaired => 'Paired successfully';
-
-  @override
-  String get desktopLinkOtpLabel => 'One-Time Password';
-
-  @override
-  String get desktopLinkOtpHint =>
-      'Enter this code in the desktop app to confirm.';
-
-  @override
-  String get desktopLinkExpired => 'Session expired. Please scan again.';
-
-  @override
-  String get desktopLinkInvalidQr => 'Invalid QR code.';
-
-  @override
-  String get desktopLinkNetworkError => 'Network error. Check your connection.';
-
-  @override
-  String get desktopLinkUnknownError => 'Something went wrong. Try again.';
 }

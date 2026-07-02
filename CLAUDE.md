@@ -123,7 +123,7 @@
 ## Особенности проекта
 - Oracle of Orpheus - AI ассистент, всегда первый в списке контактов
 - Notes Vault - зашифрованные заметки с tracking источника (manual/contact/room/oracle)
-- Desktop Link - в разработке, QR-based pairing (файлы в lib/services/)
+- Desktop Link - удалён из клиента (небезопасный протокол + мёртвый код); вернём безопасно после клиента+сервера, когда десктоп-приложение дозреет
 - Orpheus Room - официальная комната, скрытая до релиза
 - Single host: api.orpheus.click (legacy twc1 domain removed for privacy)
 - HTTP fallback для критичных сигналов (call-offer, call-answer, hang-up)

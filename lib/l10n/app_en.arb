@@ -1450,32 +1450,5 @@
     "placeholders": {"name": {"type": "String"}}
   },
   "notesFromOracle": "From Oracle chat",
-  "@notesFromOracle": {"description": "Note source from Oracle"},
-
-  "desktopLinkTitle": "Desktop Link",
-  "@desktopLinkTitle": {"description": "Desktop link screen title"},
-  "desktopLinkScanQr": "Scan QR Code",
-  "@desktopLinkScanQr": {"description": "Scan QR button"},
-  "desktopLinkReset": "Reset Session",
-  "@desktopLinkReset": {"description": "Reset session button"},
-  "desktopLinkStatusTitle": "Connection Status",
-  "@desktopLinkStatusTitle": {"description": "Status card title"},
-  "desktopLinkConnecting": "Connecting...",
-  "@desktopLinkConnecting": {"description": "Connecting state"},
-  "desktopLinkNotPaired": "Not paired. Scan a QR code from the desktop app.",
-  "@desktopLinkNotPaired": {"description": "Not paired state"},
-  "desktopLinkPaired": "Paired successfully",
-  "@desktopLinkPaired": {"description": "Paired state"},
-  "desktopLinkOtpLabel": "One-Time Password",
-  "@desktopLinkOtpLabel": {"description": "OTP label"},
-  "desktopLinkOtpHint": "Enter this code in the desktop app to confirm.",
-  "@desktopLinkOtpHint": {"description": "OTP hint"},
-  "desktopLinkExpired": "Session expired. Please scan again.",
-  "@desktopLinkExpired": {"description": "Expired error"},
-  "desktopLinkInvalidQr": "Invalid QR code.",
-  "@desktopLinkInvalidQr": {"description": "Invalid QR error"},
-  "desktopLinkNetworkError": "Network error. Check your connection.",
-  "@desktopLinkNetworkError": {"description": "Network error"},
-  "desktopLinkUnknownError": "Something went wrong. Try again.",
-  "@desktopLinkUnknownError": {"description": "Unknown error"}
+  "@notesFromOracle": {"description": "Note source from Oracle"}
 }

@@ -1547,4 +1547,10 @@ class L10nRu extends L10n {
 
   @override
   String get notesFromOracle => 'Из чата с Оракулом';
+
+  @override
+  String get searchContactsHint => 'Поиск контактов';
+
+  @override
+  String get noContactsFound => 'Контакты не найдены';
 }

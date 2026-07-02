@@ -1535,4 +1535,10 @@ class L10nEn extends L10n {
 
   @override
   String get notesFromOracle => 'From Oracle chat';
+
+  @override
+  String get searchContactsHint => 'Search contacts';
+
+  @override
+  String get noContactsFound => 'No contacts found';
 }

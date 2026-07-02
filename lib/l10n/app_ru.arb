@@ -557,5 +557,7 @@
   "notesDeleteDesc": "Заметка будет удалена безвозвратно.",
   "notesFromContact": "Из чата с {name}",
   "notesFromRoom": "Из комнаты {name}",
-  "notesFromOracle": "Из чата с Оракулом"
+  "notesFromOracle": "Из чата с Оракулом",
+  "searchContactsHint": "Поиск контактов",
+  "noContactsFound": "Контакты не найдены"
 }

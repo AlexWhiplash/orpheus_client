@@ -1450,5 +1450,9 @@
     "placeholders": {"name": {"type": "String"}}
   },
   "notesFromOracle": "From Oracle chat",
-  "@notesFromOracle": {"description": "Note source from Oracle"}
+  "@notesFromOracle": {"description": "Note source from Oracle"},
+  "searchContactsHint": "Search contacts",
+  "@searchContactsHint": {"description": "Contacts search field hint"},
+  "noContactsFound": "No contacts found",
+  "@noContactsFound": {"description": "Empty contacts search results"}
 }

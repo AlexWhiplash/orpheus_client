@@ -38,6 +38,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Timer? _updateCheckTimer;
   Timer? _refreshDebounce;
 
+  // Поиск по контактам (фильтр по имени в памяти — аудит PROD-3).
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -63,7 +68,18 @@ class _ContactsScreenState extends State<ContactsScreen> {
     _updateCheckTimer?.cancel();
     _refreshDebounce?.cancel();
     _updateSubscription?.cancel();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchController.clear();
+        _searchQuery = '';
+      }
+    });
   }
 
   /// Коалесцируем частые события обновления (входящие сообщения) в один refresh.
@@ -111,6 +127,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
         title: Text(l10n.contactsTitle),
         actions: [
           AppIconButton(
+            icon: _isSearching ? Icons.search_off : Icons.search,
+            tooltip: l10n.searchContactsHint,
+            onPressed: _toggleSearch,
+          ),
+          AppIconButton(
             icon: Icons.person_add_outlined,
             tooltip: l10n.addContact,
             onPressed: _showAddContactDialog,
@@ -135,7 +156,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<
+      body: Column(
+        children: [
+          if (_isSearching) _buildSearchField(l10n),
+          Expanded(
+            child: FutureBuilder<
           ({List<Contact> contacts, Map<String, int> unreadCounts})>(
         future: _modelFuture,
         builder: (context, snapshot) {
@@ -171,6 +196,35 @@ class _ContactsScreenState extends State<ContactsScreen> {
             },
           );
         },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField(L10n l10n) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        decoration: InputDecoration(
+          hintText: l10n.searchContactsHint,
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: _searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                ),
+        ),
       ),
     );
   }
@@ -182,16 +236,42 @@ class _ContactsScreenState extends State<ContactsScreen> {
     bool showEmptyHint = false,
   }) {
     final l10n = L10n.of(context);
-    // +1 для Оракула в начале, +1 для подсказки если список пуст
-    final itemCount = contacts.length + 1 + (showEmptyHint ? 1 : 0);
-    
+
+    // Фильтр по имени в памяти (аудит PROD-3). При активном поиске прячем
+    // Оракула и пустую подсказку — показываем только результаты.
+    final query = _searchQuery.trim().toLowerCase();
+    final searching = query.isNotEmpty;
+    final visible = searching
+        ? contacts
+            .where((c) => c.name.toLowerCase().contains(query))
+            .toList()
+        : contacts;
+
+    if (searching && visible.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Text(
+            l10n.noContactsFound,
+            style: TextStyle(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    final showOracle = !searching;
+    final showHint = showEmptyHint && !searching;
+    final leading = (showOracle ? 1 : 0) + (showHint ? 1 : 0);
+    final itemCount = visible.length + leading;
+
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.xxl),
       itemCount: itemCount,
       itemBuilder: (context, index) {
-        // Первый элемент — Оракул Орфея (AI контакт)
-        if (index == 0) {
+        // Первый элемент — Оракул Орфея (AI контакт), кроме режима поиска.
+        if (showOracle && index == 0) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: _OracleContactRow(
@@ -207,9 +287,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ),
           );
         }
-        
+
         // Подсказка для добавления контактов (если список пуст)
-        if (showEmptyHint && index == 1) {
+        if (showHint && index == (showOracle ? 1 : 0)) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 14, top: 8),
             child: _AddContactHint(
@@ -217,14 +297,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ),
           );
         }
-        
+
         // Обычные контакты (со смещением индекса)
-        final contactIndex = index - 1 - (showEmptyHint ? 1 : 0);
-        if (contactIndex < 0 || contactIndex >= contacts.length) {
+        final contactIndex = index - leading;
+        if (contactIndex < 0 || contactIndex >= visible.length) {
           return const SizedBox.shrink();
         }
-        
-        final c = contacts[contactIndex];
+
+        final c = visible[contactIndex];
         final isOnline = presence[c.publicKey] == true;
         final unread = unreadCounts[c.publicKey] ?? 0;
 

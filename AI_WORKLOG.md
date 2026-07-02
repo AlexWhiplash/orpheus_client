@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-07-02 — PROD-3: поиск по контактам
+
+**Сделано:** `contacts_screen.dart` — иконка поиска в AppBar (toggle), поле поиска
+над списком, фильтр по имени в памяти. При активном поиске Оракул и empty-hint
+скрыты, пустой результат → `noContactsFound`. Добавлены l10n-ключи
+`searchContactsHint`/`noContactsFound` (EN/RU), перегенерирован l10n.
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 325 passed.
+
+---
+
 ## 2026-07-02 — Desktop Link удалён (PROD-1/ARCH-5/SEC-9), вариант A
 
 **Задача:** решить судьбу Desktop Link. Решение владельца — удалить сейчас (вариант A),

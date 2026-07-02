@@ -2898,6 +2898,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'From Oracle chat'**
   String get notesFromOracle;
+
+  /// Contacts search field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Search contacts'**
+  String get searchContactsHint;
+
+  /// Empty contacts search results
+  ///
+  /// In en, this message translates to:
+  /// **'No contacts found'**
+  String get noContactsFound;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

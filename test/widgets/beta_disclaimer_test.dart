@@ -23,9 +23,10 @@ void main() {
       binding.window.physicalSizeTestValue = const Size(1080, 1920);
       binding.window.devicePixelRatioTestValue = 1.0;
 
-      // Чтобы не всплывал DeviceSettings диалог во время тестов.
+      // Чтобы не всплывали DeviceSettings и онбординг во время теста дисклеймера.
       SharedPreferences.setMockInitialValues({
         'setup_dialog_dismissed': true,
+        'onboarding_seen_v1': true,
       });
     });
 
@@ -138,6 +139,7 @@ void main() {
       SharedPreferences.setMockInitialValues({
         'setup_dialog_dismissed': true,
         'beta_disclaimer_dismissed_v1': true,
+        'onboarding_seen_v1': true,
       });
 
       await tester.runAsync(() async {

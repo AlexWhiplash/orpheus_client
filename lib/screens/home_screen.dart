@@ -19,9 +19,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   static const String _betaDisclaimerDismissedKey = 'beta_disclaimer_dismissed_v1';
+  static const String _onboardingSeenKey = 'onboarding_seen_v1';
 
   int _currentIndex = 1; // По умолчанию открываем Контакты
-  
+
   @override
   void initState() {
     super.initState();
@@ -29,6 +30,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeShowBetaDisclaimer();
+      if (!mounted) return;
+      await _maybeShowOnboarding();
       if (!mounted) return;
       await _checkDeviceSettings();
     });
@@ -142,6 +145,104 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _maybeShowOnboarding() async {
+    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_onboardingSeenKey) ?? false) return;
+    if (!mounted) return;
+
+    final isRu = Localizations.localeOf(context).languageCode == 'ru';
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadii.lg,
+          side: BorderSide(color: AppColors.action.withOpacity(0.25)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                isRu ? 'Добро пожаловать в Orpheus' : 'Welcome to Orpheus',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _onboardingTip(
+                icon: Icons.qr_code_2,
+                title: isRu ? 'Ваша личность — это ключ' : 'Your identity is your key',
+                subtitle: isRu
+                    ? 'Без телефона и почты. Поделитесь своим QR или ID из вкладки «Контакты», чтобы с вами могли связаться.'
+                    : 'No phone or email. Share your QR or ID from the Contacts tab so people can reach you.',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _onboardingTip(
+                icon: Icons.person_add_alt_1,
+                title: isRu ? 'Добавьте контакт' : 'Add a contact',
+                subtitle: isRu
+                    ? 'Отсканируйте его QR или вставьте ключ, чтобы начать зашифрованный чат.'
+                    : 'Scan their QR or paste their key to start an encrypted chat.',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _onboardingTip(
+                icon: Icons.lock_outline,
+                title: isRu ? 'Защитите приложение' : 'Protect the app',
+                subtitle: isRu
+                    ? 'Задайте PIN в «Настройки → Безопасность» для дополнительной защиты.'
+                    : 'Set a PIN in Settings → Security for extra protection.',
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              AppButton(
+                label: isRu ? 'Понятно' : 'Got it',
+                onPressed: () async {
+                  await prefs.setBool(_onboardingSeenKey, true);
+                  if (context.mounted) Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _onboardingTip({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.action.withOpacity(0.12),
+            borderRadius: AppRadii.sm,
+          ),
+          child: Icon(icon, color: AppColors.action, size: 22),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 2),
+              Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

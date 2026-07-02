@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-02 — PERF-2: индекс messages.timestamp
+
+**Задача:** авто-очистка истории (`WHERE timestamp < ?`) делала полный скан —
+составной индекс `(contactPublicKey, timestamp)` не применялся, т.к. в WHERE нет
+ведущего столбца `contactPublicKey`.
+
+**Сделано:** `database_service.dart` — добавлен отдельный
+`CREATE INDEX idx_messages_timestamp ON messages(timestamp)` в `_createMessagesTable`
+(для новых БД) и миграция `if (oldVersion < 8)` (для существующих). Версия БД 7→8.
+CLAUDE.md: «версия 6» → «версия 8 (SQLCipher)».
+
+**Проверки:** `flutter analyze` — 0 ошибок; тесты БД и message_cleanup — зелёные.
+
+---
+
 ## 2026-07-02 — OPS-2: постоянный applicationId (click.orpheus.app)
 
 **Задача:** сменить `com.example.orpheus_project` на нормальный reverse-DNS id

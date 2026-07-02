@@ -49,7 +49,7 @@ class DatabaseService {
       final db = await openDatabase(
         path,
         password: dbKey,
-        version: 7,
+        version: 8,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
         singleInstance: true, // Важно для избежания блокировок
@@ -174,6 +174,20 @@ class DatabaseService {
           DebugLogger.warn('DB', 'Ошибка индексов v7: $e');
         }
       }
+      if (oldVersion < 8) {
+        // Отдельный индекс по одному timestamp: авто-очистка истории фильтрует
+        // `WHERE timestamp < ?` без contactPublicKey, поэтому составной индекс
+        // (contactPublicKey, timestamp) ей не помогал — был полный скан (аудит PERF-2).
+        DebugLogger.info('DB', 'Миграция до версии 8 — индекс messages.timestamp');
+        try {
+          await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_messages_timestamp
+            ON messages(timestamp)
+          ''');
+        } catch (e) {
+          DebugLogger.warn('DB', 'Ошибка индекса v8: $e');
+        }
+      }
       print("DB: Миграция завершена");
     } catch (e) {
       print("DB: ОШИБКА миграции: $e");
@@ -208,6 +222,12 @@ class DatabaseService {
     await db.execute('''
       CREATE INDEX IF NOT EXISTS idx_messages_contact_ts
       ON messages(contactPublicKey, timestamp)
+    ''');
+    // Отдельный индекс по timestamp: авто-очистка истории фильтрует по
+    // `timestamp < ?` без contactPublicKey, где составной индекс не работает (PERF-2).
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_messages_timestamp
+      ON messages(timestamp)
     ''');
     // Дедуп по стабильному messageId (NULL допускается многократно —
     // сообщения без id от старых клиентов не считаются дублями).

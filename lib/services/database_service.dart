@@ -452,6 +452,38 @@ class DatabaseService {
     return maps.map(_rowToMessage).toList();
   }
 
+  /// Последние [limit] сообщений контакта для НАЧАЛЬНОЙ загрузки чата страницами
+  /// (вместо всей истории — аудит PERF-1). Возвращает по возрастанию времени (ASC).
+  Future<List<ChatMessage>> getMessagesForContactLatest(
+      String contactKey, {int limit = 50}) async {
+    if (_isDuressMode) return [];
+    final db = await instance.database;
+    final maps = await db.query(
+      'messages',
+      where: 'contactPublicKey = ?',
+      whereArgs: [contactKey],
+      orderBy: 'timestamp DESC',
+      limit: limit,
+    );
+    return maps.reversed.map(_rowToMessage).toList();
+  }
+
+  /// [limit] сообщений контакта СТРОГО старше [beforeMs] — для подгрузки истории
+  /// вверх по скроллу (аудит PERF-1). Возвращает по возрастанию времени (ASC).
+  Future<List<ChatMessage>> getMessagesForContactBefore(
+      String contactKey, int beforeMs, {int limit = 50}) async {
+    if (_isDuressMode) return [];
+    final db = await instance.database;
+    final maps = await db.query(
+      'messages',
+      where: 'contactPublicKey = ? AND timestamp < ?',
+      whereArgs: [contactKey, beforeMs],
+      orderBy: 'timestamp DESC',
+      limit: limit,
+    );
+    return maps.reversed.map(_rowToMessage).toList();
+  }
+
   ChatMessage _rowToMessage(Map<String, Object?> row) {
     return ChatMessage(
       id: row['id'] as int?,

@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-02 — PERF-1 (финал): пагинация начальной загрузки чата
+
+**Задача:** остаток PERF-1 — при открытии чата грузилась вся история. Инкрементальный
+append для входящих уже был сделан ранее; здесь — начальная загрузка страницами.
+
+**Сделано:**
+- `database_service.dart`: `getMessagesForContactLatest(key, limit)` (последние N,
+  ORDER BY DESC LIMIT + reverse→ASC) и `getMessagesForContactBefore(key, beforeMs, limit)`
+  (старше метки, для подгрузки вверх). Оба поверх индекса `(contactPublicKey, timestamp)`.
+- `chat_screen.dart`: `_loadChatHistory` грузит последнюю страницу (50); scroll-listener
+  `_onScroll` у `maxScrollExtent` (reverse=true → старое сверху) вызывает `_loadOlder`,
+  который prepend-ит старую страницу (дедуп по messageId). Prepend при reverse=true
+  скролл-стабилен. `_hasMoreOlder`/`_isLoadingOlder` гварды.
+
+**ТРЕБУЕТ ПРОВЕРКИ НА УСТРОЙСТВЕ:** плавность подгрузки вверх и отсутствие «прыжков»
+на реальной длинной истории (логика скролл-стабильна by design, но UX стоит увидеть).
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 325 passed.
+
+---
+
 ## 2026-07-02 — PROD-5: меню «…» в чате вместо one-tap очистки
 
 **Задача:** кнопка «…» (иконка меню) сразу открывала подтверждение очистки истории —

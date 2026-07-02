@@ -37,6 +37,13 @@ class _ChatScreenState extends State<ChatScreen>
   List<ChatMessage> _chatHistory = const <ChatMessage>[];
   StreamSubscription<String>? _messageUpdateSubscription;
 
+  // Пагинация истории (аудит PERF-1): грузим только последнюю страницу, старые
+  // сообщения подгружаем по скроллу вверх. Список reverse=true, поэтому "верх"
+  // (старое) соответствует maxScrollExtent.
+  static const int _pageSize = 50;
+  bool _hasMoreOlder = false;
+  bool _isLoadingOlder = false;
+
   late final AnimationController _encryptionController;
   bool _isEncrypting = false;
 
@@ -61,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen>
 
     _loadChatHistory();
     _markAsRead();
+    _scrollController.addListener(_onScroll);
 
     _messageUpdateSubscription =
         messageUpdateController.stream.listen((senderKey) {
@@ -98,6 +106,7 @@ class _ChatScreenState extends State<ChatScreen>
   void dispose() {
     _messageUpdateSubscription?.cancel();
     _messageController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _inputFocusNode.dispose();
     _encryptionController.dispose();
@@ -105,15 +114,57 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   Future<void> _loadChatHistory() async {
+    // Грузим последнюю страницу, а не всю историю (аудит PERF-1).
     final history = await DatabaseService.instance
-        .getMessagesForContact(widget.contact.publicKey);
+        .getMessagesForContactLatest(widget.contact.publicKey, limit: _pageSize);
     if (!mounted) return;
-    setState(() => _chatHistory = history);
+    setState(() {
+      _chatHistory = history;
+      _hasMoreOlder = history.length >= _pageSize;
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.jumpTo(0.0);
       }
+    });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    // reverse=true: старые сообщения — у maxScrollExtent (визуально сверху).
+    if (pos.pixels >= pos.maxScrollExtent - 300 &&
+        _hasMoreOlder &&
+        !_isLoadingOlder) {
+      _loadOlder();
+    }
+  }
+
+  /// Подгружает предыдущую страницу истории (старые сообщения). При reverse=true
+  /// prepend скролл-стабилен — контент добавляется у дальнего края, вид не прыгает.
+  Future<void> _loadOlder() async {
+    if (_isLoadingOlder || !_hasMoreOlder || _chatHistory.isEmpty) return;
+    _isLoadingOlder = true;
+    final oldestMs = _chatHistory.first.timestamp.millisecondsSinceEpoch;
+    final older = await DatabaseService.instance.getMessagesForContactBefore(
+        widget.contact.publicKey, oldestMs,
+        limit: _pageSize);
+    if (!mounted) {
+      _isLoadingOlder = false;
+      return;
+    }
+    final existingIds =
+        _chatHistory.map((m) => m.messageId).whereType<String>().toSet();
+    final toPrepend = older
+        .where((m) => m.messageId == null || !existingIds.contains(m.messageId))
+        .toList();
+    setState(() {
+      if (toPrepend.isNotEmpty) {
+        _chatHistory = [...toPrepend, ..._chatHistory];
+      }
+      _hasMoreOlder = older.length >= _pageSize;
+      _isLoadingOlder = false;
     });
   }
 

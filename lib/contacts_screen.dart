@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:orpheus_project/chat_screen.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
@@ -443,12 +444,27 @@ class _ContactRow extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
+  /// Компактная метка времени последнего сообщения для строки контакта.
+  /// Только время/дата — без текста сообщения (приватность: содержимое не
+  /// показываем на главном экране; уведомления тоже скрывают контент). PROD-4.
+  static String _formatLastTime(int? ms, String locale) {
+    if (ms == null || ms <= 0) return '';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    final now = DateTime.now();
+    final sameDay =
+        dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    if (sameDay) return DateFormat.Hm(locale).format(dt); // 14:32
+    if (dt.year == now.year) return DateFormat.MMMd(locale).format(dt); // 12 июн.
+    return DateFormat('dd.MM.yyyy', locale).format(dt);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasUnread = unreadCount > 0;
-    final subtitle = contact.publicKey.length > 8
-        ? '…${contact.publicKey.substring(contact.publicKey.length - 8)}'
-        : contact.publicKey;
+    final subtitle = _formatLastTime(
+      contact.lastMessageTime,
+      Localizations.localeOf(context).languageCode,
+    );
 
     return Material(
       color: Colors.transparent,
@@ -495,14 +511,16 @@ class _ContactRow extends StatelessWidget {
                         UserBadge(pubkey: contact.publicKey, compact: true),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: AppColors.textTertiary,
-                            fontFamily: 'monospace',
-                          ),
-                    ),
+                    if (subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -313,10 +313,12 @@ class DatabaseService {
     ''');
     
     return List.generate(maps.length, (i) {
+      final lastTs = maps[i]['lastMessageTime'] as int?;
       return Contact(
         id: maps[i]['id'] as int,
         name: maps[i]['name'] as String,
         publicKey: maps[i]['publicKey'] as String,
+        lastMessageTime: (lastTs == null || lastTs == 0) ? null : lastTs,
       );
     });
   }

@@ -2910,6 +2910,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'No contacts found'**
   String get noContactsFound;
+
+  /// Chat menu: contact info item
+  ///
+  /// In en, this message translates to:
+  /// **'Contact info'**
+  String get contactInfo;
+
+  /// Hint for verifying a contact's public key against MITM
+  ///
+  /// In en, this message translates to:
+  /// **'Compare this key with your contact over a trusted channel to make sure no one is intercepting your messages.'**
+  String get verifyKeyHint;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

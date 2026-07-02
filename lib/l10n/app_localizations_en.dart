@@ -1541,4 +1541,11 @@ class L10nEn extends L10n {
 
   @override
   String get noContactsFound => 'No contacts found';
+
+  @override
+  String get contactInfo => 'Contact info';
+
+  @override
+  String get verifyKeyHint =>
+      'Compare this key with your contact over a trusted channel to make sure no one is intercepting your messages.';
 }

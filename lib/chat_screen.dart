@@ -295,6 +295,106 @@ class _ChatScreenState extends State<ChatScreen>
     await _loadChatHistory();
   }
 
+  /// Меню чата («…»). Раньше кнопка сразу открывала подтверждение очистки истории
+  /// (вводило в заблуждение — иконка меню без меню). Теперь это настоящее меню
+  /// с информацией о контакте (в т.ч. сверкой ключа против MITM) и очисткой (PROD-5).
+  void _showChatMenu() {
+    final l10n = L10n.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.info_outline, color: AppColors.primary),
+              title: Text(l10n.contactInfo),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showContactInfo();
+              },
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.delete_forever, color: AppColors.danger),
+              title: Text(l10n.clearHistory,
+                  style: const TextStyle(color: AppColors.danger)),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _confirmClearHistory();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Информация о контакте: имя + полный публичный ключ (для сверки против MITM)
+  /// с возможностью копирования.
+  void _showContactInfo() {
+    final l10n = L10n.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.contact.name,
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                l10n.publicKey,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(
+                widget.contact.publicKey,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                l10n.verifyKeyHint,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton(
+                label: l10n.copy,
+                onPressed: () async {
+                  await Clipboard.setData(
+                      ClipboardData(text: widget.contact.publicKey));
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.keyCopied)),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _confirmClearHistory() async {
     final l10n = L10n.of(context);
     final ok = await AppDialog.show(
@@ -392,7 +492,7 @@ class _ChatScreenState extends State<ChatScreen>
           AppIconButton(
             icon: Icons.more_horiz,
             tooltip: l10n.menu,
-            onPressed: _confirmClearHistory,
+            onPressed: _showChatMenu,
           ),
         ],
       ),

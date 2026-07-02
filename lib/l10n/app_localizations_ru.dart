@@ -1553,4 +1553,11 @@ class L10nRu extends L10n {
 
   @override
   String get noContactsFound => 'Контакты не найдены';
+
+  @override
+  String get contactInfo => 'Информация о контакте';
+
+  @override
+  String get verifyKeyHint =>
+      'Сверьте этот ключ с контактом по доверенному каналу, чтобы убедиться, что переписку никто не перехватывает.';
 }

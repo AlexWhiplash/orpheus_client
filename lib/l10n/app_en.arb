@@ -1454,5 +1454,9 @@
   "searchContactsHint": "Search contacts",
   "@searchContactsHint": {"description": "Contacts search field hint"},
   "noContactsFound": "No contacts found",
-  "@noContactsFound": {"description": "Empty contacts search results"}
+  "@noContactsFound": {"description": "Empty contacts search results"},
+  "contactInfo": "Contact info",
+  "@contactInfo": {"description": "Chat menu: contact info item"},
+  "verifyKeyHint": "Compare this key with your contact over a trusted channel to make sure no one is intercepting your messages.",
+  "@verifyKeyHint": {"description": "Hint for verifying a contact's public key against MITM"}
 }

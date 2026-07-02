@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-07-02 — UI-9: отладочный лог-оверлей звонка спрятан в release
+
+`call_screen.dart`: скрытая кнопка (тап по «Secure Call») открывала оверлей с
+сигналинг/ICE-логами. Переключатель (`onTap`) и рендер оверлея (`if (...)`)
+загейчены за `kDebugMode` — в release недоступны. Импорт `foundation` (kDebugMode).
+Проверки: analyze 0 ошибок.
+
+QUAL-9 (инлайн-changelog в config.dart) НЕ трогал: `changelogData` — живой
+offline-fallback в updates_screen (+ config_test), удаление сломает офлайн-changelog.
+Правило config.dart запрещает *добавлять* записи, а не хранить fallback.
+
+---
+
 ## 2026-07-02 — LOGIC-6: блокировка брутфорса по монотонным часам
 
 **Задача:** прогрессивная блокировка PIN считалась по `DateTime.now()` — обходится

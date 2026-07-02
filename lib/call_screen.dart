@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -893,9 +894,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               children: [
                 const SizedBox(height: 40),
 
-                // Скрытая кнопка логов
+                // Скрытая кнопка логов — только в debug (аудит UI-9)
                 GestureDetector(
-                  onTap: () => setState(() => _showDebugLogs = !_showDebugLogs),
+                  onTap: kDebugMode
+                      ? () => setState(() => _showDebugLogs = !_showDebugLogs)
+                      : null,
                   child: const Text(
                     "Secure Call",
                     style: TextStyle(
@@ -1101,8 +1104,8 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // Оверлей с логами
-          if (_showDebugLogs)
+          // Оверлей с логами — только в debug (в release не показываем, аудит UI-9)
+          if (kDebugMode && _showDebugLogs)
             Positioned.fill(
               child: Container(
                 color: Colors.black.withOpacity(0.85),

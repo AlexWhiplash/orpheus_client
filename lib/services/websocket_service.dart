@@ -30,6 +30,7 @@ class WebSocketService {
   String? _currentPublicKey;
   Timer? _reconnectTimer;
   Timer? _pingTimer;
+  Timer? _connectTimeout;
   bool _isDisconnectingIntentional = false;
   // Поколение попытки подключения: защищает от гонки, когда _initConnection
   // запускается повторно (реконнект/сеть/lifecycle), пока предыдущий
@@ -126,6 +127,19 @@ class WebSocketService {
     print("WS: Попытка подключения к $uri...");
     DebugLogger.info('WS', 'Attempting to connect to $uri');
 
+    // Watchdog: не залипаем в Connecting навсегда, если connect зависает.
+    // По таймауту помечаем поколение устаревшим (опоздавший сокет закроется в
+    // .then по gen-guard — без второго живого сокета), ротируем хост и уходим в
+    // реконнект.
+    _connectTimeout?.cancel();
+    _connectTimeout = Timer(const Duration(seconds: 20), () {
+      if (gen != _connectionGeneration || _channel != null) return;
+      DebugLogger.warn('WS', 'Connect timeout — abandoning attempt');
+      _connectionGeneration++;
+      _rotateHost();
+      _handleDisconnect();
+    });
+
     try {
       WebSocket.connect(uri.toString()).then((ws) {
         // Пока подключались, стартовал более новый connect — этот сокет лишний:
@@ -136,6 +150,7 @@ class WebSocketService {
           } catch (_) {}
           return;
         }
+        _connectTimeout?.cancel(); // успели подключиться — гасим watchdog
         ws.pingInterval = const Duration(seconds: 10);
 
         // Закрываем прежний канал, если он вдруг ещё открыт.
@@ -186,12 +201,14 @@ class WebSocketService {
       }).catchError((e) {
         // Устаревшая попытка (уже стартовал новый connect) — не трогаем состояние.
         if (gen != _connectionGeneration) return;
+        _connectTimeout?.cancel();
         print("WS FATAL: Не удалось подключиться: $e");
         DebugLogger.error('WS', 'FATAL: Не удалось подключиться: $e');
         _rotateHost();
         _handleDisconnect();
       });
     } catch (e) {
+      _connectTimeout?.cancel();
       print("WS EXCEPTION: $e");
       DebugLogger.error('WS', 'EXCEPTION: $e');
       _rotateHost();
@@ -250,6 +267,7 @@ class WebSocketService {
     // закрыт, а не установлен (LOGIC-9).
     _connectionGeneration++;
     _reconnectTimer?.cancel();
+    _connectTimeout?.cancel();
     _stopPingPong();
     _networkSubscription?.cancel();
     _networkSubscription = null;

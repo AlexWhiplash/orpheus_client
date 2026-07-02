@@ -340,3 +340,14 @@ short-circuit апгрейда в fast-тестах (LOW). Constant-time compare
 `**/*.jks` в .gitignore. Владелец генерирует keystore сам.
 
 **Статус:** `flutter build apk --release` OK (фолбэк на debug-подпись, APK 128.9 МБ).
+
+---
+
+## 2026-07-02 - WS connect watchdog (pre-existing LOW из верификации LOGIC-9) [ветка wl/ws-timeout]
+
+`websocket_service.dart`: `WebSocket.connect` не имел таймаута -> при зависшем connect статус навсегда
+залипал в Connecting, а `connect()` блокировал новые попытки. Добавлен `_connectTimeout` (20с): по
+таймауту бампает `_connectionGeneration` (опоздавший сокет закроется в .then по gen-guard, без утечки),
+ротирует хост, зовёт `_handleDisconnect` (реконнект). Отменяется на успехе/ошибке/disconnect.
+
+**Статус:** analyze 0 errors; test 327 passed / 0 failed.

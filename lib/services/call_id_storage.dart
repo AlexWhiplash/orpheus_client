@@ -26,9 +26,10 @@ class CallIdStorage {
   /// но не блокирует перезвон после завершения звонка
   static const int _ttlMs = 15 * 1000;
   
-  /// Маркеры источника
+  /// Маркеры источника.
+  /// `ws` — main-изолят (UI); `push` — фоновый WS-сервис (killed-state), раньше был FCM.
   static const String sourceWebSocket = 'ws';
-  static const String sourceFcm = 'fcm';
+  static const String sourcePush = 'push';
   
   /// Попытаться зарегистрировать callId как "активный".
   /// 
@@ -36,8 +37,8 @@ class CallIdStorage {
   /// - `true` если callId успешно сохранён (новый звонок или устаревший сброшен)
   /// - `false` если уже есть активный callId (любой, включая тот же)
   /// 
-  /// ВАЖНО: Для WebSocket используем этот метод для регистрации.
-  /// Для FCM используем tryShowCallKitForFcm — он имеет другую логику.
+  /// ВАЖНО: Для main-изолята (UI) WebSocket используем этот метод для регистрации.
+  /// Для фонового push-сервиса используем tryShowCallKitForPush — иная логика.
   static Future<bool> trySetActiveCall({
     required String callId,
     required String source,
@@ -84,44 +85,44 @@ class CallIdStorage {
     }
   }
   
-  /// Проверить, можно ли FCM показать CallKit для этого callId.
-  /// 
+  /// Проверить, можно ли фоновому push-сервису показать CallKit для этого callId.
+  ///
   /// Возвращает:
   /// - `true` если callId ещё НЕ обрабатывается (можно показать CallKit)
   /// - `false` если callId УЖЕ активен (кто-то уже показал CallKit)
-  /// 
+  ///
   /// В отличие от trySetActiveCall, этот метод НЕ регистрирует callId если он уже есть.
-  static Future<bool> tryShowCallKitForFcm({
+  static Future<bool> tryShowCallKitForPush({
     required String callId,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       final existingCallId = prefs.getString(_keyActiveCallId);
       final existingTs = prefs.getInt(_keyActiveCallTimestamp) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
-      
+
       // Если есть активный callId и он не устарел
       if (existingCallId != null && existingCallId.isNotEmpty) {
         final age = now - existingTs;
         if (age < _ttlMs) {
           // Кто-то уже обрабатывает звонок (неважно какой callId)
-          print("📞 CallIdStorage FCM: уже есть активный звонок $existingCallId (age=${age}ms), FCM НЕ показываю");
+          print("📞 CallIdStorage PUSH: уже есть активный звонок $existingCallId (age=${age}ms), не показываю");
           return false;
         }
         // Устарел — можно показывать
-        print("📞 CallIdStorage FCM: предыдущий callId устарел (${age}ms)");
+        print("📞 CallIdStorage PUSH: предыдущий callId устарел (${age}ms)");
       }
-      
-      // Регистрируем callId для FCM
+
+      // Регистрируем callId для push-сервиса
       await prefs.setString(_keyActiveCallId, callId);
       await prefs.setInt(_keyActiveCallTimestamp, now);
-      await prefs.setString(_keyActiveCallSource, sourceFcm);
-      
-      print("📞 CallIdStorage FCM: сохранён callId=$callId");
+      await prefs.setString(_keyActiveCallSource, sourcePush);
+
+      print("📞 CallIdStorage PUSH: сохранён callId=$callId");
       return true;
     } catch (e) {
-      print("📞 CallIdStorage FCM ERROR: $e");
+      print("📞 CallIdStorage PUSH ERROR: $e");
       // При ошибке разрешаем показать
       return true;
     }

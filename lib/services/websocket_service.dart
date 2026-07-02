@@ -8,7 +8,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
-import 'package:orpheus_project/services/notification_service.dart';
 import 'package:orpheus_project/services/pending_actions_service.dart';
 import 'package:rxdart/rxdart.dart';
 
@@ -163,7 +162,6 @@ class WebSocketService {
         print("WS: Соединение установлено!");
         DebugLogger.success('WS', 'Соединение установлено!');
 
-        _sendFcmToken();
         _startPingPong();
         
         // Отправляем pending сообщения после восстановления соединения
@@ -220,22 +218,6 @@ class WebSocketService {
     if (AppConfig.apiHosts.isEmpty) return;
     _hostIndex = (_hostIndex + 1) % AppConfig.apiHosts.length;
     DebugLogger.warn('WS', 'Переключение хоста: $currentHost');
-  }
-
-  void _sendFcmToken() {
-    final token = NotificationService().fcmToken;
-    if (token != null) {
-      print("WS: Отправка FCM токена на сервер...");
-      DebugLogger.info('WS', 'Отправка FCM токена: ${token.substring(0, 20)}...');
-      final msg = json.encode({
-        "type": "register-fcm",
-        "token": token
-      });
-      _channel?.sink.add(msg);
-    } else {
-      print("WS WARN: FCM токен не готов, пропускаем отправку.");
-      DebugLogger.warn('WS', 'FCM токен не готов, пропускаем отправку');
-    }
   }
 
   void _handleDisconnect() {

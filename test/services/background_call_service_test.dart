@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:orpheus_project/services/background_call_service.dart';
+import 'package:orpheus_project/services/push_connection_service.dart';
 
-class _FakeBackend implements BackgroundCallBackend {
+/// Фейковый backend постоянного сервиса (PushConnectionService), чтобы не дёргать
+/// MethodChannel. BackgroundCallService теперь тонкий фасад над ним.
+class _FakeBackend implements PushServiceBackend {
   int createChannelCalls = 0;
   int configureCalls = 0;
   int isRunningCalls = 0;
@@ -59,31 +62,31 @@ class _FakeBackend implements BackgroundCallBackend {
 }
 
 void main() {
-  group('BackgroundCallService (контракт foreground service на время звонка)', () {
+  group('PushConnectionService / BackgroundCallService (фасад)', () {
     late _FakeBackend backend;
 
     setUp(() {
       backend = _FakeBackend();
-      BackgroundCallService.debugSetBackendForTesting(backend);
-      BackgroundCallService.debugResetForTesting();
+      PushConnectionService.debugSetBackendForTesting(backend);
+      PushConnectionService.debugResetForTesting();
     });
 
     tearDown(() {
-      BackgroundCallService.debugSetBackendForTesting(null);
-      BackgroundCallService.debugResetForTesting();
+      PushConnectionService.debugSetBackendForTesting(null);
+      PushConnectionService.debugResetForTesting();
     });
 
     test('initialize идемпотентен: channel+configure вызываются один раз', () async {
-      await BackgroundCallService.initialize();
-      await BackgroundCallService.initialize();
+      await PushConnectionService.initialize();
+      await PushConnectionService.initialize();
 
       expect(backend.createChannelCalls, equals(1));
       expect(backend.configureCalls, equals(1));
     });
 
-    test('startCallService: если не running — стартует сервис', () async {
+    test('start: если не running — инициализирует и стартует сервис', () async {
       backend.running = false;
-      await BackgroundCallService.startCallService();
+      await PushConnectionService.start();
 
       expect(backend.createChannelCalls, equals(1));
       expect(backend.configureCalls, equals(1));
@@ -91,34 +94,43 @@ void main() {
       expect(backend.running, isTrue);
     });
 
-    test('startCallService: если уже running — не стартует повторно', () async {
+    test('start: если уже running — не стартует повторно', () async {
       backend.running = true;
-      await BackgroundCallService.startCallService();
+      await PushConnectionService.start();
 
       expect(backend.startCalls, equals(0));
-      // При первом вызове всё равно происходит initialize, потому что _isInitialized был false.
       expect(backend.configureCalls, equals(1));
     });
 
-    test('stopCallService: если running — вызывает stopService', () async {
+    test('фасад startCallService: поднимает сервис и входит в call mode', () async {
+      backend.running = false;
+      await BackgroundCallService.startCallService(contactName: 'Alice');
+
+      expect(backend.startCalls, equals(1));
+      final enter = backend.invoked.where((e) => e.method == 'enterCallMode');
+      expect(enter, hasLength(1));
+      expect(enter.single.args?['title'], equals('Alice'));
+    });
+
+    test('фасад stopCallService: НЕ останавливает сервис, только exitCallMode', () async {
       backend.running = true;
       await BackgroundCallService.stopCallService();
 
-      expect(backend.invoked.where((e) => e.method == 'stopService').length, equals(1));
+      expect(backend.invoked.where((e) => e.method == 'stopService'), isEmpty);
+      expect(backend.invoked.where((e) => e.method == 'exitCallMode'), hasLength(1));
     });
 
-    test('stopCallService: если не running — ничего не вызывает', () async {
-      backend.running = false;
-      await BackgroundCallService.stopCallService();
-
-      expect(backend.invoked, isEmpty);
-    });
-
-    test('updateCallDuration отправляет updateNotification с title/content', () async {
+    test('updateCallDuration шлёт enterCallMode с длительностью', () async {
       BackgroundCallService.updateCallDuration('00:12', 'Alice');
-      expect(backend.invoked, hasLength(1));
-      expect(backend.invoked.single.method, equals('updateNotification'));
-      expect(backend.invoked.single.args, equals({'title': 'Alice', 'content': 'Звонок: 00:12'}));
+      final enter = backend.invoked.where((e) => e.method == 'enterCallMode');
+      expect(enter, hasLength(1));
+      expect(enter.single.args, equals({'title': 'Alice', 'content': '00:12'}));
+    });
+
+    test('stop: если running — вызывает stopService', () async {
+      backend.running = true;
+      await PushConnectionService.stop();
+      expect(backend.invoked.where((e) => e.method == 'stopService'), hasLength(1));
     });
 
     test('ошибки backend не должны пробрасываться наружу (best-effort)', () async {
@@ -128,13 +140,12 @@ void main() {
       backend.throwOnStart = StateError('boom:start');
       backend.throwOnInvoke = StateError('boom:invoke');
 
-      // Ничего из этого не должно падать
-      await BackgroundCallService.initialize();
+      await PushConnectionService.initialize();
+      await PushConnectionService.start();
+      await PushConnectionService.stop();
       await BackgroundCallService.startCallService();
       await BackgroundCallService.stopCallService();
       BackgroundCallService.updateCallDuration('00:01', 'Bob');
     });
   });
 }
-
-

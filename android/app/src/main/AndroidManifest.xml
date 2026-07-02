@@ -24,11 +24,16 @@
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     
-    <!-- Foreground service для активных звонков -->
+    <!-- Foreground services: постоянный сервис доставки пушей (specialUse, замена
+         FCM) + микрофон во время звонков -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
-    <!-- Автозапуск после перезагрузки (BootReceiver) -->
+    <!-- Постоянное соединение переживает Doze только с исключением из энергосбережения -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Автозапуск сервиса после перезагрузки (boot-receiver плагина flutter_background_service) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Установка APK (для системы обновлений) -->
@@ -40,14 +45,6 @@
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher">
-
-        <!--
-          FCM default notification icon (Android small icon).
-          Если не задать, Android берёт ic_launcher (часто адаптивный) и в шторке получается "белый квадрат".
-        -->
-        <meta-data
-            android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_stat_orpheus" />
 
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
@@ -94,25 +91,21 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Foreground service для активных звонков -->
+        <!-- Постоянный foreground-сервис доставки пушей без Google/FCM.
+             Тип specialUse: единственный, у кого нет лимита времени работы
+             (dataSync ограничен ~6ч/сутки на Android 15) и кого разрешено
+             автозапускать при загрузке (microphone/dataSync — нельзя). Держит
+             WebSocket-соединение в сервисном isolate. Автозапуск при загрузке —
+             через собственный boot-receiver плагина flutter_background_service. -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="microphone"
+            android:foregroundServiceType="specialUse"
             android:exported="true"
-            tools:replace="android:exported,android:foregroundServiceType"
-            />
-
-        <!-- Автозапуск после перезагрузки устройства -->
-        <receiver
-            android:name=".BootReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
+            tools:replace="android:exported,android:foregroundServiceType">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains an end-to-end-encrypted realtime WebSocket to deliver incoming calls and messages without Google/FCM on de-Googled devices." />
+        </service>
 
         <!-- FileProvider для безопасной передачи APK файлов (установка обновлений) -->
         <provider

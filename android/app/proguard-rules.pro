@@ -21,10 +21,6 @@
 -keep class com.google.gson.reflect.TypeToken { *; }
 -keep class * extends com.google.gson.reflect.TypeToken
 
-# Firebase
--keep class com.google.firebase.** { *; }
--dontwarn com.google.firebase.**
-
 # Flutter WebRTC
 -keep class org.webrtc.** { *; }
 -dontwarn org.webrtc.**

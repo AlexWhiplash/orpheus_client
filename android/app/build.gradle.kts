@@ -6,7 +6,6 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
 }
 
 // Настройки подписи release читаются из android/key.properties (в .gitignore,
@@ -46,7 +45,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // Рекомендуется включить MultiDex, так как у вас Firebase + Notifications
+        // MultiDex включён (много плагинов: WebRTC, CallKit, уведомления, фоновый сервис)
         multiDexEnabled = true
     }
 

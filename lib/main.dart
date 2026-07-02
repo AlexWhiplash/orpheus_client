@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kReleaseMode;
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -35,6 +33,7 @@ import 'package:orpheus_project/services/presence_service.dart';
 import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/services/telemetry_service.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
+import 'package:orpheus_project/services/push_connection_service.dart';
 import 'package:orpheus_project/theme/app_theme.dart';
 import 'package:orpheus_project/welcome_screen.dart';
 import 'package:orpheus_project/screens/home_screen.dart';
@@ -58,6 +57,9 @@ final StreamController<Map<String, dynamic>> signalingStreamController = StreamC
 final IncomingCallBuffer incomingCallBuffer = IncomingCallBuffer.instance;
 
 bool _hasKeys = false;
+
+/// Таймер heartbeat для координации с сервисным isolate (PushConnectionService).
+Timer? _pushHeartbeatTimer;
 
 /// Глобальный флаг: приложение в foreground (активно)?
 bool isAppInForeground = true;
@@ -158,23 +160,14 @@ Future<void> _initializeApp() async {
   Intl.defaultLocale = LocaleService.instance.effectiveLocale.languageCode;
 
   try {
-    // 1. Firebase
-    DebugLogger.info('APP', 'Инициализация Firebase...');
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    DebugLogger.success('APP', 'Firebase инициализирован');
-    
-    // 2. Уведомления (простая инициализация)
+    // Уведомления (локальные, без Google/FCM)
     DebugLogger.info('APP', 'Инициализация уведомлений...');
     await notificationService.init();
     DebugLogger.success('APP', 'Уведомления инициализированы');
-
-    // 3. BackgroundCallService — НЕ инициализируем на старте.
-    // Он будет lazy-инициализирован при первом звонке (см. BackgroundCallService.startCallService()).
   } catch (e, stackTrace) {
     print("INIT ERROR: $e");
     DebugLogger.error('APP', 'INIT ERROR: $e');
-    // Отправляем ошибку инициализации в Sentry
+    // Отправляем ошибку инициализации в Sentry (no-op, если Sentry выключен)
     await Sentry.captureException(e, stackTrace: stackTrace);
   }
 
@@ -237,7 +230,37 @@ Future<void> _initializeApp() async {
     );
   };
 
+  // Постоянный foreground-сервис доставки пушей (замена FCM). Поднимаем только
+  // если у пользователя есть ключи (иначе показывать постоянное уведомление до
+  // создания аккаунта незачем).
+  _startPushConnectionAndHeartbeat();
+
   DebugLogger.success('APP', '✅ Приложение запущено');
+}
+
+/// Heartbeat main-изолята + публикация pubkey для сервисного isolate, плюс старт
+/// постоянного сервиса. Пока main-изолят жив и пишет heartbeat, сервис молчит;
+/// когда приложение убито и heartbeat протухает — сервис берёт доставку на себя.
+void _startPushConnectionAndHeartbeat() {
+  final pubkey = cryptoService.publicKeyBase64;
+  if (!_hasKeys || pubkey == null || pubkey.isEmpty) return;
+
+  Future<void> beat() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Публичный ключ НЕ секрет (раздаётся через QR) — можно в SharedPreferences.
+      await prefs.setString(kPrefUserPubkey, pubkey);
+      await prefs.setInt(
+          kPrefMainAliveTs, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
+  beat();
+  _pushHeartbeatTimer?.cancel();
+  _pushHeartbeatTimer =
+      Timer.periodic(const Duration(seconds: 4), (_) => beat());
+
+  PushConnectionService.start();
 }
 
 /// Инициализация CallKit для обработки нативного UI входящих звонков
@@ -973,6 +996,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     AuthService.onWipeStarted = () {
       try {
         websocketService.disconnect();
+      } catch (_) {}
+      // Гасим heartbeat (иначе он перезапишет старый pubkey обратно в prefs
+      // после prefs.clear() и сервис переподключится под стёртой личностью) и
+      // останавливаем постоянный сервис доставки.
+      try {
+        _pushHeartbeatTimer?.cancel();
+        _pushHeartbeatTimer = null;
+      } catch (_) {}
+      try {
+        PushConnectionService.stop();
       } catch (_) {}
     };
 

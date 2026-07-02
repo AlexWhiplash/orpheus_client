@@ -32,7 +32,8 @@
 - CryptoService - E2E шифрование (X25519 + ChaCha20-Poly1305)
 - WebSocketService - real-time messaging с автореконнектом
 - DatabaseService - SQLite, версия 6, поддержка duress mode
-- NotificationService - FCM + local notifications
+- NotificationService - локальные уведомления + CallKit (без Google/FCM)
+- PushConnectionService - постоянный foreground-сервис (specialUse) с WebSocket в отдельном isolate; заменяет FCM для доставки при убитом приложении
 - CallStateService - WebRTC звонки
 - AiAssistantService - Oracle of Orpheus AI
 - RoomsService - групповые чаты

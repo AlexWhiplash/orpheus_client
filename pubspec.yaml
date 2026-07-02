@@ -36,16 +36,14 @@ dependencies:
   cupertino_icons: ^1.0.2
   audioplayers: ^6.0.0
   qr_flutter: ^4.1.0
-  mobile_scanner: ^5.1.1
+  # QR-сканер на чистом Dart (zxing_lib) + официальный camera-плагин.
+  # Заменил mobile_scanner, который тянул закрытый Google ML Kit (barcode-scanning).
+  qr_code_dart_scan: ^0.11.5
 
   # Звонки
   flutter_webrtc: ^1.2.0
 
-  # Firebase
-  firebase_core: ^3.6.0
-  firebase_messaging: ^15.1.3
-
-  # Фоновая работа
+  # Фоновая работа (постоянный foreground-сервис для пушей без Google/FCM)
   flutter_background_service: ^5.0.0
   flutter_local_notifications: ^17.0.0
   

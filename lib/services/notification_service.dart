@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -19,20 +18,19 @@ import 'package:orpheus_project/services/call_id_storage.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Обработчик фоновых FCM сообщений (top-level функция)
-/// Вызывается когда приложение убито или в фоне
-/// 
-/// КРИТИЧЕСКИ ВАЖНО: Этот код выполняется в отдельном isolate!
+/// Диспетчер входящего push-сообщения из фонового WS-слушателя
+/// (см. PushConnectionService). Раньше эту роль играл FCM background handler
+/// (`firebaseMessagingBackgroundHandler(RemoteMessage)`) — после отказа от Google
+/// сообщения приходят по WebSocket из изолята постоянного foreground-сервиса.
+///
+/// КРИТИЧЕСКИ ВАЖНО: Этот код выполняется в ОТДЕЛЬНОМ isolate!
 /// Нельзя использовать синглтоны или состояние из main isolate.
+/// `data` — это раскодированный JSON WS-кадра (data-only, без notification payload).
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  print("📱 FCM BACKGROUND: ${message.messageId}");
-  
-  final data = message.data;
+Future<void> handleBackgroundPush(Map<String, dynamic> data) async {
   final type = data['type'];
-  
-  print("📱 FCM BACKGROUND type: $type");
-  
+  print("PUSH BACKGROUND type: $type");
+
   // === ВХОДЯЩИЙ ЗВОНОК ===
   // Показываем нативный UI звонка через flutter_callkit_incoming
   if (type == 'incoming_call' || type == 'call-offer') {
@@ -40,21 +38,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await _showNativeIncomingCall(data);
     return;
   }
-  
+
   // === НОВОЕ СООБЩЕНИЕ ===
-  // Показываем локальное уведомление
+  // Показываем локальное уведомление (WS-кадр всегда data-only)
   if (type == 'new_message' ||
       type == 'chat' ||
       type == 'room-message' ||
       type == 'room_message' ||
       type == 'support-reply') {
-    // Только если нет notification payload (data-only message)
-    if (message.notification == null) {
-      await NotificationService._handleBackgroundMessage(data);
-    }
+    await NotificationService._handleBackgroundMessage(data);
     return;
   }
-  
+
   // === ЗАВЕРШЕНИЕ ЗВОНКА ===
   // Скрываем нативный UI если звонок завершён
   if (type == 'hang-up' || type == 'call-rejected' || type == 'call-ended') {
@@ -171,7 +166,7 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
     // КРИТИЧНО: сервер должен передавать уникальный call_id для каждого звонка!
     final callId = _extractOrGenerateCallId(data, callerKey.toString());
 
-    final canShow = await CallIdStorage.tryShowCallKitForFcm(callId: callId);
+    final canShow = await CallIdStorage.tryShowCallKitForPush(callId: callId);
     if (!canShow) {
       print("📞 CALLKIT FCM: callId=$callId уже активен, пропускаю показ");
       return;
@@ -316,11 +311,6 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  /// ВАЖНО: не трогаем `FirebaseMessaging.instance` в момент импорта/конструирования
-  /// (widget-тесты могут падать без зарегистрированных плагинов).
-  /// Достаём инстанс лениво — только когда реально вызывается `init()`.
-  FirebaseMessaging get _firebaseMessaging => FirebaseMessaging.instance;
-
   // ===== Local notifications backend (DI for unit tests) =====
   static NotificationLocalBackend? _localBackend;
   static bool _localInitialized = false;
@@ -331,12 +321,7 @@ class NotificationService {
     _localInitialized = false;
   }
 
-  /// FCM токен для отправки на сервер
-  String? fcmToken;
-
   /// Callbacks для обработки событий
-  static VoidCallback? onTokenUpdated;
-  static Function(String callerKey)? onIncomingCallFromPush;
   static Function(Map<String, dynamic> data)? onIncomingCallFromNotification;
 
   // ID каналов уведомлений
@@ -359,13 +344,15 @@ class NotificationService {
   static const int _callNotificationId = 1001;
   static const int _messageNotificationId = 1002;
 
-  /// Инициализация сервиса
+  /// Инициализация сервиса (только локальные уведомления — без Google/FCM).
+  ///
+  /// Пуши доставляются по WebSocket из фонового сервиса (PushConnectionService),
+  /// а показ на экране — через flutter_local_notifications / flutter_callkit_incoming.
   Future<void> init() async {
     // 1. Инициализация локальных уведомлений
     await _ensureLocalNotificationsInitialized();
 
     // 1.1 Android 13+: запрос runtime permission на уведомления (best-effort).
-    // На iOS это делается через FirebaseMessaging.requestPermission().
     if (!kIsWeb && Platform.isAndroid) {
       try {
         final status = await Permission.notification.request();
@@ -373,47 +360,6 @@ class NotificationService {
       } catch (e) {
         DebugLogger.warn('NOTIF', 'Notification permission request failed: $e');
       }
-    }
-
-    // 2. Запрос разрешений FCM
-    NotificationSettings settings = await _firebaseMessaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-      criticalAlert: true,  // Важно для звонков
-      provisional: false,
-    );
-    print('📱 FCM Permission: ${settings.authorizationStatus}');
-    DebugLogger.info('FCM', 'Permission: ${settings.authorizationStatus}');
-
-    // 3. Получение токена
-    try {
-      fcmToken = await _firebaseMessaging.getToken();
-      print("📱 FCM Token: $fcmToken");
-      DebugLogger.success('FCM', 'Token received: ${fcmToken?.substring(0, 30)}...');
-
-      // Подписка на обновление токена
-      _firebaseMessaging.onTokenRefresh.listen((newToken) {
-        fcmToken = newToken;
-        print("📱 FCM Token updated: $newToken");
-        DebugLogger.info('FCM', 'Token updated: ${newToken.substring(0, 30)}...');
-        onTokenUpdated?.call();
-      });
-    } catch (e) {
-      print("📱 FCM Error: $e");
-      DebugLogger.error('FCM', 'Token error: $e');
-    }
-
-    // 4. Обработка foreground сообщений
-    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-    // 5. Обработка клика по уведомлению
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
-
-    // 6. Проверка начального сообщения (если приложение открыто из уведомления)
-    final initialMessage = await _firebaseMessaging.getInitialMessage();
-    if (initialMessage != null) {
-      _handleNotificationTap(initialMessage);
     }
   }
 
@@ -453,19 +399,6 @@ class NotificationService {
 
     _localInitialized = true;
     print("🔔 Local notifications initialized");
-  }
-
-  /// Обработка foreground FCM сообщений
-  void _handleForegroundMessage(RemoteMessage message) {
-    print('📱 FCM Foreground: ${message.notification?.title}');
-    
-    // Если приложение открыто - FCM не показывает уведомление автоматически
-    // Можно показать локальное уведомление если нужно
-    final data = message.data;
-    if (data.containsKey('type') && (data['type'] == 'call' || data['type'] == 'incoming_call')) {
-      // Для звонков можно показать уведомление даже в foreground
-      // (но обычно экран звонка уже открывается через WebSocket)
-    }
   }
 
   /// Обработка фоновых data-only сообщений
@@ -533,19 +466,6 @@ class NotificationService {
         type == 'room-message' ||
         type == 'room_message' ||
         type == 'support-reply';
-  }
-
-  /// Обработка клика по уведомлению FCM
-  void _handleNotificationTap(RemoteMessage message) {
-    print('📱 Notification tap: ${message.data}');
-    
-    final data = message.data;
-    if (data.containsKey('caller_key')) {
-      onIncomingCallFromPush?.call(data['caller_key']);
-    }
-    if (data.isNotEmpty) {
-      onIncomingCallFromNotification?.call(Map<String, dynamic>.from(data));
-    }
   }
 
   /// Обработка клика по локальному уведомлению

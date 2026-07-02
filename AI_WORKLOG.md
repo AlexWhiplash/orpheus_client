@@ -5,6 +5,70 @@
 
 ---
 
+## 2026-07-02 — Де-гуглизация, фаза 3: QR без ML Kit + отказ от FCM
+
+**Задача:** убрать последние проприетарные привязки к Google — закрытый ML Kit в
+QR-сканере и Firebase Cloud Messaging (пуши). Курс: клиент без сервисов Google.
+
+**Сделано (QR):**
+- `mobile_scanner` (тянул закрытый `com.google.mlkit:barcode-scanning`) → `qr_code_dart_scan`
+  (декодирование на чистом Dart через `zxing_lib`, поверх официального `camera`-плагина;
+  ноль GMS/ML Kit). `qr_scan_screen.dart`: `MobileScanner` → `QRCodeDartScanView`,
+  `onDetect(BarcodeCapture)` → `onCapture(Result)`, ошибка камеры через `onCameraError`.
+
+**Сделано (FCM → постоянный foreground-сервис):**
+- Удалены `firebase_core`, `firebase_messaging` (pubspec); плагин
+  `com.google.gms.google-services` (оба build.gradle.kts); `google-services.json`;
+  firebase-правила ProGuard; FCM-meta-data в манифесте; кастомный `BootReceiver.kt`
+  (стартовал Activity — запрещено на Android 10+; автозапуск теперь через boot-receiver
+  плагина flutter_background_service).
+- `notification_service.dart`: FCM background handler (`firebaseMessagingBackgroundHandler(RemoteMessage)`)
+  → публичный `handleBackgroundPush(Map)`; `init()` без FCM (только локальные уведомления +
+  Android 13 permission); убраны `fcmToken`, `onTokenUpdated`, FCM-обработчики.
+- `websocket_service.dart`: убран `_sendFcmToken()` / сообщение `register-fcm` — WS-сокет
+  сам теперь является push-каналом.
+- Новый `push_connection_service.dart`: постоянный foreground-сервис (`flutter_background_service`,
+  тип `specialUse`, autoStart + autoStartOnBoot). В сервисном isolate — WS-слушатель, который
+  приводит WS-кадры к плоскому виду (как раньше FCM data) и вызывает те же
+  `_showNativeIncomingCall` / `_handleBackgroundMessage` через `handleBackgroundPush`.
+- `background_call_service.dart` → тонкий фасад над `PushConnectionService` (flutter_background_service
+  одноинстансный, поэтому «сервис на время звонка» сведён к смене текста постоянного уведомления;
+  звонок больше не стартует/останавливает отдельный сервис).
+- `main.dart`: старт сервиса + heartbeat main-изолята (`push_main_alive_ts`) и публикация
+  публичного ключа (`push_user_pubkey`, не секрет) в SharedPreferences для координации;
+  на panic-wipe гасим heartbeat и сервис.
+- `call_id_storage.dart`: `sourceFcm`→`sourcePush`, `tryShowCallKitForFcm`→`tryShowCallKitForPush`.
+
+**Архитектура пушей (почему так):** тип `specialUse` — единственный без лимита времени
+(dataSync ограничен ~6ч/сутки на Android 15) и разрешённый к автозапуску при загрузке
+(microphone/dataSync — нельзя). Микрофон в постоянный сервис не влить: boot-стартованный
+сервис не может держать while-in-use микрофон (Android 14) — активный звонок обслуживает
+видимый CallScreen. Координация main↔сервис через heartbeat, чтобы не было двух сокетов на
+один pubkey.
+
+**КОНТРАКТ БЭКЕНДА (отдельный репозиторий — требуется правка на сервере):**
+- Клиент больше НЕ шлёт WS-сообщение `{"type":"register-fcm","token":...}`. Сервер должен
+  перестать требовать/использовать FCM-токены и **не** пытаться доставлять через FCM.
+- Оффлайн-доставку сервер должен отдавать в WS-сокет при (ре)коннекте (chat уже дедупится по
+  `message_id`; call-offer хранить с коротким TTL и уникальным `call_id`/`server_ts_ms`).
+- `/api/signal` и `/api/logs/batch` не трогать — уже FCM-free.
+
+**ТРЕБУЕТ ПРОВЕРКИ НА УСТРОЙСТВЕ (нельзя валидировать из репозитория):**
+- Доставка входящего звонка/сообщения при УБИТОМ приложении (свайп из recents) — задержка
+  перехвата сервисом ≈ порог heartbeat (12с) + тик (4с). Настроить пороги на реальной сети.
+- Автозапуск сервиса после ребута (boot-start `specialUse` разрешён, но OEM могут блокировать).
+- Xiaomi/Huawei/Oppo/Vivo/Samsung: исключение из энергосбережения (уже есть DeviceSettingsService)
+  + ручной автозапуск — без них OEM-киллеры рвут сервис (программного обхода нет).
+- Микрофон при сворачивании приложения ВО ВРЕМЯ звонка (постоянный сервис — specialUse без mic).
+  Если критично — вынести звонковый микрофон в отдельный нативный `microphone`-сервис
+  (запуск из видимой Activity ответа) — задокументированный follow-up.
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 328 passed; `flutter build apk`
+(debug) — успешно (нативные `camera_android_camerax`, слияние манифеста `specialUse`,
+Gradle без google-services).
+
+---
+
 ## 2026-07-02 — Де-гуглизация, фаза 1: privacy-правки (без крупной миграции)
 
 **Задача:** первый пакет правок по курсу «клиент без сервисов Google» + смежные

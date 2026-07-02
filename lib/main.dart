@@ -34,6 +34,7 @@ import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/services/telemetry_service.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
 import 'package:orpheus_project/services/push_connection_service.dart';
+import 'package:orpheus_project/services/secure_storage_options.dart';
 import 'package:orpheus_project/theme/app_theme.dart';
 import 'package:orpheus_project/welcome_screen.dart';
 import 'package:orpheus_project/screens/home_screen.dart';
@@ -170,6 +171,10 @@ Future<void> _initializeApp() async {
     // Отправляем ошибку инициализации в Sentry (no-op, если Sentry выключен)
     await Sentry.captureException(e, stackTrace: stackTrace);
   }
+
+  // 3.5. Одноразовый чистый сброс secure storage при переходе на
+  // flutter_secure_storage v10 (новые шифры). ДО первого чтения ключей.
+  await ensureSecureStorageMigrated();
 
   // 4. Криптография
   DebugLogger.info('APP', 'Инициализация криптографии...');

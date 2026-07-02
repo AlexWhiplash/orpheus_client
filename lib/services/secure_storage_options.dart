@@ -2,38 +2,54 @@
 //
 // ЕДИНЫЙ источник опций flutter_secure_storage для ВСЕХ мест, где создаётся
 // FlutterSecureStorage (CryptoService, AuthService, DatabaseService).
-// КРИТИЧНО: опции должны быть идентичны везде — иначе часть секретов (X25519-ключи,
-// хэши PIN/duress/wipe, ключ шифрования БД) станет нечитаемой у части кода.
+// КРИТИЧНО: опции идентичны везде — иначе часть секретов (X25519-ключи,
+// хэши PIN/duress/wipe, ключ шифрования БД) станет нечитаемой.
 //
-// Апгрейд 9 -> 10: v10 сменил ДЕФОЛТНЫЕ Android-шифры (ключ: RSA PKCS1 -> OAEP,
-// данные: AES-CBC -> AES-GCM) и по умолчанию при сбое авто-миграции БЕЗВОЗВРАТНО
-// стирает хранилище (`resetOnError: true` + `migrateWithBackup: false`).
-// Для приложения с НЕвосстановимыми ключами (изъять их заново неоткуда) это
-// задокументированная потеря данных у существующих пользователей
-// (juliansteenbakker/flutter_secure_storage issues #1043, #1079).
+// Апгрейд 9 -> 10: используем СОВРЕМЕННЫЕ шифры v10 по умолчанию
+// (RSA/ECB/OAEP для ключа + AES/GCM для данных) — не deprecated, живут в v11.
 //
-// Поэтому здесь — БЕЗОПАСНЫЙ МОСТ: остаёмся на «старых» шифрах v9 (PKCS1 + CBC),
-// значит алгоритм не меняется и миграция не запускается; и отключаем авто-wipe.
-// Существующие данные читаются как есть, риск потери — нулевой.
+// Данные v9 писались старыми шифрами (PKCS1 + CBC). Авто-миграцию v10 НЕ
+// используем: она ненадёжна (может крашить/частично стирать — issues
+// juliansteenbakker/flutter_secure_storage #1043, #1079). Вместо неё —
+// детерминированный одноразовый `deleteAll()` ДО первого чтения
+// (см. ensureSecureStorageMigrated). Данные v9 осознанно приносятся в жертву:
+// существующие пользователи создают аккаунт заново (приложение в закрытой бете).
 //
-// ВАЖНО: это ВРЕМЕННЫЙ мост. Старые шифры помечены @Deprecated в v10 и удалены
-// в v11. Полноценный переход на новые шифры делать ТОЛЬКО после того, как в
-// приложении появится экспорт/импорт ключа (чтобы сбой миграции был переживаем),
-// затем с `migrateOnAlgorithmChange: true` + `migrateWithBackup: true` +
-// `resetOnError: false`. См. девайс-чеклист в docs/.
+// resetOnError: false — не стираем аккаунт на транзиентной ошибке чтения
+// (после сброса всё в новом формате, мигрировать нечего).
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// Android-опции: точное совпадение с тем, что записал v9 (никакой миграции),
-/// авто-wipe при ошибке ОТКЛЮЧЁН.
+/// Android-опции: современные шифры v10 (дефолт — OAEP + GCM), без авто-wipe и
+/// без авто-миграции (старых данных после сброса не остаётся).
 const AndroidOptions kAndroidSecureStorageOptions = AndroidOptions(
-  keyCipherAlgorithm: KeyCipherAlgorithm.RSA_ECB_PKCS1Padding,
-  storageCipherAlgorithm: StorageCipherAlgorithm.AES_CBC_PKCS7Padding,
-  migrateOnAlgorithmChange: false,
   resetOnError: false,
+  migrateOnAlgorithmChange: false,
 );
 
 /// Единый экземпляр FlutterSecureStorage. Использовать ВЕЗДЕ вместо
 /// `const FlutterSecureStorage()`.
 const FlutterSecureStorage appSecureStorage =
     FlutterSecureStorage(aOptions: kAndroidSecureStorageOptions);
+
+const String _resetFlagKey = 'secure_storage_v10_reset_done';
+
+/// Одноразовый чистый сброс secure storage при переходе на v10.
+///
+/// Вызывать ОДИН РАЗ на старте приложения, ДО первого чтения ключей
+/// (до CryptoService/AuthService/DatabaseService). Идемпотентно: реальный
+/// `deleteAll` выполняется только на первом запуске после апгрейда (флаг в
+/// SharedPreferences), дальше — no-op. `deleteAll` не расшифровывает данные,
+/// поэтому старый формат v9 стирается без риска краша авто-миграции.
+Future<void> ensureSecureStorageMigrated() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_resetFlagKey) ?? false) return;
+    await appSecureStorage.deleteAll();
+    await prefs.setBool(_resetFlagKey, true);
+  } catch (_) {
+    // best-effort: даже если сброс не удался, resetOnError:false не даст стереть
+    // данные молча, а следующий запуск повторит попытку (флаг не выставлен).
+  }
+}

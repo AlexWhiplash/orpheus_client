@@ -36,8 +36,10 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.orpheus_project"
+        // Постоянный уникальный Application ID (reverse-DNS домена orpheus.click).
+        // ВАЖНО: после первого публичного релиза менять НЕЛЬЗЯ (аудит OPS-2).
+        // Внутренний namespace/package намеренно оставлен прежним — магазину не виден.
+        applicationId = "click.orpheus.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

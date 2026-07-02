@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-02 — OPS-2: постоянный applicationId (click.orpheus.app)
+
+**Задача:** сменить `com.example.orpheus_project` на нормальный reverse-DNS id
+до первого релиза (после релиза не меняется; сторы банят com.example).
+
+**Сделано:**
+- `android/app/build.gradle.kts`: `applicationId = "click.orpheus.app"`
+  (reverse-DNS домена orpheus.click — выбран владельцем).
+- Изменён ТОЛЬКО applicationId. `namespace`/Kotlin-package/имена MethodChannel
+  (`com.example.orpheus_project/*`) оставлены прежними — они внутренние, магазину
+  не видны, а их переименование = крупный риск ради косметики. FileProvider
+  authority (`${applicationId}.fileprovider` / runtime `packageName`) остаётся
+  консистентной автоматически.
+- Смена стала тривиальной после удаления Firebase (не нужна перерегистрация
+  google-services).
+
+**Проверка:** `flutter build apk` (debug) — успешно; `aapt dump badging` →
+`package: name='click.orpheus.app'`.
+
+---
+
 ## 2026-07-02 — Микрофон при свёрнутом приложении во время звонка
 
 **Задача:** восстановить поведение «говорить, когда приложение свёрнуто во время

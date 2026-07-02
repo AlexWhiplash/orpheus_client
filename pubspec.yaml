@@ -22,15 +22,15 @@ dependencies:
   flutter_secure_storage: ^10.3.1
 
   # Утилиты
-  rxdart: ^0.27.7
+  rxdart: ^0.28.0
   intl: ^0.20.2
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.3
   http: ^1.2.1
   shared_preferences: ^2.2.2
 
   # Сеть
   web_socket_channel: ^3.0.0
-  connectivity_plus: ^6.0.3
+  connectivity_plus: ^7.2.0
 
   # UI и Медиа
   cupertino_icons: ^1.0.2
@@ -45,35 +45,35 @@ dependencies:
 
   # Фоновая работа (постоянный foreground-сервис для пушей без Google/FCM)
   flutter_background_service: ^5.0.0
-  flutter_local_notifications: ^17.0.0
+  flutter_local_notifications: ^22.0.1
   
   # Нативный UI входящих звонков (как WhatsApp/Telegram)
-  flutter_callkit_incoming: ^2.0.4+1
+  flutter_callkit_incoming: ^3.1.3
   uuid: ^4.3.3
 
   # Авторизация
-  local_auth: ^2.2.0
+  local_auth: ^3.0.1
 
   # Markdown для AI чата
   flutter_markdown: ^0.7.4+3
 
   # Инструменты
-  share_plus: ^10.0.0
-  package_info_plus: ^8.0.0
-  device_info_plus: ^10.1.0
+  share_plus: ^13.2.0
+  package_info_plus: ^10.2.0
+  device_info_plus: ^13.2.0
   url_launcher: ^6.3.0
   path_provider: ^2.1.1
   dio: ^5.4.0
   open_filex: ^4.3.4
 
   # Мониторинг ошибок
-  sentry_flutter: ^8.0.0
+  sentry_flutter: ^9.23.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
-  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.3.1
   mockito: ^5.4.4
   build_runner: ^2.4.8

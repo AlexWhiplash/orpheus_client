@@ -139,10 +139,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
       try {
         final didAuth = await _localAuth.authenticate(
           localizedReason: l10n.confirmForBiometry,
-          options: const AuthenticationOptions(
-            stickyAuth: true,
-            biometricOnly: true,
-          ),
+          persistAcrossBackgrounding: true,
+          biometricOnly: true,
         );
 
         if (!didAuth) {

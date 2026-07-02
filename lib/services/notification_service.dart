@@ -176,21 +176,20 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
     // ВАЖНО: FCM и WebSocket могут генерировать РАЗНЫЕ callId для одного звонка!
     // Поэтому проверяем по callerKey, а не только по callId.
     try {
+      // activeCalls() теперь возвращает List<CallKitParams> (callkit 3.x).
       final activeCalls = await FlutterCallkitIncoming.activeCalls();
-      if (activeCalls is List && activeCalls.isNotEmpty) {
+      if (activeCalls.isNotEmpty) {
         for (final call in activeCalls) {
-          if (call is Map) {
-            // Проверяем по callId
-            if (call['id'] == callId) {
-              print("📞 CALLKIT FCM: Звонок с id=$callId уже показан, пропускаю дубликат");
-              return;
-            }
-            // Проверяем по callerKey в extra — если тот же caller, значит дубль!
-            final extra = call['extra'];
-            if (extra is Map && extra['callerKey'] == callerKey.toString()) {
-              print("📞 CALLKIT FCM: Звонок от $callerKey уже показан (WS?), пропускаю FCM дубликат");
-              return;
-            }
+          // Проверяем по callId
+          if (call.id == callId) {
+            print("📞 CALLKIT PUSH: Звонок с id=$callId уже показан, пропускаю дубликат");
+            return;
+          }
+          // Проверяем по callerKey в extra — если тот же caller, значит дубль!
+          final extra = call.extra;
+          if (extra != null && extra['callerKey'] == callerKey.toString()) {
+            print("📞 CALLKIT PUSH: Звонок от $callerKey уже показан (WS?), пропускаю дубликат");
+            return;
           }
         }
         // Есть активный звонок от ДРУГОГО caller — закрываем и показываем новый
@@ -218,8 +217,6 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
       appName: 'Orpheus',
       handle: callerKey.toString().substring(0, 8),
       type: 0, // Audio call
-      textAccept: l10n.answerCall,
-      textDecline: l10n.decline,
       missedCallNotification: NotificationParams(
         showNotification: true,
         isShowCallback: false,
@@ -240,6 +237,9 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
         backgroundColor: '#0D0D0D',
         actionColor: '#6AD394',
         textColor: '#FFFFFF',
+        // callkit 3.x: textAccept/textDecline переехали из CallKitParams в AndroidParams.
+        textAccept: l10n.answerCall,
+        textDecline: l10n.decline,
         incomingCallNotificationChannelName: 'Incoming calls',
         missedCallNotificationChannelName: 'Missed calls',
         isShowCallID: false,
@@ -279,7 +279,7 @@ Future<void> _showFallbackLocalCallNotification(Map<String, dynamic> data) async
     final plugin = FlutterLocalNotificationsPlugin();
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidSettings);
-    await plugin.initialize(initSettings);
+    await plugin.initialize(settings: initSettings);
 
     const androidDetails = AndroidNotificationDetails(
       'incoming_calls_fallback',
@@ -294,10 +294,10 @@ Future<void> _showFallbackLocalCallNotification(Map<String, dynamic> data) async
     const details = NotificationDetails(android: androidDetails);
 
     await plugin.show(
-      9901,
-      l10n.incomingCall,
-      l10n.fromCaller(callerName.toString()),
-      details,
+      id: 9901,
+      title: l10n.incomingCall,
+      body: l10n.fromCaller(callerName.toString()),
+      notificationDetails: details,
       payload: json.encode(data),
     );
   } catch (_) {
@@ -725,7 +725,7 @@ class PluginNotificationLocalBackend implements NotificationLocalBackend {
   @override
   Future<void> initialize({required void Function(NotificationResponse response) onTap}) async {
     await _plugin.initialize(
-      const InitializationSettings(
+      settings: const InitializationSettings(
         android: AndroidInitializationSettings(NotificationService._androidSmallIcon),
       ),
       onDidReceiveNotificationResponse: onTap,
@@ -763,16 +763,16 @@ class PluginNotificationLocalBackend implements NotificationLocalBackend {
     );
 
     await _plugin.show(
-      id,
-      title,
-      body,
-      NotificationDetails(android: androidDetails),
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: NotificationDetails(android: androidDetails),
       payload: payload,
     );
   }
 
   @override
-  Future<void> cancel(int id) => _plugin.cancel(id);
+  Future<void> cancel(int id) => _plugin.cancel(id: id);
 
   @override
   Future<void> cancelAll() => _plugin.cancelAll();

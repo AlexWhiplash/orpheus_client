@@ -369,23 +369,22 @@ class IncomingMessageHandler {
     // ВАЖНО: FCM и WebSocket могут генерировать РАЗНЫЕ callId для одного звонка!
     // Поэтому проверяем по callerKey, а не по callId.
     try {
+      // activeCalls() теперь возвращает List<CallKitParams> (callkit 3.x).
       final activeCalls = await FlutterCallkitIncoming.activeCalls();
-      if (activeCalls is List && activeCalls.isNotEmpty) {
+      if (activeCalls.isNotEmpty) {
         for (final call in activeCalls) {
-          if (call is Map) {
-            // Проверяем по callId
-            if (call['id'] == callId) {
-              DebugLogger.info('CALL', '📞 CallKit с id=$callId уже показан, пропускаю дубликат',
-                  context: {'call_id': callId, 'peer_pubkey': callerKey});
-              return;
-            }
-            // Проверяем по callerKey в extra — если тот же caller, значит дубль!
-            final extra = call['extra'];
-            if (extra is Map && extra['callerKey'] == callerKey) {
-              DebugLogger.info('CALL', '📞 CallKit для $callerKey уже показан (FCM?), пропускаю WS дубликат',
-                  context: {'call_id': callId, 'peer_pubkey': callerKey});
-              return;
-            }
+          // Проверяем по callId
+          if (call.id == callId) {
+            DebugLogger.info('CALL', '📞 CallKit с id=$callId уже показан, пропускаю дубликат',
+                context: {'call_id': callId, 'peer_pubkey': callerKey});
+            return;
+          }
+          // Проверяем по callerKey в extra — если тот же caller, значит дубль!
+          final extra = call.extra;
+          if (extra != null && extra['callerKey'] == callerKey) {
+            DebugLogger.info('CALL', '📞 CallKit для $callerKey уже показан, пропускаю WS дубликат',
+                context: {'call_id': callId, 'peer_pubkey': callerKey});
+            return;
           }
         }
         // Есть активный звонок от ДРУГОГО caller — закрываем и показываем новый
@@ -405,8 +404,6 @@ class IncomingMessageHandler {
       handle: callerKey.substring(0, 8), // Короткий ID для отображения
       type: 0, // Audio call
       duration: 45000, // 45 секунд рингтон (больше времени на ответ)
-      textAccept: 'Answer',
-      textDecline: 'Decline',
       missedCallNotification: const NotificationParams(
         showNotification: true,
         isShowCallback: false,
@@ -425,6 +422,9 @@ class IncomingMessageHandler {
         backgroundColor: '#0D0D0D',
         actionColor: '#6AD394',
         textColor: '#FFFFFF',
+        // callkit 3.x: textAccept/textDecline теперь в AndroidParams.
+        textAccept: 'Answer',
+        textDecline: 'Decline',
         isShowFullLockedScreen: true,
         // КРИТИЧНО для пробуждения устройства:
         isImportant: true,

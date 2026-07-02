@@ -19,10 +19,41 @@ audioplayers 6.5→6.8, path_provider/shared_preferences/uuid/cupertino_icons/
 flutter_native_splash — патчи; dev: build_runner 2.10→2.15, mockito 5.6→5.7,
 sqflite_common_ffi 2.3→2.4. Проверки: analyze 0 ошибок, test 325 passed, debug APK — ок.
 
-**Фаза 2 (мажоры — отдельными коммитами, см. ниже по мере выполнения):** callkit 2→3,
-flutter_local_notifications 17→22, local_auth 2→3, permission_handler 11→12,
-sentry_flutter 8→9, connectivity_plus 6→7, device_info_plus 10→13, package_info_plus
-8→10, share_plus 10→13, rxdart 0.27→0.28, flutter_lints 3→6. Каждый device-gated.
+**Фаза 2 (мажоры) — СДЕЛАНО.** Обновлены все мажоры разом; breaking changes по
+каждому пакету исследованы параллельным workflow (10 агентов, по source-тегам +
+GitHub changelogs), правки применены по точным новым API.
+
+Правки кода:
+- **flutter_callkit_incoming 2→3:** `CallEvent` — sealed class с подклассами
+  (`CallEventActionCallAccept(:final callKitParams)` и т.д.) вместо `event.event/body`;
+  onEvent переписан на pattern-matching (main.dart), хендлеры не тронуты — форма body
+  реконструируется хелпером `_callKitParamsToBody`. `textAccept/textDecline` переехали
+  из `CallKitParams` в `AndroidParams` (notification_service + incoming_message_handler).
+  `activeCalls()` → `List<CallKitParams>` (доступ `.id`/`.extra` вместо `['id']`/`['extra']`).
+- **flutter_local_notifications 17→22:** `initialize/show/cancel` — позиционные →
+  именованные параметры (5 мест в notification_service). Конструкторы не менялись.
+- **local_auth 2→3:** `authenticate(options: AuthenticationOptions(stickyAuth:...))` →
+  плоские `persistAcrossBackgrounding:`/`biometricOnly:` (lock_screen, security_settings,
+  settings).
+- **share_plus 10→13:** `Share.share(...)` → `SharePlus.instance.share(ShareParams(...))`
+  (deprecation, 2 места).
+- Без правок кода: permission_handler 12, connectivity_plus 7, device_info_plus 13,
+  package_info_plus 10, rxdart 0.28, sentry_flutter 9, flutter_lints 6 (API не задет).
+
+Build/toolchain (форсят зависимости):
+- **minSdk 23 → 24** (`maxOf(24, flutter.minSdkVersion)`) — Android 6.0 больше не
+  поддерживается (форсят local_notifications 22 + local_auth 3). Продуктовое решение.
+- desugar_jdk_libs 2.0.4 → 2.1.4 (local_notifications 19+).
+- AGP 8.9.1 → 8.12.1, Gradle wrapper 8.12 → 8.13, Kotlin 2.1.0 → 2.2.20
+  (форсят connectivity_plus/device_info_plus/package_info_plus/share_plus).
+
+**ТРЕБУЕТ ПРОВЕРКИ НА УСТРОЙСТВЕ (5 мажоров notifications + callkit rewrite):**
+входящий звонок из убитого состояния (CallKit из push-сервиса), full-screen с локскрина,
+показ/тап уведомлений + каналы, биометрия, вход по PIN; на Android 13/14/15 и OEM.
+API 23 (Android 6.0) устройства теперь не поддерживаются.
+
+**Проверки:** `flutter analyze` — 0 ошибок; `flutter test` — 325 passed; `flutter build
+apk` (debug) — см. коммит.
 
 ---
 

@@ -141,8 +141,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (systemAuthAvailable) {
         authenticated = await auth.authenticate(
           localizedReason: l10n.confirmIdentity,
-          options: const AuthenticationOptions(
-              stickyAuth: true, biometricOnly: false),
+          persistAcrossBackgrounding: true,
+          biometricOnly: false,
         );
         // User explicitly cancelled — don't fall through to PIN
         if (!authenticated) return;
@@ -272,7 +272,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _PrimaryActions(
               myKey: myKey,
               l10n: l10n,
-              onShare: () => Share.share(l10n.shareMessage(myKey)),
+              onShare: () =>
+                  SharePlus.instance.share(ShareParams(text: l10n.shareMessage(myKey))),
             ),
             const SizedBox(height: 14),
             _StatsCard(stats: _stats, l10n: l10n),

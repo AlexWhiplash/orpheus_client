@@ -173,7 +173,8 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
             tooltip: l10n.share,
             onPressed: () {
               final text = DebugLogger.exportToText();
-              Share.share(text, subject: 'Orpheus Debug Logs');
+              SharePlus.instance
+                  .share(ShareParams(text: text, subject: 'Orpheus Debug Logs'));
             },
           ),
           // Очистить логи

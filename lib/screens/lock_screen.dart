@@ -125,10 +125,8 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       
       final didAuth = await _localAuth.authenticate(
         localizedReason: isRu ? 'Разблокируйте Orpheus' : 'Unlock Orpheus',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
+        persistAcrossBackgrounding: true,
+        biometricOnly: true,
       );
       
       if (didAuth && mounted) {

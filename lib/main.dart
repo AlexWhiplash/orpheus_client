@@ -271,33 +271,33 @@ void _startPushConnectionAndHeartbeat() {
 /// Инициализация CallKit для обработки нативного UI входящих звонков
 void _initCallKit() {
   // Слушаем события от CallKit (принять/отклонить звонок)
+  // flutter_callkit_incoming 3.x: CallEvent — sealed class с подклассами вместо
+  // event.event/event.body. Событие несёт CallKitParams; наш прежний body-контракт
+  // реконструируем через _callKitParamsToBody, чтобы не переписывать хендлеры.
   FlutterCallkitIncoming.onEvent.listen((CallEvent? event) async {
     if (event == null) return;
-    
-    DebugLogger.info('CALLKIT', 'Event: ${event.event}, body keys: ${event.body?.keys.toList()}');
-    
-    switch (event.event) {
-      case Event.actionCallAccept:
+
+    switch (event) {
+      case CallEventActionCallAccept(:final callKitParams):
         // Пользователь принял звонок через нативный UI
-        await _handleCallKitAccept(event.body);
+        await _handleCallKitAccept(_callKitParamsToBody(callKitParams));
         break;
-        
-      case Event.actionCallDecline:
+
+      case CallEventActionCallDecline(:final callKitParams):
         // Пользователь отклонил звонок через нативный UI
-        await _handleCallKitDecline(event.body);
+        await _handleCallKitDecline(_callKitParamsToBody(callKitParams));
         break;
-        
-      case Event.actionCallEnded:
-        // Звонок завершён
+
+      case CallEventActionCallEnded():
         DebugLogger.info('CALLKIT', 'Звонок завершён');
         break;
-        
-      case Event.actionCallTimeout:
-        // Таймаут - никто не ответил
+
+      case CallEventActionCallTimeout():
+        // Таймаут — никто не ответил (событие несёт только id)
         DebugLogger.info('CALLKIT', 'Таймаут звонка');
-        await _handleCallKitDecline(event.body);
+        await _handleCallKitDecline(null);
         break;
-        
+
       default:
         break;
     }
@@ -307,6 +307,15 @@ void _initCallKit() {
   // (если приложение было запущено из нативного UI)
   _checkActiveCallOnStart();
 }
+
+/// Реконструирует прежнюю форму body (как её ждут _handleCallKit*/_extractExtraFromBody)
+/// из CallKitParams (flutter_callkit_incoming 3.x). `extra` — тот же map, что мы клали.
+Map<String, dynamic> _callKitParamsToBody(CallKitParams cp) => {
+      'id': cp.id,
+      'nameCaller': cp.nameCaller,
+      'handle': cp.handle,
+      'extra': cp.extra,
+    };
 
 /// Рекурсивно конвертирует Map<Object?, Object?> → Map<String, dynamic>
 Map<String, dynamic> _convertToStringDynamicMap(dynamic input) {
@@ -405,19 +414,9 @@ Future<void> _checkActiveCallOnStart() async {
       // КРИТИЧНО: блокируем дубли из WebSocket
       _isProcessingCallKitAnswer = true;
       
-      // Конвертируем первый звонок в Map<String, dynamic>
-      final rawCall = calls.first;
-      Map<String, dynamic> call;
-      if (rawCall is Map<String, dynamic>) {
-        call = rawCall;
-      } else if (rawCall is Map) {
-        call = _convertToStringDynamicMap(rawCall);
-      } else {
-        DebugLogger.error('CALLKIT', 'Неизвестный тип call: ${rawCall.runtimeType}');
-        _isProcessingCallKitAnswer = false;
-        return;
-      }
-      
+      // activeCalls() теперь возвращает List<CallKitParams> (callkit 3.x).
+      final call = _callKitParamsToBody(calls.first);
+
       DebugLogger.info('CALLKIT', 'Active call keys: ${call.keys.toList()}');
       
       // Парсим extra
@@ -771,23 +770,13 @@ Future<void> _checkActiveCallOnResumed() async {
     // Блокируем дубли
     _isProcessingCallKitAnswer = true;
     
-    // Конвертируем первый звонок
-    final rawCall = calls.first;
-    Map<String, dynamic> call;
-    if (rawCall is Map<String, dynamic>) {
-      call = rawCall;
-    } else if (rawCall is Map) {
-      call = _convertToStringDynamicMap(rawCall);
-    } else {
-      DebugLogger.error('LIFECYCLE', 'Неизвестный тип call: ${rawCall.runtimeType}');
-      _isProcessingCallKitAnswer = false;
-      return;
-    }
-    
+    // activeCalls() теперь возвращает List<CallKitParams> (callkit 3.x).
+    final call = _callKitParamsToBody(calls.first);
+
     // Парсим extra
     final extra = _extractExtraFromBody(call);
     String? callerKey = extra?['callerKey'] as String?;
-    
+
     // Fallback на буфер
     if (callerKey == null) {
       callerKey = incomingCallBuffer.lastCallerKey;

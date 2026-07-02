@@ -1,0 +1,21 @@
+# Шаблон настроек подписи RELEASE-сборки (аудит OPS-1).
+#
+# Как использовать:
+#   1) Скопируйте этот файл в android/key.properties
+#   2) Сгенерируйте свой keystore (ОДИН раз) и заполните значения ниже
+#   3) НИКОГДА не коммитьте android/key.properties и сам .jks — они в .gitignore
+#      и должны храниться в секрете (потеря = невозможность обновлять приложение
+#      в сторе тем же ключом).
+#
+# Генерация keystore (в терминале сессии — с префиксом `!`):
+#   keytool -genkey -v -keystore orpheus-release.jks -keyalg RSA -keysize 2048 \
+#           -validity 10000 -alias orpheus
+#   (запомните storePassword, keyPassword и alias, которые зададите)
+#
+# --- Значения ---
+storePassword=ПАРОЛЬ_ХРАНИЛИЩА
+keyPassword=ПАРОЛЬ_КЛЮЧА
+keyAlias=orpheus
+# Путь к keystore. Рекомендуется АБСОЛЮТНЫЙ путь и хранение .jks ВНЕ репозитория.
+# Относительный путь отсчитывается от папки android/app.
+storeFile=/absolute/path/to/orpheus-release.jks

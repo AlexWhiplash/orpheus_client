@@ -329,3 +329,14 @@ short-circuit апгрейда в fast-тестах (LOW). Constant-time compare
 Остаток: legacy wipe-код не апгрейдится (он и так стирается при вводе) — задокументировано.
 
 **Статус:** analyze 0 errors; test 327 passed / 0 failed; APK — пересобирается.
+
+---
+
+## 2026-07-02 - OPS-1: подпись release своим keystore [wl/dev]
+
+`build.gradle.kts`: загрузка `android/key.properties` (в .gitignore) + `signingConfigs.release`;
+`buildTypes.release` подписывает release-ключом при наличии key.properties, иначе фолбэк на debug
+(сборка/CI без секретов). Добавлены `android/key.properties.example` (с инструкцией keytool) и
+`**/*.jks` в .gitignore. Владелец генерирует keystore сам.
+
+**Статус:** `flutter build apk --release` OK (фолбэк на debug-подпись, APK 128.9 МБ).

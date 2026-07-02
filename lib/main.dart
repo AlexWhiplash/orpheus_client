@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -72,13 +73,27 @@ bool _isProcessingCallKitAnswer = false;
 const String _sentryDsn = 'https://7d6801508e29bc2e4f5b93b986147cdc@o4509485705265152.ingest.de.sentry.io/4510682122879056';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Sentry — сторонний краш-репортер (ingest.de.sentry.io). Для privacy-мессенджера
+  // отправка данных наружу должна быть строго opt-in: инициализируем Sentry только
+  // если пользователь явно включил телеметрию (тот же флаг, что у TelemetryService).
+  // По умолчанию (флаг выключен) наружу ничего не уходит.
+  final telemetryEnabled = await _isTelemetryEnabled();
+
+  if (!telemetryEnabled) {
+    await _initializeApp();
+    runApp(const MyApp());
+    return;
+  }
+
   // Sentry инициализация с перехватом всех ошибок
   await SentryFlutter.init(
     (options) {
       options.dsn = _sentryDsn;
       // Версия приложения для отслеживания регрессий
       options.release = 'orpheus@1.1.6+12';
-      options.environment = 'production';
+      options.environment = kReleaseMode ? 'production' : 'development';
       // Отслеживание производительности (10% транзакций)
       options.tracesSampleRate = 0.1;
       // Отключаем отправку PII (персональных данных)
@@ -86,7 +101,7 @@ Future<void> main() async {
       // Фильтруем breadcrumbs от чувствительных данных
       options.beforeBreadcrumb = (Breadcrumb? breadcrumb, Hint _hint) {
         // Не логируем содержимое сообщений
-        if (breadcrumb?.category == 'message' || 
+        if (breadcrumb?.category == 'message' ||
             breadcrumb?.message?.contains('encrypted') == true) {
           return null;
         }
@@ -98,6 +113,17 @@ Future<void> main() async {
       runApp(const MyApp());
     },
   );
+}
+
+/// Читает opt-in флаг телеметрии (по умолчанию выключено). Один и тот же флаг
+/// управляет и Sentry, и фоновой телеметрией (см. [TelemetryService]).
+Future<bool> _isTelemetryEnabled() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('telemetry_enabled') ?? false;
+  } catch (_) {
+    return false;
+  }
 }
 
 /// Основная инициализация приложения

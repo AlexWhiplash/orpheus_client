@@ -70,11 +70,20 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> _sendBackgroundTelemetry(Map<String, dynamic> data, String message) async {
   try {
+    // Уважаем opt-in: фоновая телеметрия не уходит, пока пользователь явно не
+    // включил её (тот же флаг, что у TelemetryService). Раньше этот путь слал
+    // peer_pubkey и сырой payload в обход флага и санитизации (AUDIT_REPORT SEC-2).
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool('telemetry_enabled') ?? false)) return;
+    } catch (_) {
+      return;
+    }
+
     final recipientPubkey = data['recipient_pubkey']?.toString();
     if (recipientPubkey == null || recipientPubkey.isEmpty) return;
 
     final callId = data['call_id'] ?? data['callId'] ?? data['id'];
-    final peerKey = data['caller_key'] ?? data['sender_pubkey'];
 
     final payload = {
       'source': 'client-bg',
@@ -82,12 +91,11 @@ Future<void> _sendBackgroundTelemetry(Map<String, dynamic> data, String message)
         {
           'timestamp': DateTime.now().toIso8601String(),
           'level': 'info',
-          'tag': 'FCM_BG',
-          'category': 'FCM_BG',
+          'tag': 'BG',
+          'category': 'BG',
           'message': message,
-          'details': data,
+          // НЕ отправляем сырой data и peer_pubkey (граф общения контактов) — SEC-2.
           'call_id': callId,
-          'peer_pubkey': peerKey,
           'app_state': 'background',
         },
       ],

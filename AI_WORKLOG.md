@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-02 — Де-гуглизация, фаза 1: privacy-правки (без крупной миграции)
+
+**Задача:** первый пакет правок по курсу «клиент без сервисов Google» + смежные
+утечки наружу. Безопасные изменения, не трогающие крупные потоки (звонки/пуши).
+
+**Сделано:**
+- `android/app/build.gradle.kts` — удалён `firebase-analytics` + `firebase-bom`
+  (из Dart не используется, слал события на app-measurement.com по умолчанию).
+- `lib/main.dart` — `SentryFlutter.init` теперь под opt-in флагом `telemetry_enabled`
+  (по умолчанию наружу ничего); `environment` = `kReleaseMode ? production : development`.
+- `lib/screens/status_screen.dart` — регион по локали устройства вместо
+  plaintext-запроса к ip-api.com (ARCH-6); удалён неиспользуемый http-клиент/параметр.
+- `lib/services/notification_service.dart` — `_sendBackgroundTelemetry` уважает
+  opt-in и больше не шлёт `peer_pubkey`/сырой payload (регресс SEC-2).
+- `test/widgets/status_screen_test.dart` — убран ip-api мок (регион теперь локальный).
+
+**Проверки:** `flutter analyze` — 0 ошибок; целевые тесты зелёные.
+
+---
+
 ## 2026-07-02 — Де-гуглизация: шрифты Inter забандлены локально
 
 **Задача:** курс на клиент без сервисов Google (решение владельца). Первый шаг —

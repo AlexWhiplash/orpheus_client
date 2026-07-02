@@ -17,20 +17,16 @@ import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_card.dart';
 import 'package:orpheus_project/widgets/app_scaffold.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 class StatusScreen extends StatefulWidget {
   const StatusScreen({
     super.key,
-    this.httpClient,
     this.databaseService,
     this.messageUpdates,
     this.debugPublicKeyBase64,
     this.disableTimersForTesting = false,
   });
 
-  final http.Client? httpClient;
   final DatabaseService? databaseService;
   final Stream<void>? messageUpdates;
   final String? debugPublicKeyBase64;
@@ -43,7 +39,6 @@ class StatusScreen extends StatefulWidget {
 class _StatusScreenState extends State<StatusScreen>
     with TickerProviderStateMixin {
   late final AnimationController _pulseController;
-  http.Client? _ownedHttpClient;
   Timer? _timer;
   StreamSubscription<void>? _updatesSub;
 
@@ -82,7 +77,6 @@ class _StatusScreenState extends State<StatusScreen>
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
-    _ownedHttpClient = widget.httpClient == null ? http.Client() : null;
     _sessionStart = DateTime.now();
 
     _loadAll();
@@ -100,7 +94,6 @@ class _StatusScreenState extends State<StatusScreen>
   void dispose() {
     _timer?.cancel();
     _updatesSub?.cancel();
-    _ownedHttpClient?.close();
     _pulseController.dispose();
     super.dispose();
   }
@@ -121,21 +114,19 @@ class _StatusScreenState extends State<StatusScreen>
   }
 
   Future<void> _loadRegion() async {
-    final client = widget.httpClient ?? _ownedHttpClient ?? http.Client();
+    // Приватность: регион определяется по настройкам устройства (локаль), БЕЗ
+    // сетевых запросов. Раньше здесь был plaintext-запрос к стороннему ip-api.com,
+    // который при каждом открытии экрана отдавал IP пользователя третьей стороне
+    // по незашифрованному HTTP (AUDIT_REPORT ARCH-6). Никакой Google/сторонний
+    // сервис больше не задействован.
     try {
-      final resp = await client
-          .get(Uri.parse('http://ip-api.com/json/'))
-          .timeout(const Duration(seconds: 3));
-      if (resp.statusCode != 200) throw Exception();
-      final data = jsonDecode(resp.body) as Map<String, dynamic>;
-      final country = (data['country'] as String?)?.trim() ?? 'Unknown';
-      final code =
-          ((data['countryCode'] as String?)?.trim() ?? '--').toUpperCase();
-
+      final code = (WidgetsBinding.instance.platformDispatcher.locale.countryCode ??
+              '--')
+          .toUpperCase();
       if (!mounted) return;
       setState(() {
-        _country = country;
         _countryCode = code;
+        _country = code == '--' ? 'Unknown' : code;
         _isTrafficControlRegion = _trafficControlCountries.contains(code);
       });
     } catch (_) {

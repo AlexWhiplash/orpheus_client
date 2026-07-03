@@ -796,6 +796,221 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     );
   }
 
+  /// Статус/таймер под именем контакта: таймер (Connected), спиннер реконнекта
+  /// (Reconnecting) или текст статуса (остальные состояния).
+  Widget _buildStatusSection() {
+    if (_callState == CallState.Connected) {
+      return Column(
+        children: [
+          Text(
+            _durationText,
+            style: const TextStyle(
+              color: Color(0xFF6AD394),
+              fontSize: 24,
+              fontFamily: "monospace",
+            ),
+          ),
+          // Показываем предупреждение при проблемах с сетью
+          if (_networkState == NetworkState.offline ||
+              _wsStatus != ConnectionStatus.Connected)
+            _buildConnectionWarning(),
+        ],
+      );
+    } else if (_callState == CallState.Reconnecting) {
+      return Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _getStatusText(),
+                style: const TextStyle(color: Colors.orange, fontSize: 18),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _debugStatus,
+            style: const TextStyle(color: Colors.orange, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Attempt $_reconnectAttempts of $_maxReconnectAttempts",
+            style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        children: [
+          Text(
+            _getStatusText(),
+            style: const TextStyle(color: Colors.grey, fontSize: 18),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _debugStatus,
+            style: const TextStyle(color: Colors.red, fontSize: 10),
+          ),
+        ],
+      );
+    }
+  }
+
+  /// Аватар контакта с пульсирующими кольцами (кроме Failed/Rejected).
+  Widget _buildAvatar() {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        if (_callState != CallState.Failed && _callState != CallState.Rejected)
+          ...List.generate(3, (index) {
+            return ScaleTransition(
+              scale: Tween(begin: 1.0, end: 1.8 + index * 0.3).animate(
+                CurvedAnimation(
+                  parent: _pulseController,
+                  curve: Interval(index * 0.2, 1.0, curve: Curves.easeOut),
+                ),
+              ),
+              child: FadeTransition(
+                opacity: Tween(begin: 0.4 - index * 0.1, end: 0.0).animate(
+                  CurvedAnimation(
+                    parent: _pulseController,
+                    curve: Interval(index * 0.2, 1.0, curve: Curves.easeOut),
+                  ),
+                ),
+                child: Container(
+                  width: 150 + index * 30,
+                  height: 150 + index * 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF6AD394).withOpacity(0.3 - index * 0.1),
+                      width: 2 - index * 0.3,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: _callState == CallState.Connected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF6AD394).withOpacity(0.5),
+                      blurRadius: 30,
+                      spreadRadius: 5,
+                    ),
+                  ]
+                : [],
+          ),
+          child: CircleAvatar(
+            radius: 60,
+            backgroundColor: _callState == CallState.Connected
+                ? const Color(0xFF6AD394).withOpacity(0.2)
+                : Colors.grey[800],
+            child: Text(
+              _displayName.isNotEmpty ? _displayName[0].toUpperCase() : "?",
+              style: TextStyle(
+                fontSize: 40,
+                color: _callState == CallState.Connected
+                    ? const Color(0xFF6AD394)
+                    : Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Визуализатор звука (полоски), показывается только в состоянии Connected.
+  Widget _buildAudioVisualizer() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 30),
+        Container(
+          height: 60,
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: List.generate(_audioWaveData.length, (index) {
+              final height = _audioWaveData[index] * 50;
+              return Container(
+                width: 3,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6AD394),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                height: height.clamp(5.0, 50.0),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Оверлей debug-логов (только в debug, аудит UI-9).
+  Widget _buildDebugOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.85),
+        padding: const EdgeInsets.only(top: 50, bottom: 20, left: 10, right: 10),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "DEBUG LOGS",
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => setState(() => _showDebugLogs = false),
+                )
+              ],
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: _logScrollController,
+                itemCount: _debugLogs.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      _debugLogs[index],
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     CallStateService.instance.setCallActive(false);
@@ -927,164 +1142,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                 const SizedBox(height: 4),
 
                 // Статус или Таймер
-                if (_callState == CallState.Connected)
-                  Column(
-                    children: [
-                      Text(
-                        _durationText,
-                        style: const TextStyle(
-                          color: Color(0xFF6AD394),
-                          fontSize: 24,
-                          fontFamily: "monospace",
-                        ),
-                      ),
-                      // Показываем предупреждение при проблемах с сетью
-                      if (_networkState == NetworkState.offline || 
-                          _wsStatus != ConnectionStatus.Connected)
-                        _buildConnectionWarning(),
-                    ],
-                  )
-                else if (_callState == CallState.Reconnecting)
-                  Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _getStatusText(),
-                            style: const TextStyle(color: Colors.orange, fontSize: 18),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _debugStatus,
-                        style: const TextStyle(color: Colors.orange, fontSize: 12),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Attempt $_reconnectAttempts of $_maxReconnectAttempts",
-                        style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
-                      ),
-                    ],
-                  )
-                else
-                  Column(
-                    children: [
-                      Text(
-                        _getStatusText(),
-                        style: const TextStyle(color: Colors.grey, fontSize: 18),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _debugStatus,
-                        style: const TextStyle(color: Colors.red, fontSize: 10),
-                      ),
-                    ],
-                  ),
+                _buildStatusSection(),
 
                 const Spacer(),
 
                 // Аватар с анимацией пульсации
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (_callState != CallState.Failed && _callState != CallState.Rejected)
-                      ...List.generate(3, (index) {
-                        return ScaleTransition(
-                          scale: Tween(begin: 1.0, end: 1.8 + index * 0.3).animate(
-                            CurvedAnimation(
-                              parent: _pulseController,
-                              curve: Interval(index * 0.2, 1.0, curve: Curves.easeOut),
-                            ),
-                          ),
-                          child: FadeTransition(
-                            opacity: Tween(begin: 0.4 - index * 0.1, end: 0.0).animate(
-                              CurvedAnimation(
-                                parent: _pulseController,
-                                curve: Interval(index * 0.2, 1.0, curve: Curves.easeOut),
-                              ),
-                            ),
-                            child: Container(
-                              width: 150 + index * 30,
-                              height: 150 + index * 30,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: const Color(0xFF6AD394).withOpacity(0.3 - index * 0.1),
-                                  width: 2 - index * 0.3,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: _callState == CallState.Connected
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFF6AD394).withOpacity(0.5),
-                                  blurRadius: 30,
-                                  spreadRadius: 5,
-                                ),
-                              ]
-                            : [],
-                      ),
-                      child: CircleAvatar(
-                        radius: 60,
-                        backgroundColor: _callState == CallState.Connected
-                            ? const Color(0xFF6AD394).withOpacity(0.2)
-                            : Colors.grey[800],
-                        child: Text(
-                          _displayName.isNotEmpty ? _displayName[0].toUpperCase() : "?",
-                          style: TextStyle(
-                            fontSize: 40,
-                            color: _callState == CallState.Connected
-                                ? const Color(0xFF6AD394)
-                                : Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                _buildAvatar(),
 
                 // Визуализатор звука
-                if (_callState == CallState.Connected) ...[
-                  const SizedBox(height: 30),
-                  Container(
-                    height: 60,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: List.generate(_audioWaveData.length, (index) {
-                        final height = _audioWaveData[index] * 50;
-                        return Container(
-                          width: 3,
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6AD394),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          height: height.clamp(5.0, 50.0),
-                        );
-                      }),
-                    ),
-                  ),
-                ],
+                if (_callState == CallState.Connected) _buildAudioVisualizer(),
 
                 const Spacer(),
 
@@ -1105,49 +1171,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           ),
 
           // Оверлей с логами — только в debug (в release не показываем, аудит UI-9)
-          if (kDebugMode && _showDebugLogs)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.85),
-                padding: const EdgeInsets.only(top: 50, bottom: 20, left: 10, right: 10),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "DEBUG LOGS",
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          onPressed: () => setState(() => _showDebugLogs = false),
-                        )
-                      ],
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: _logScrollController,
-                        itemCount: _debugLogs.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Text(
-                              _debugLogs[index],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          if (kDebugMode && _showDebugLogs) _buildDebugOverlay(),
         ],
       ),
     );

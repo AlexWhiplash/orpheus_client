@@ -16,6 +16,7 @@ import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -175,7 +176,21 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
       final localName = contact?.name.trim();
       if (localName != null && localName.isNotEmpty) callerName = localName;
     } catch (_) {}
-    
+
+    // Приватность на локскрине: если устройство заблокировано и в настройках НЕ
+    // включён показ имени на локскрине — прячем личность звонящего за нейтральной
+    // подписью (без имени и без префикса ключа). Имя появится на экране звонка
+    // после разблокировки Orpheus.
+    bool hideCallerIdentity = false;
+    try {
+      if (await DeviceSettingsService.isDeviceLocked() &&
+          !(await DeviceSettingsService.showCallerNameWhenLocked())) {
+        hideCallerIdentity = true;
+        callerName =
+            (await NotificationService.notificationL10n()).incomingEncryptedCall;
+      }
+    } catch (_) {}
+
     // Используем call_id от сервера если есть, иначе генерируем
     // КРИТИЧНО: сервер должен передавать уникальный call_id для каждого звонка!
     final callId = _extractOrGenerateCallId(data, callerKey.toString());
@@ -229,7 +244,7 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
       id: callId,
       nameCaller: callerName,
       appName: 'Orpheus',
-      handle: callerKey.toString().substring(0, 8),
+      handle: hideCallerIdentity ? '' : callerKey.toString().substring(0, 8),
       type: 0, // Audio call
       missedCallNotification: NotificationParams(
         showNotification: true,
@@ -500,6 +515,12 @@ class NotificationService {
   /// поэтому язык резолвим по сохранённому выбору пользователя (`app_locale`,
   /// пишется `LocaleService`), с откатом на системную локаль, затем на английский.
   /// Так RU-пользователь получает русские уведомления, EN — английские.
+  /// Нейтральная подпись входящего звонка для локскрина (без имени/ключа).
+  /// Публичная обёртка над локализацией — чтобы другие сервисы (WS-путь показа
+  /// CallKit) не лезли к @visibleForTesting notificationL10n напрямую.
+  static Future<String> incomingEncryptedCallLabel() async =>
+      (await notificationL10n()).incomingEncryptedCall;
+
   @visibleForTesting
   static Future<L10n> notificationL10n() async {
     String code;

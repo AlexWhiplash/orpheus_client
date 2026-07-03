@@ -6,6 +6,8 @@ import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/services/incoming_call_buffer.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
+import 'package:orpheus_project/services/device_settings_service.dart';
+import 'package:orpheus_project/services/notification_service.dart';
 
 abstract interface class IncomingMessageCrypto {
   Future<String> decrypt(String senderPublicKeyBase64, String encryptedPayload);
@@ -397,11 +399,23 @@ class IncomingMessageHandler {
           context: {'call_id': callId, 'peer_pubkey': callerKey});
     }
     
+    // Приватность на локскрине: заблокировано + флаг выключен -> нейтральная
+    // подпись без имени/ключа (имя появится на экране звонка после разблокировки).
+    String displayName = callerName;
+    bool hideCallerIdentity = false;
+    try {
+      if (await DeviceSettingsService.isDeviceLocked() &&
+          !(await DeviceSettingsService.showCallerNameWhenLocked())) {
+        hideCallerIdentity = true;
+        displayName = await NotificationService.incomingEncryptedCallLabel();
+      }
+    } catch (_) {}
+
     final params = CallKitParams(
       id: callId,
-      nameCaller: callerName,
+      nameCaller: displayName,
       appName: 'Orpheus',
-      handle: callerKey.substring(0, 8), // Короткий ID для отображения
+      handle: hideCallerIdentity ? '' : callerKey.substring(0, 8),
       type: 0, // Audio call
       duration: 45000, // 45 секунд рингтон (больше времени на ответ)
       missedCallNotification: const NotificationParams(

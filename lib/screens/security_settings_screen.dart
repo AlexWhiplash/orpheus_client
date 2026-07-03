@@ -7,6 +7,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/models/message_retention_policy.dart';
 import 'package:orpheus_project/screens/pin_setup_screen.dart';
 import 'package:orpheus_project/services/auth_service.dart';
+import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/message_cleanup_service.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
@@ -24,19 +25,26 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
   final _localAuth = LocalAuthentication();
   
   bool _canUseBiometrics = false;
+  bool _showCallerNameOnLock = false;
   late AnimationController _revealController;
 
   @override
   void initState() {
     super.initState();
     _auth = widget.auth;
-    
+
     _revealController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
-    
+
     _checkBiometrics();
+    _loadCallPrivacy();
+  }
+
+  Future<void> _loadCallPrivacy() async {
+    final value = await DeviceSettingsService.showCallerNameWhenLocked();
+    if (mounted) setState(() => _showCallerNameOnLock = value);
   }
 
   @override
@@ -261,6 +269,19 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
               const SizedBox(height: 32),
             ],
             
+            // Приватность звонка: показывать ли имя звонящего на локскрине
+            _buildSwitchTile(
+              icon: Icons.phonelink_lock,
+              title: l10n.callerNameOnLockTitle,
+              subtitle: l10n.callerNameOnLockDesc,
+              value: _showCallerNameOnLock,
+              onChanged: (v) async {
+                await DeviceSettingsService.setShowCallerNameWhenLocked(v);
+                if (mounted) setState(() => _showCallerNameOnLock = v);
+              },
+            ),
+            const SizedBox(height: 32),
+
             // Секция кода принуждения (только если PIN включен)
             if (isPinEnabled) ...[
               _buildSectionHeader(l10n.duressCodeSection, Icons.shield_outlined),

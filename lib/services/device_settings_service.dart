@@ -45,6 +45,33 @@ class DeviceSettingsService {
     await prefs.setBool(_setupDialogDismissedKey, dismissed);
   }
 
+  /// Заблокирован ли экран устройства (keyguard). false при ошибке / не-Android /
+  /// вызове из фонового изолята без активити — тогда вызывающий код трактует это
+  /// консервативно (для приватности имени звонка лучше считать «залочено»).
+  static Future<bool> isDeviceLocked() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _settingsChannel.invokeMethod<bool>('isDeviceLocked') ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static const String _showCallerNameWhenLockedKey =
+      'show_caller_name_when_locked';
+
+  /// Показывать ли имя звонящего на входящем, когда устройство заблокировано.
+  /// По умолчанию НЕТ: на локскрине не светим, кто звонит (приватность).
+  static Future<bool> showCallerNameWhenLocked() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_showCallerNameWhenLockedKey) ?? false;
+  }
+
+  static Future<void> setShowCallerNameWhenLocked(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showCallerNameWhenLockedKey, value);
+  }
+
   /// Получить производителя устройства
   static Future<String> getDeviceManufacturer() async {
     final forced = debugForceAndroid;

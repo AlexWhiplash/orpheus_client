@@ -294,6 +294,9 @@ class L10nRu extends L10n {
   String get incomingCall => 'Входящий звонок';
 
   @override
+  String get incomingEncryptedCall => 'Входящий зашифрованный звонок';
+
+  @override
   String get outgoingCall => 'Исходящий звонок';
 
   @override
@@ -873,6 +876,13 @@ class L10nRu extends L10n {
 
   @override
   String get inactivityLockDesc => 'Блокировка при отсутствии активности';
+
+  @override
+  String get callerNameOnLockTitle => 'Имя звонящего на локскрине';
+
+  @override
+  String get callerNameOnLockDesc =>
+      'Показывать имя контакта на входящем звонке, когда телефон заблокирован. По умолчанию выключено для приватности.';
 
   @override
   String get inactivity30s => '30 секунд';

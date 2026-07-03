@@ -290,6 +290,9 @@ class L10nEn extends L10n {
   String get incomingCall => 'Incoming call';
 
   @override
+  String get incomingEncryptedCall => 'Incoming encrypted call';
+
+  @override
   String get outgoingCall => 'Outgoing call';
 
   @override
@@ -865,6 +868,13 @@ class L10nEn extends L10n {
 
   @override
   String get inactivityLockDesc => 'Lock after no activity';
+
+  @override
+  String get callerNameOnLockTitle => 'Caller name on lockscreen';
+
+  @override
+  String get callerNameOnLockDesc =>
+      'Show the contact name on an incoming call while the phone is locked. Off by default for privacy.';
 
   @override
   String get inactivity30s => '30 seconds';

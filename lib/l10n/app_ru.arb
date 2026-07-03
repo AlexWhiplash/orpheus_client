@@ -115,6 +115,7 @@
   "yesterday": "Вчера",
   
   "incomingCall": "Входящий звонок",
+  "incomingEncryptedCall": "Входящий зашифрованный звонок",
   "outgoingCall": "Исходящий звонок",
   "missedCall": "Пропущен звонок",
   "callLabel": "Звонок",
@@ -328,6 +329,8 @@
   "pinCodeSection": "PIN-КОД",
   "inactivityLockTitle": "Таймер автоблокировки",
   "inactivityLockDesc": "Блокировка при отсутствии активности",
+  "callerNameOnLockTitle": "Имя звонящего на локскрине",
+  "callerNameOnLockDesc": "Показывать имя контакта на входящем звонке, когда телефон заблокирован. По умолчанию выключено для приватности.",
   "inactivity30s": "30 секунд",
   "inactivity1m": "1 минута",
   "inactivity5m": "5 минут",

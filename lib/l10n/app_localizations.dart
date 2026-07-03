@@ -583,6 +583,12 @@ abstract class L10n {
   /// **'Incoming call'**
   String get incomingCall;
 
+  /// Neutral incoming-call label shown on a locked device so the caller identity is not leaked on the lockscreen
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming encrypted call'**
+  String get incomingEncryptedCall;
+
   /// Outgoing call status
   ///
   /// In en, this message translates to:
@@ -1662,6 +1668,18 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Lock after no activity'**
   String get inactivityLockDesc;
+
+  /// Setting toggle: show the incoming caller's name while the device is locked
+  ///
+  /// In en, this message translates to:
+  /// **'Caller name on lockscreen'**
+  String get callerNameOnLockTitle;
+
+  /// Setting description for caller name on lockscreen
+  ///
+  /// In en, this message translates to:
+  /// **'Show the contact name on an incoming call while the phone is locked. Off by default for privacy.'**
+  String get callerNameOnLockDesc;
 
   /// Inactivity timeout 30s
   ///

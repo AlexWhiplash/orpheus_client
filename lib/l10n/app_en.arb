@@ -277,6 +277,8 @@
   
   "incomingCall": "Incoming call",
   "@incomingCall": {"description": "Incoming call status"},
+  "incomingEncryptedCall": "Incoming encrypted call",
+  "@incomingEncryptedCall": {"description": "Neutral incoming-call label shown on a locked device so the caller identity is not leaked on the lockscreen"},
   
   "outgoingCall": "Outgoing call",
   "@outgoingCall": {"description": "Outgoing call status"},
@@ -834,6 +836,10 @@
   "@inactivityLockTitle": {"description": "Inactivity lock title"},
   "inactivityLockDesc": "Lock after no activity",
   "@inactivityLockDesc": {"description": "Inactivity lock description"},
+  "callerNameOnLockTitle": "Caller name on lockscreen",
+  "@callerNameOnLockTitle": {"description": "Setting toggle: show the incoming caller's name while the device is locked"},
+  "callerNameOnLockDesc": "Show the contact name on an incoming call while the phone is locked. Off by default for privacy.",
+  "@callerNameOnLockDesc": {"description": "Setting description for caller name on lockscreen"},
   "inactivity30s": "30 seconds",
   "@inactivity30s": {"description": "Inactivity timeout 30s"},
   "inactivity1m": "1 minute",

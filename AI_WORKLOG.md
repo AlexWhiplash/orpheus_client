@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-03 — Приватность имени звонящего на локскрине (по запросу владельца)
+
+Владелец: показывать имя контакта на локскрине — утечка (видно, КТО звонит).
+Дизайн: заблокировано -> нейтральная подпись «Входящий зашифрованный звонок» (без
+имени/ключа), разблокировано -> имя; + настройка-флаг (по умолчанию ВЫКЛ).
+
+Сделано:
+- Нативно: `MainActivity` settings-канал -> `isDeviceLocked` (KeyguardManager.isKeyguardLocked).
+- `DeviceSettingsService`: `isDeviceLocked()` + флаг `showCallerNameWhenLocked` (SharedPrefs).
+- Оба пути показа CallKit применяют гейт: `notification_service._showNativeIncomingCall`
+  (push) и `incoming_message_handler._showCallKitIncoming` (WS). При locked && !флаг ->
+  nameCaller = l10n.incomingEncryptedCall, handle = '' (не светим и префикс ключа).
+- l10n: incomingEncryptedCall, callerNameOnLockTitle/Desc (en+ru, gen-l10n).
+- UI: тумблер в `security_settings_screen` (_buildSwitchTile + async load флага).
+- Публичный `NotificationService.incomingEncryptedCallLabel()` (WS-путь не лезет к
+  @visibleForTesting notificationL10n).
+
+Требует device-проверки: locked -> нейтральная подпись; unlocked -> имя; флаг ON ->
+имя на locked. Проверки: analyze 0, test 353.
+
 ## 2026-07-03 — Device-тест звонков: улов багов (Samsung<->Pixel)
 
 Прогон звонков между двумя телефонами. Подтверждено рабочим: полноэкранный входящий

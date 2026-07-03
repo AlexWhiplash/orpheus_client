@@ -85,6 +85,12 @@ class MainActivity: FlutterFragmentActivity() {
                     // часов — для тамперо-устойчивой блокировки от брутфорса PIN.
                     result.success(android.os.SystemClock.elapsedRealtime())
                 }
+                "isDeviceLocked" -> {
+                    // Заблокирован ли экран устройства (keyguard) — чтобы на локскрине
+                    // не показывать имя звонящего (приватность входящего звонка).
+                    val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                    result.success(km.isKeyguardLocked)
+                }
                 "openAutoStartSettings" -> {
                     openAutoStartSettings()
                     result.success(true)

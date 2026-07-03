@@ -15,6 +15,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
+import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -158,9 +159,22 @@ String _extractOrGenerateCallId(Map<String, dynamic> data, String callerKey) {
 Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
   try {
     final callerKey = data['caller_key'] ?? data['sender_pubkey'] ?? '';
-    // NOTE: caller_name из FCM — это только первые 8 символов ключа (сервер не знает имена).
-    // Правильное имя появится после открытия CallScreen из локальной БД.
-    final callerName = data['caller_name'] ?? data['sender_name'] ?? callerKey.toString().substring(0, 8);
+    // Резолвим ЛОКАЛЬНОЕ имя контакта (как пользователь его назвал), а не префикс
+    // ключа. Best-effort с таймаутом: если приложение живо и БД доступна — покажем
+    // имя сразу на экране входящего; при killed-app/закрытой БД — фолбэк на
+    // caller_name/префикс (сервер имён не знает; имя всё равно подтянется при
+    // открытии CallScreen).
+    final fallbackName =
+        (data['caller_name'] ?? data['sender_name'] ?? callerKey.toString().substring(0, 8))
+            .toString();
+    String callerName = fallbackName;
+    try {
+      final contact = await DatabaseService.instance
+          .getContact(callerKey.toString())
+          .timeout(const Duration(seconds: 1));
+      final localName = contact?.name.trim();
+      if (localName != null && localName.isNotEmpty) callerName = localName;
+    } catch (_) {}
     
     // Используем call_id от сервера если есть, иначе генерируем
     // КРИТИЧНО: сервер должен передавать уникальный call_id для каждого звонка!

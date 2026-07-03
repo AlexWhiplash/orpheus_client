@@ -130,11 +130,14 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     CallNativeUiService.startCallAudio(title: _displayName);
     _resolveContactName();
 
-    // Единый call_id для корреляции логов
+    // Единый call_id для корреляции логов.
+    // Исходящий (offer == null) -> УНИКАЛЬНЫЙ id на каждый звонок (иначе быстрые
+    // перезвоны в пределах 30с получали одинаковый id и CallKit не показывал
+    // новый ринг). Входящий -> берём id из offer.
     _callId = widget.callId
         ?? (widget.offer != null
             ? CallIdStorage.extractCallId(widget.offer!, widget.contactPublicKey)
-            : CallIdStorage.generateFallbackCallId(
+            : CallIdStorage.generateUniqueCallId(
                 cryptoService.publicKeyBase64 ?? widget.contactPublicKey,
               ));
 

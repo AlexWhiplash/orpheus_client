@@ -192,16 +192,29 @@ class CallIdStorage {
   }
   
   /// Генерирует стабильный fallback callId.
-  /// 
+  ///
   /// КРИТИЧНО: Использует 30-секундное окно для надёжной синхронизации
   /// между FCM (который приходит с задержкой) и WebSocket.
-  /// 
+  ///
   /// Формат: `call-{callerKeyHash}-{timeWindow}`
   static String generateFallbackCallId(String callerKey) {
     final hash = callerKey.hashCode.abs();
     // 30-секундное окно — достаточно для синхронизации FCM и WS
     final timeWindow = DateTime.now().millisecondsSinceEpoch ~/ 30000;
     return 'call-${hash.toRadixString(16).padLeft(8, '0')}-$timeWindow';
+  }
+
+  /// Генерирует УНИКАЛЬНЫЙ callId для нового ИСХОДЯЩЕГО звонка.
+  ///
+  /// В отличие от [generateFallbackCallId] (30-секундное окно, одинаковый id для
+  /// быстрых перезвонов -> CallKit дедупит по id и не показывает новый ринг),
+  /// использует полный timestamp в микросекундах — каждый звонок получает свой id.
+  /// Звонящий кладёт этот id в offer (_attachCallId), приёмник берёт его оттуда,
+  /// поэтому обе стороны и оба изолята (WS/push) видят один и тот же уникальный id.
+  static String generateUniqueCallId(String callerKey) {
+    final hash = callerKey.hashCode.abs();
+    final ts = DateTime.now().microsecondsSinceEpoch;
+    return 'call-${hash.toRadixString(16).padLeft(8, '0')}-$ts';
   }
   
   /// Извлекает call_id из данных сообщения.

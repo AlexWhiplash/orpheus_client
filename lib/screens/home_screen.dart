@@ -18,7 +18,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const String _betaDisclaimerDismissedKey = 'beta_disclaimer_dismissed_v1';
+  static const String _betaDisclaimerDismissedKey =
+      'beta_disclaimer_dismissed_v1';
   static const String _onboardingSeenKey = 'onboarding_seen_v1';
 
   int _currentIndex = 1; // По умолчанию открываем Контакты
@@ -36,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await _checkDeviceSettings();
     });
   }
-  
+
   @override
   void dispose() {
     LocaleService.instance.removeListener(_onLocaleChanged);
@@ -83,64 +84,70 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.warning.withOpacity(0.12),
-                    shape: BoxShape.circle,
+            // Скролл на случай маленького экрана / крупного системного шрифта —
+            // иначе кнопка «Понятно» уезжает за экран, а barrierDismissible:false
+            // не даёт закрыть диалог.
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.info_outline,
+                        color: AppColors.warning, size: 28),
                   ),
-                  child: const Icon(Icons.info_outline, color: AppColors.warning, size: 28),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  isRu ? 'Бета-версия' : 'Beta Version',
-                  style: Theme.of(context).textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  isRu 
-                      ? 'Сейчас приложение проходит закрытое тестирование. '
-                        'Возможны непредвиденные сбои и ошибки. '
-                        'Мы постоянно работаем над улучшением сервиса.'
-                      : 'The app is currently in closed beta testing. '
-                        'Unexpected crashes and errors may occur. '
-                        'We are constantly working to improve the service.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 12),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: dontShowAgain,
-                  onChanged: (value) {
-                    setState(() {
-                      dontShowAgain = value ?? false;
-                    });
-                  },
-                  activeColor: AppColors.primary,
-                  checkColor: Colors.white,
-                  title: Text(
-                    isRu ? 'Больше не показывать' : "Don't show again",
+                  const SizedBox(height: 16),
+                  Text(
+                    isRu ? 'Бета-версия' : 'Beta Version',
+                    style: Theme.of(context).textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isRu
+                        ? 'Сейчас приложение проходит закрытое тестирование. '
+                            'Возможны непредвиденные сбои и ошибки. '
+                            'Мы постоянно работаем над улучшением сервиса.'
+                        : 'The app is currently in closed beta testing. '
+                            'Unexpected crashes and errors may occur. '
+                            'We are constantly working to improve the service.',
                     style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                const SizedBox(height: 12),
-                AppButton(
-                  label: isRu ? 'Понятно' : 'Got it',
-                  onPressed: () async {
-                    if (dontShowAgain) {
-                      await _setBetaDisclaimerDismissed();
-                    }
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: dontShowAgain,
+                    onChanged: (value) {
+                      setState(() {
+                        dontShowAgain = value ?? false;
+                      });
+                    },
+                    activeColor: AppColors.primary,
+                    checkColor: Colors.white,
+                    title: Text(
+                      isRu ? 'Больше не показывать' : "Don't show again",
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  AppButton(
+                    label: isRu ? 'Понятно' : 'Got it',
+                    onPressed: () async {
+                      if (dontShowAgain) {
+                        await _setBetaDisclaimerDismissed();
+                      }
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -167,48 +174,55 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                isRu ? 'Добро пожаловать в Orpheus' : 'Welcome to Orpheus',
-                style: Theme.of(context).textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _onboardingTip(
-                icon: Icons.qr_code_2,
-                title: isRu ? 'Ваша личность — это ключ' : 'Your identity is your key',
-                subtitle: isRu
-                    ? 'Без телефона и почты. Поделитесь своим QR или ID из вкладки «Контакты», чтобы с вами могли связаться.'
-                    : 'No phone or email. Share your QR or ID from the Contacts tab so people can reach you.',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _onboardingTip(
-                icon: Icons.person_add_alt_1,
-                title: isRu ? 'Добавьте контакт' : 'Add a contact',
-                subtitle: isRu
-                    ? 'Отсканируйте его QR или вставьте ключ, чтобы начать зашифрованный чат.'
-                    : 'Scan their QR or paste their key to start an encrypted chat.',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              _onboardingTip(
-                icon: Icons.lock_outline,
-                title: isRu ? 'Защитите приложение' : 'Protect the app',
-                subtitle: isRu
-                    ? 'Задайте PIN в «Настройки → Безопасность» для дополнительной защиты.'
-                    : 'Set a PIN in Settings → Security for extra protection.',
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              AppButton(
-                label: isRu ? 'Понятно' : 'Got it',
-                onPressed: () async {
-                  await prefs.setBool(_onboardingSeenKey, true);
-                  if (context.mounted) Navigator.pop(context);
-                },
-              ),
-            ],
+          // Скролл: контент онбординга (3 подсказки + кнопка) на маленьких экранах
+          // или при крупном системном шрифте не влезает и кнопка «Понятно» уезжает
+          // за экран, а barrierDismissible:false не даёт закрыть — окно «залипает».
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  isRu ? 'Добро пожаловать в Orpheus' : 'Welcome to Orpheus',
+                  style: Theme.of(context).textTheme.titleMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _onboardingTip(
+                  icon: Icons.qr_code_2,
+                  title: isRu
+                      ? 'Ваша личность — это ключ'
+                      : 'Your identity is your key',
+                  subtitle: isRu
+                      ? 'Без телефона и почты. Поделитесь своим QR или ID из вкладки «Контакты», чтобы с вами могли связаться.'
+                      : 'No phone or email. Share your QR or ID from the Contacts tab so people can reach you.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _onboardingTip(
+                  icon: Icons.person_add_alt_1,
+                  title: isRu ? 'Добавьте контакт' : 'Add a contact',
+                  subtitle: isRu
+                      ? 'Отсканируйте его QR или вставьте ключ, чтобы начать зашифрованный чат.'
+                      : 'Scan their QR or paste their key to start an encrypted chat.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _onboardingTip(
+                  icon: Icons.lock_outline,
+                  title: isRu ? 'Защитите приложение' : 'Protect the app',
+                  subtitle: isRu
+                      ? 'Задайте PIN в «Настройки → Безопасность» для дополнительной защиты.'
+                      : 'Set a PIN in Settings → Security for extra protection.',
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: isRu ? 'Понятно' : 'Got it',
+                  onPressed: () async {
+                    await prefs.setBool(_onboardingSeenKey, true);
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -248,12 +262,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _checkDeviceSettings() async {
     await Future.delayed(const Duration(seconds: 2));
-    
+
     if (!mounted) return;
-    
+
     final isDismissed = await DeviceSettingsService.isSetupDialogDismissed();
     if (isDismissed) return;
-    
+
     final needsSetup = await DeviceSettingsService.needsManualSetup();
     if (needsSetup && mounted) {
       DeviceSettingsService.showSetupDialog(context);
@@ -275,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    
+
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),

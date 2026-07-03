@@ -112,10 +112,15 @@ class _LicenseScreenState extends State<LicenseScreen> {
         safeArea: false,
         appBar: AppBar(
           title: Text(l10n.activation),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new),
-            onPressed: () => Navigator.pop(context),
-          ),
+          // «Назад» показываем ТОЛЬКО если есть куда возвращаться. Как стартовый
+          // гейт лицензии экран — корневой, под ним пусто: pop увёл бы в пустой
+          // Navigator → чёрный мёртвый экран. canPop=false → кнопки нет.
+          leading: Navigator.canPop(context)
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new),
+                  onPressed: () => Navigator.pop(context),
+                )
+              : null,
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),

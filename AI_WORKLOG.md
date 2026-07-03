@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-07-03 — Device-тест на живых устройствах: найдены и починены баги
+
+Прогон release-APK на Samsung + Pixel 7 Pro (GrapheneOS). Подтверждено рабочим:
+de-Google (WS-коннект без GMS на чистом GrapheneOS), Oracle/AI + markdown,
+все меню настроек, лицензия-активация, анти-скриншот (FLAG_SECURE), авто-лок по
+неактивности (лог: armed 60s -> locked ровно через 60s).
+
+**Критический баг (release-блокер) — потеря аккаунта при рестарте.** Причина
+исследована агентом (source-verified): дефолтный key-шифр v10
+`RSA_ECB_OAEPwithSHA_256andMGF1Padding` генерит ключ с digest только SHA-256, но
+расшифровывает с MGF1=SHA-1 → строгий KeyMint (Titan M2 / Knox — НЕ
+GrapheneOS-специфика, Samsung тоже падал) отклоняет unwrap приватным ключом на
+новом процессе. Запись публичным ключом (софтверно) проходит → "пишется, не
+читается после рестарта". Наши resetOnError:false + migrateOnAlgorithmChange:false
+превращали это в тупик "нет данных". Фикс (`secure_storage_options.dart`):
+keyCipherAlgorithm -> `RSA_ECB_PKCS1Padding` (не задет MGF1, тихий — важно для
+фонового чтения ключа БД из push-изолята), resetOnError:true, бамп reset-флага.
+Подтверждено на Pixel: закрыл -> открыл -> аккаунт+PIN на месте.
+
+**UI-баги (тоже device-only):**
+- Онбординг + бета-дисклеймер (`home_screen`): нескролящийся Column + barrierDismissible:false
+  -> кнопка за экраном на маленьком экране/крупном шрифте. Фикс: SingleChildScrollView.
+- Экран лицензии (`license_screen`): AppBar с явной кнопкой "назад" на корневом гейте
+  -> Navigator.pop в пустой стек -> чёрный экран. Фикс: leading только при Navigator.canPop.
+- Setup-диалог уведомлений/питания (`device_settings_service`): весь на хардкод-английском
+  + каждый шаг делал Navigator.pop перед открытием настроек Android (диалог исчезал).
+  Фикс: локализация RU/EN (~17 строк) + убран Navigator.pop (диалог переживает поход в настройки).
+
+**Апстрим:** завести баг в juliansteenbakker/flutter_secure_storage (OAEP-ключ должен
+авторизовать оба digest ИЛИ MGF1=SHA-256). Нельзя починить из Dart — отсюда обход через PKCS1.
+
+Проверки: analyze 0 ошибок, test 353 passed, device-тест на 2 устройствах.
+
+---
+
 ## 2026-07-03 — Консолидированный device-чеклист перед релизом
 
 `docs/DEVICE_TEST_CHECKLIST.md` — собраны все device-gated пункты, накопленные за

@@ -1015,6 +1015,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     CallStateService.instance.setCallActive(false);
+    // Освобождаем активный call_id в межизолятном хранилище. Раньше clear() был
+    // мёртвым кодом -> активный id висел до TTL 15с, и быстрый повторный звонок
+    // (уже с НОВЫМ id) отклонялся trySetActiveCall как "занято, другой активен".
+    CallIdStorage.clear();
     CallNativeUiService.disableCallMode();
     // Останавливаем микрофонный сервис — звонок завершён.
     CallNativeUiService.stopCallAudio();

@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-07-03 — Fix: двойной экран звонка, раунд 2 (device-тест выявил ещё 2 причины)
+
+После call_id-claim (раунд 1) владелец на device всё равно увидел ДВА экрана: первый
+CallKit «Закрытая связь», второй — реальное имя без блока. Лог: `🔔 Local notification
+tap: {type:incoming_call, caller_name:Самсунг, ...}` — fullScreenIntent-уведомление на
+локскрине САМО запускало активити -> onIncomingCallFromNotification -> второй экран.
+То есть на один фоновый offer handler поднимал ДВА аффорданса: showCallNotification
+(incoming_message_handler:172, реальное имя, БЕЗ приват-гейта) + _showCallKitIncoming
+(:182, «Закрытая связь»). Claim дедупит Flutter-навигацию, но не саму пару
+CallKit-UI + notification-auto-launch.
+Fix A: убрал showCallNotification из фоновой ветки WS-пути — оставил только CallKit
+(он и так поверх локскрина + приват-подпись). Убирает задвоение и утечку имени.
+
+Второй симптом «сразу второй звонок не проходит»: `CallIdStorage.trySetActiveCall`
+отклоняет ДРУГОЙ call_id пока активен предыдущий, а активный id НЕ очищался при
+завершении — `CallIdStorage.clear()` был мёртвым кодом (0 вызовов, аудит подтвердил),
+id висел до TTL 15с.
+Fix B: вызвал `CallIdStorage.clear()` в CallScreen.dispose. Проверки: analyze 0,
+test 353.
+
 ## 2026-07-03 — Fix: двойной экран звонка (multi-agent аудит участка)
 
 Симптом владельца: входящий открывает ДВА окна звонка (одно за другим); плюс сразу

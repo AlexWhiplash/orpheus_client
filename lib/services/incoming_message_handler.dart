@@ -168,17 +168,11 @@ class IncomingMessageHandler {
       } else {
         DebugLogger.info('CALL', '📞 Background: показываю CallKit UI',
             context: {'call_id': callId, 'peer_pubkey': senderKey});
-        // Доп. фолбек: локальное уведомление, если CallKit не покажется
-        await _notif.showCallNotification(
-          callerName: displayName,
-          payload: json.encode({
-            'type': 'incoming_call',
-            'caller_key': senderKey,
-            'caller_name': displayName,
-            'offer_data': json.encode(data),
-            'call_id': callId,
-          }),
-        );
+        // Показываем ТОЛЬКО нативный CallKit-входящий. Раньше здесь ДОПОЛНИТЕЛЬНО
+        // показывалось fullScreenIntent-уведомление как "фолбек" — но на локскрине
+        // оно само запускало активити и открывало ВТОРОЙ экран звонка (задвоение),
+        // да ещё и с реальным именем в обход приват-гейта. CallKit показывает
+        // входящий надёжно (в т.ч. поверх локскрина) и применяет приват-подпись.
         await _showCallKitIncoming(
           callerName: displayName,
           callerKey: senderKey,

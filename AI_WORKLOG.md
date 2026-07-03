@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-03 — ARCH-3: разбит god-файл main.dart (1298 → 760)
+
+Блок CallKit + навигации звонка (`_initCallKit`, `_checkActiveCallOnStart`,
+`_handleCallKitAccept/Decline`, `_openCallScreenFromCallKit`, `_navigateToCallScreen`,
+`processPendingCallAfterUnlock`, `_checkActiveCallOnResumed` — строки 272-807)
+вынесен в `main_callkit.dart` через `part`/`part of`. Физический split, одна
+библиотека (глобалы/приваты main.dart доступны в part-файле), ноль изменений
+логики. Проверки: analyze 0 ошибок (1 предсуществующий unused-local warning вне
+блока), test 353 passed, debug APK собран.
+
+С этим ARCH-3 закрыт целиком: все три god-файла разгружены (contacts_screen 1310→433,
+call_screen build() 287→90 + логика в контроллер, main 1298→760).
+
+---
+
 ## 2026-07-03 — ARCH-3/#1 шаг 3 (Stage B): перепровязка call_screen на контроллер
 
 Виджет `_CallScreenState` переведён на `CallSessionController`.

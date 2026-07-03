@@ -555,7 +555,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     DebugLogger.info('APP', '🔓 App unlocked');
     setState(() => _isLocked = false);
     _registerUserActivity('unlock');
-    
+
+    // Подключаем основной WebSocket при разблокировке. Старт-подключение выше
+    // гейтится на !_isLocked, а со строгим локом приложение часто СТАРТУЕТ
+    // заблокированным; на холодном старте события resumed нет (уже resumed), так
+    // что без этого основной WS не встаёт до ручного сворачивания-разворачивания
+    // (не работают presence и исходящие звонки). connect идемпотентен.
+    if (_keysExist && cryptoService.publicKeyBase64 != null) {
+      websocketService.connect(cryptoService.publicKeyBase64!);
+    }
+
     // Обработать отложенный звонок если есть
     // Используем небольшую задержку чтобы UI успел перестроиться
     Future.delayed(const Duration(milliseconds: 300), () {

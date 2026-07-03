@@ -75,6 +75,35 @@ PendingCallData? _pendingCall;
 /// Флаг: ожидается открытие CallScreen из CallKit (блокирует дубли из WebSocket)
 bool _isProcessingCallKitAnswer = false;
 
+/// Синхронный CLAIM навигации на экран звонка по call_id. Один и тот же звонок,
+/// доставленный дважды (call-offer уходит и по WS, И по HTTP-fallback) или сразу
+/// двумя путями (fullScreenIntent-уведомление + CallKit accept), должен открыть
+/// ОДИН экран. Опираться на isCallActive нельзя: он ставится поздно, в
+/// CallScreen.initState — кадром ПОЗЖЕ push, поэтому два вызова в одном кадре оба
+/// видят false и оба пушат. Этот claim ставится СИНХРОННО на входе навигации, до
+/// postFrame; Dart однопоточный и между проверкой и присвоением нет await, значит
+/// конкурентные вызовы сериализуются: первый захватывает call_id, остальные
+/// отклоняются. TTL самозаживляется (законный повторный звонок получает новый
+/// call_id и не блокируется).
+String? _navClaimedCallId;
+int _navClaimedAtMs = 0;
+const int _navClaimTtlMs = 15000;
+
+bool _claimCallNavigation(String? callId) {
+  if (callId == null || callId.isEmpty) return true;
+  final now = DateTime.now().millisecondsSinceEpoch;
+  if (_navClaimedCallId == callId && (now - _navClaimedAtMs) < _navClaimTtlMs) {
+    return false;
+  }
+  _navClaimedCallId = callId;
+  _navClaimedAtMs = now;
+  return true;
+}
+
+/// Освобождает claim (если Navigator оказался null в postFrame и звонок ушёл в
+/// pending — чтобы повторная обработка смогла заново захватить и открыть экран).
+void _resetCallNavigationClaim() => _navClaimedCallId = null;
+
 /// Sentry DSN для мониторинга ошибок
 const String _sentryDsn = 'https://7d6801508e29bc2e4f5b93b986147cdc@o4509485705265152.ingest.de.sentry.io/4510682122879056';
 
@@ -295,6 +324,12 @@ void _listenForMessages() {
       }
       if (CallStateService.instance.isCallActive.value) {
         DebugLogger.info('CALL', '📞 Игнорирую call-offer из WS: уже есть активный звонок');
+        return;
+      }
+      // Тот же call_id, что уже захвачен другим путём (уведомление/CallKit или
+      // дубль WS+HTTP) — не открываем второй экран.
+      if (!_claimCallNavigation(callId)) {
+        DebugLogger.info('CALL', '📞 Игнорирую дубль call-offer из WS по call_id');
         return;
       }
       navigatorKey.currentState?.push(MaterialPageRoute(

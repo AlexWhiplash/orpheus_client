@@ -388,7 +388,17 @@ void _navigateToCallScreen(
     _isProcessingCallKitAnswer = false;
     return;
   }
-  
+
+  // Дедуп по call_id ДО отложенного push: один и тот же звонок (WS+HTTP или
+  // уведомление+CallKit accept) не должен открыть второй экран. Захватываем
+  // синхронно здесь, а не полагаемся на isCallActive (он встаёт кадром позже).
+  if (!_claimCallNavigation(resolvedCallId)) {
+    DebugLogger.warn(
+        'CALLKIT', 'Дубль навигации по call_id=$resolvedCallId, игнорирую');
+    _isProcessingCallKitAnswer = false;
+    return;
+  }
+
   // Очищаем буфер после использования
   incomingCallBuffer.clearLastIncomingCall();
   
@@ -413,6 +423,9 @@ void _navigateToCallScreen(
     if (navigatorKey.currentState == null) {
       // Если Navigator всё ещё null — сохраняем pending call для обработки при resumed
       DebugLogger.warn('CALLKIT', '⚠️ Navigator null после postFrame, сохраняю pending call');
+      // Освобождаем claim: экран так и не открыли, pending-обработка должна
+      // суметь заново захватить этот call_id (иначе звонок не откроется вовсе).
+      _resetCallNavigationClaim();
       _pendingCall = PendingCallData(
         callerKey: callerKey,
         offerData: offerData,

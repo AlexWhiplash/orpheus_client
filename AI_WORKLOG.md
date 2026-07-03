@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-07-03 — Fix: дубль answer ломал WebRTC-негоциацию (device-тест звонков)
+
+Device-тест звонка (Samsung<->Pixel): в логе `E flutter: setRemoteDescription:
+Failed to set remote answer sdp: Called in wrong state: stable` из
+`webrtc_service.handleAnswer`. Причина: сигналы шлются по WS И по HTTP-fallback →
+answer приходит дважды; второй раз PC уже в stable → необработанное исключение,
+из-за которого первая негоциация закрывалась и звонок соединялся только с ретрая
+(симптом владельца «оборвался тут же, на Pixel продолжает звонить»). Фикс:
+`handleAnswer` применяет answer только при signalingState == have-local-offer
+(дедуп дубликата, корректно работает и для ice-restart-answer) + try/catch.
+
+Аудио в звонке при этом работало (Connected -> Completed, ~55с разговора),
+двусторонний звук подтверждён. Требует device-ретеста: входящий на ЗАБЛОКИРОВАННЫЙ
+телефон (в логе показался как local-notification, а не full-screen CallKit —
+отдельно понаблюдать). Проверки: analyze 0.
+
+---
+
 ## 2026-07-03 — BT-разрешение: priming вместо пугающего диалога (device-тест)
 
 Пользователь при звонке увидел системный диалог «устройства поблизости… определять

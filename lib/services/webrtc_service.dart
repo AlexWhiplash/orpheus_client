@@ -208,12 +208,27 @@ class WebRTCService {
   Future<void> handleAnswer(Map<String, dynamic> answerData) async {
     if (_peerConnection == null) return;
 
-    final answer = RTCSessionDescription(answerData['sdp'], answerData['type']);
-    await _peerConnection!.setRemoteDescription(answer);
+    // Answer валиден ТОЛЬКО в состоянии have-local-offer. Звонок шлётся и по WS,
+    // и по HTTP-fallback → answer прилетает дважды; повторный вызов в состоянии
+    // stable кидал "wrong state: stable" (необработанное исключение, ломавшее
+    // первую негоциацию → звонок «обрывался» и переподключался). Гейт по
+    // signalingState дедупает дубликат.
+    final state = _peerConnection!.signalingState;
+    if (state != RTCSignalingState.RTCSignalingStateHaveLocalOffer) {
+      _log("⏭️ handleAnswer пропущен: signalingState=$state (дубликат/поздний answer)");
+      return;
+    }
 
-    // ВАЖНО: Устанавливаем флаг и применяем очередь
-    _remoteDescriptionSet = true;
-    await _drainCandidateQueue();
+    try {
+      final answer = RTCSessionDescription(answerData['sdp'], answerData['type']);
+      await _peerConnection!.setRemoteDescription(answer);
+
+      // ВАЖНО: Устанавливаем флаг и применяем очередь
+      _remoteDescriptionSet = true;
+      await _drainCandidateQueue();
+    } catch (e) {
+      _log("⚠️ handleAnswer error: $e");
+    }
   }
 
   // БЕЗОПАСНОЕ ДОБАВЛЕНИЕ КАНДИДАТА

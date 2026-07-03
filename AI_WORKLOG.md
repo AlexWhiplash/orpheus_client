@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-07-03 — ARCH-3/#1 шаг 2: CallSessionController + тесты (dead code)
+
+Поэтапный вынос логики звонка (по выбору владельца: сначала контроллер+тесты как
+отдельный модуль, потом перепровязка виджета — чтобы rewire шёл по проверенному коду).
+
+Создано:
+- `lib/services/call_session_controller.dart` — `CallSessionController extends
+  ChangeNotifier`: домен-enum `CallState`, машина состояний (initialStateFor,
+  onNetworkLost/Restored, onConnected, onRemoteHangup, onError, statusText) и
+  политика ICE-restart (attemptIceRestart: дебаунс 3с, лимит 5 попыток, повторы
+  через инжектируемый scheduler, ожидание WS). Внешние операции за узким
+  инъектируемым `CallOps` (restartIce) — это и есть peer-интерфейс из TEST-4.
+  Часы и планировщик тоже инжектятся -> всё юнит-тестируемо.
+- `test/services/call_session_controller_test.dart` — 17 тестов: initialStateFor,
+  statusText-маппинг, guard onNetworkLost (только из Connected), сброс на
+  onConnected, Rejected/Failed, инкремент попыток, дебаунс, исчерпание->Failed,
+  ws-not-connected->повтор, восстановление WS->рестарт, no-op вне реконнекта.
+
+Логика 1-в-1 с виджетом (мирроринг прочитанного `_CallScreenState`). Контроллер
+НЕ подключён к call_screen — dead code, нулевой риск для живого пути звонка.
+
+**Следующий шаг (Stage B):** перепровязать `_CallScreenState` на контроллер
+(setState -> слушатель, глобалы -> реализация CallOps поверх WebRTCService/
+websocketService), затем адверсариал-ревью + прогон звонка на устройстве.
+
+Проверки: analyze 0 ошибок, test 347 passed (+17).
+
+---
+
 ## 2026-07-03 — ARCH-3/#1 шаг 1: разбит build() экрана звонка (287 строк)
 
 Первый (безопасный) шаг рефактора call_screen (вариант #1 — вынос логики в

@@ -664,17 +664,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.paused) {
       DebugLogger.info('LIFECYCLE', 'Приложение в background');
-      
+
       final hasActiveCall = CallStateService.instance.isCallActive.value;
       final hasPendingCall = _pendingCall != null && _pendingCall!.isValid;
-      
+
       // ВАЖНО: сохраняем WebSocket в фоне, чтобы звонки доходили даже без CallKit/FCM.
       // Дедуп выполняется через call_id (CallIdStorage) в обработчике входящих сигналов.
       DebugLogger.info('LIFECYCLE', '📶 WebSocket остаётся подключённым в background');
-      
-      // В фоне не блокируем сразу — полагаемся на таймер неактивности.
+
       _inactivityTimer?.cancel();
-      if (hasPendingCall) {
+
+      // Строгая блокировка: как только приложение уходит в фон / гаснет экран —
+      // сразу лочим (при включённом PIN). Исключение — активный ИЛИ входящий
+      // звонок: экран звонка и приём должны остаться доступными без PIN.
+      if (authService.config.isPinEnabled &&
+          !_isLocked &&
+          !hasActiveCall &&
+          !hasPendingCall) {
+        authService.lock();
+        setState(() => _isLocked = true);
+        DebugLogger.info('LIFECYCLE', '🔒 App locked on background (immediate)');
+      } else if (hasPendingCall) {
         DebugLogger.info('LIFECYCLE', '📞 Есть pending call');
       }
     }

@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-07-03 — Строгая блокировка на background (по запросу владельца)
+
+`didChangeAppLifecycleState`: в ветке `paused` теперь сразу `authService.lock()` +
+`_isLocked=true` при `isPinEnabled` (раньше только отменяли таймер, лок ставился на
+resume по elapsed). Исключение — `hasActiveCall || hasPendingCall` (звонок должен
+остаться доступен). Заодно задействована переменная `hasActiveCall`, которая висела
+unused после сплита main.dart. Проверки: analyze 0, test 353.
+Продуктовый нюанс (озвучен владельцу): звонок на УЖЕ залоченное фоновое приложение
+потребует PIN для ответа.
+
+---
+
 ## 2026-07-03 — Device-тест на живых устройствах: найдены и починены баги
 
 Прогон release-APK на Samsung + Pixel 7 Pro (GrapheneOS). Подтверждено рабочим:

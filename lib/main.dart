@@ -478,6 +478,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _keysExist = _hasKeys;
     _isLocked = authService.requiresUnlock;
     RawKeyboard.instance.addListener(_handleRawKeyEvent);
+    CallStateService.instance.isCallActive.addListener(_onCallActiveChanged);
     _registerUserActivity('init');
     
     // Подписываемся на изменения локали
@@ -636,7 +637,24 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _licenseSubscription?.cancel();
     _inactivityTimer?.cancel();
     RawKeyboard.instance.removeListener(_handleRawKeyEvent);
+    CallStateService.instance.isCallActive.removeListener(_onCallActiveChanged);
     super.dispose();
+  }
+
+  /// Звонок на время своего показа снимает keyguard (enableCallMode -> дать
+  /// ответить на заблокированном телефоне). По завершении звонка, если устройство
+  /// всё ещё под системной блокировкой, лочим и приложение — иначе после звонка
+  /// над локскрином мелькнёт интерфейс Orpheus (утечка). Если устройство уже
+  /// разблокировано (пользователь сам ввёл PIN во время звонка) — не мешаем.
+  Future<void> _onCallActiveChanged() async {
+    if (CallStateService.instance.isCallActive.value) return; // звонок начался
+    if (!authService.config.isPinEnabled || _isLocked) return;
+    try {
+      if (await DeviceSettingsService.isDeviceLocked()) {
+        authService.lock();
+        if (mounted) setState(() => _isLocked = true);
+      }
+    } catch (_) {}
   }
 
   void _handleRawKeyEvent(RawKeyEvent event) {

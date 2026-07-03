@@ -28,8 +28,30 @@ class MainActivity: FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Флаги showWhenLocked и turnScreenOn теперь применяются только во время звонков
-        // через MethodChannel, чтобы не мешать нормальной работе приложения
+        // Флаги showWhenLocked/turnScreenOn применяются runtime только во время звонков
+        // (через MethodChannel), чтобы не мешать обычной работе. НО при ответе на
+        // заблокированном телефоне активити стартует именно сейчас (onCreate), и если
+        // не выставить showWhenLocked ДО показа окна — оно выйдет под keyguard и
+        // устройство потребует PIN (ответить нельзя). Поэтому если есть активный
+        // звонок (флаг в SharedPreferences от CallIdStorage), включаем режим сразу.
+        if (hasActiveCall()) {
+            enableCallMode()
+        }
+    }
+
+    /// Есть ли активный (звонящий/идущий) звонок — читаем межизолятный флаг
+    /// CallIdStorage из Flutter SharedPreferences. Нужен в onCreate, до Flutter.
+    private fun hasActiveCall(): Boolean {
+        return try {
+            val prefs = getSharedPreferences(
+                "FlutterSharedPreferences", Context.MODE_PRIVATE)
+            val callId = prefs.getString("flutter.orpheus_active_call_id", null)
+            if (callId.isNullOrEmpty()) return false
+            val ts = prefs.getLong("flutter.orpheus_active_call_ts", 0L)
+            (System.currentTimeMillis() - ts) < 15000L // тот же TTL, что в CallIdStorage
+        } catch (e: Exception) {
+            false
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -169,20 +191,20 @@ class MainActivity: FlutterFragmentActivity() {
 
     private fun enableCallMode() {
         // Показ экрана звонка ПОВЕРХ блокировки + включение экрана только на время
-        // звонка. requestDismissKeyguard/FLAG_DISMISS_KEYGUARD НУЖНЫ: без них при
-        // ответе на заблокированном телефоне экран звонка не выходит поверх
-        // локскрина и устройство требует PIN («выкидывает на пин код телефона»).
+        // звонка. НЕ снимаем keyguard: setShowWhenLocked показывает и делает
+        // интерактивным экран звонка над локскрином (можно ответить/говорить), а
+        // keyguard остаётся снизу. requestDismissKeyguard как раз показывал PIN-
+        // промпт (выкидывало на пин). Ключ к тому чтобы окно вышло ПОВЕРХ локскрина
+        // при ответе — вызвать это РАНО, в onCreate (см. вызов там), а не только из
+        // CallScreen.initState (поздно, активити уже под keyguard).
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
     }
@@ -196,8 +218,7 @@ class MainActivity: FlutterFragmentActivity() {
             @Suppress("DEPRECATION")
             window.clearFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
     }

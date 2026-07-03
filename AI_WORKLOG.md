@@ -12,14 +12,21 @@
 keyguard-фикс (убрал requestDismissKeyguard ради post-call флеша) сломал ответ —
 без снятия keyguard экран звонка не выходит поверх локскрина, устройство требует PIN.
 
-Fix: вернул requestDismissKeyguard + FLAG_DISMISS_KEYGUARD в enableCallMode. Чтобы НЕ
-вернуть флеш — добавил в main.dart листенер `CallStateService.isCallActive`: по
-завершении звонка, если `DeviceSettingsService.isDeviceLocked()` (устройство под
-системной блокировкой) и PIN включён — `authService.lock()` + `_isLocked=true`. Тогда
-после звонка над локскрином показывается СВОЙ экран блокировки, а не чат. Если юзер
-сам разблокировал устройство в звонке (isDeviceLocked=false) — не лочим. Проверки:
-analyze 0, test 353. (Урок: этот keyguard/lockscreen-флоу хрупкий, правки только с
-device-проверкой обоих сценариев — ответ И post-call.)
+Первая попытка (вернуть requestDismissKeyguard) НЕ помогла — device-тест: ответ всё
+равно выкидывал на PIN, звонок не поднимался. НАСТОЯЩИЙ корень: в начале сессии убрал
+`android:showWhenLocked` из манифеста (был ВСЕГДА), сделал runtime через enableCallMode
+— но тот зовётся из CallScreen.initState, ПОЗЖЕ запуска активити; окно успевает выйти
+под keyguard -> PIN. А requestDismissKeyguard как раз показывал PIN-промпт.
+
+Итоговый fix: (1) в `MainActivity.onCreate` читаем межизолятный флаг активного звонка
+(`FlutterSharedPreferences` -> `flutter.orpheus_active_call_id` + `_ts`, TTL 15с, от
+CallIdStorage) и, если звонок активен, зовём `enableCallMode()` СРАЗУ — окно выходит
+поверх локскрина до показа. (2) Убрал requestDismissKeyguard/FLAG_DISMISS_KEYGUARD —
+keyguard не снимаем, showWhenLocked достаточно и интерактивно. (3) Оставил листенер
+`CallStateService.isCallActive` в main.dart: по завершении звонка при
+`DeviceSettingsService.isDeviceLocked()` -> `authService.lock()` (свой PIN вместо
+мелькания чата). Проверки: analyze 0, test 353. Урок: keyguard/lockscreen-флоу хрупкий,
+правки только с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
 ## 2026-07-03 — Fix: перезвон в пределах 30с не звонит — уникальный call_id исходящего
 

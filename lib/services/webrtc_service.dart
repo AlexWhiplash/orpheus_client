@@ -54,9 +54,11 @@ class WebRTCService {
 
   Future<void> initialize() async {
     _log("--- [WebRTC] Requesting Permissions... ---");
+    // Только микрофон (обязателен). BLUETOOTH_CONNECT (звук в BT-гарнитуру) НЕ
+    // просим здесь: у него пугающий системный диалог «устройства поблизости».
+    // Он запрашивается отдельно, с поясняющим priming-экраном (см. call_screen).
     Map<Permission, PermissionStatus> statuses = await [
       Permission.microphone,
-      Permission.bluetoothConnect,
     ].request();
 
     if (statuses[Permission.microphone]!.isGranted) {

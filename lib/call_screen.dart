@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:orpheus_project/main.dart';
@@ -181,6 +183,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     // Слушаем контроллер ПОСЛЕДНИМ: синхронные правки состояния выше (нач.
     // значения сети/WS) не должны дёргать setState во время initState.
     _controller.addListener(_onControllerChanged);
+
+    // BT-priming один раз, с задержкой — после того как отработает запрос
+    // микрофона (иначе диалоги стекаются).
+    Future.delayed(const Duration(seconds: 3), _maybePrimeBluetooth);
   }
 
   void _onControllerChanged() {
@@ -306,6 +312,62 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Future<void> _startBackgroundMode() async {
     await BackgroundCallService.startCallService();
+  }
+
+  static const String _btPrimeKey = 'bt_call_audio_primed';
+
+  /// Разовый поясняющий экран ПЕРЕД системным запросом BLUETOOTH_CONNECT.
+  /// Системный диалог «устройства поблизости» звучит пугающе (упоминает
+  /// «относительное положение»), хотя разрешение нужно ТОЛЬКО для вывода звука
+  /// звонка в BT-гарнитуру — без сканирования устройств и геолокации. Праймим один
+  /// раз, только когда микрофон уже выдан (чтобы диалоги не стекались).
+  Future<void> _maybePrimeBluetooth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool(_btPrimeKey) ?? false) return;
+      if (await Permission.bluetoothConnect.isGranted) return;
+      if (!await Permission.microphone.isGranted) return;
+      if (!mounted) return;
+
+      final isRu = Localizations.localeOf(context).languageCode == 'ru';
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: Text(
+            isRu ? 'Звук звонка в Bluetooth' : 'Bluetooth call audio',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: Text(
+            isRu
+                ? 'Чтобы выводить звук звонка в вашу Bluetooth-гарнитуру, Android '
+                    'сейчас попросит разрешение «Устройства поблизости». Orpheus '
+                    'использует его ТОЛЬКО для подключения к гарнитуре — не сканирует '
+                    'устройства и не определяет ваше местоположение. Можно пропустить: '
+                    'звонки работают и через динамик/наушники.'
+                : 'To play call audio through your Bluetooth headset, Android will now '
+                    'ask for the "Nearby devices" permission. Orpheus uses it ONLY to '
+                    'connect to your headset — it does not scan for devices or track your '
+                    'location. You can skip this; calls still work via the speaker/earpiece.',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(isRu ? 'Пропустить' : 'Skip'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(isRu ? 'Продолжить' : 'Continue'),
+            ),
+          ],
+        ),
+      );
+      await prefs.setBool(_btPrimeKey, true);
+      if (proceed == true) {
+        await Permission.bluetoothConnect.request();
+      }
+    } catch (_) {}
   }
 
   Future<void> _resolveContactName() async {

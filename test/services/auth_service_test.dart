@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/services/auth_service.dart';
+import 'package:orpheus_project/services/database_service.dart';
 
 class _InMemoryAuthStorage implements AuthSecureStorage {
   final Map<String, String> _kv = {};
@@ -28,6 +29,11 @@ class _InMemoryAuthStorage implements AuthSecureStorage {
 
 void main() {
   group('AuthService (контракты безопасности)', () {
+    // ARCH-1: verifyPin(duress) теперь пушит duress-режим в DatabaseService.instance
+    // (синглтон). Сбрасываем после каждого теста, чтобы флаг не «протёк» в поздний
+    // тест (fail-safe, но чистим для изоляции). setDuressMode не трогает реальную БД.
+    tearDown(() => DatabaseService.instance.setDuressMode(false));
+
     test('init: без конфига в storage — SecurityConfig.empty и приложение разблокировано', () async {
       final storage = _InMemoryAuthStorage();
       final auth = AuthService.createForTesting(secureStorage: storage);

@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-07-03 — ARCH-1: разрыв цикла AuthService ↔ DatabaseService (крупный рефактор)
+
+**Задача:** разорвать циклическую зависимость двух ядровых сервисов безопасности
+(БД читала `AuthService.instance.isDuressMode`, auth импортировал БД для wipe).
+
+**Сделано (инверсия зависимости, поведение не меняется):**
+- `database_service.dart`: убран `import auth_service`; геттер
+  `_isDuressMode => AuthService.instance.isDuressMode` → плоское поле
+  `bool _isDuressMode = false` + `setDuressMode(bool)`. БД про AuthService не знает.
+- `auth_service.dart`: единый `_setDuressMode(value)` = поле + push в
+  `DatabaseService.instance.setDuressMode`. Все 6 переходов duress (verifyPin
+  success/duress, disableDuressCode, lock, exitDuressMode, performWipe) идут через него.
+- Цикл разорван: остаётся ОДНОнаправленная auth→database (была и раньше, для wipe).
+
+**Перепроверка критичного (по просьбе владельца):** запущен адверсариал-ревьюер на
+duress-корректность. Вердикт — в проде утечки НЕТ, поведение эквивалентно: набор
+guard-методов не менялся; push синхронный/атомарный с auth-флагом (нет гонки);
+duress рантайм-only (не персистится → оба стартуют false); БД — единственный
+consumer скрытия данных. Единственная находка — тест-гигиена (fail-safe): тест-инстанс
+через createForTesting пушит в DB-синглтон → добавлен `tearDown` со сбросом в
+`auth_service_test.dart`.
+
+**Проверки:** analyze 0 ошибок; test 330 passed (включая duress); + адверсариал-ревью.
+
+---
+
 ## 2026-07-02 — UI-9: отладочный лог-оверлей звонка спрятан в release
 
 `call_screen.dart`: скрытая кнопка (тап по «Secure Call») открывала оверлей с

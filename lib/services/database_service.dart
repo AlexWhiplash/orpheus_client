@@ -9,7 +9,6 @@ import 'package:orpheus_project/services/secure_storage_options.dart';
 import 'package:path/path.dart';
 import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
-import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/models/ai_message_model.dart';
 
@@ -23,8 +22,17 @@ class DatabaseService {
   bool _isWiping = false;
   DatabaseService._init();
 
-  /// Проверка: находимся ли мы в duress mode (показываем пустой профиль)
-  bool get _isDuressMode => AuthService.instance.isDuressMode;
+  /// Находимся ли мы в duress mode (показываем пустой профиль).
+  ///
+  /// Флаг ПРОТАЛКИВАЕТСЯ снаружи через [setDuressMode] — БД сама НЕ знает про
+  /// AuthService. Это разрывает цикл import auth↔database (аудит ARCH-1): раньше
+  /// здесь был геттер `=> AuthService.instance.isDuressMode`, из-за чего два
+  /// ядровых сервиса безопасности нельзя было менять/тестировать по отдельности.
+  bool _isDuressMode = false;
+
+  /// Установить duress-режим. Вызывается ТОЛЬКО из AuthService при смене режима
+  /// (вход/duress/lock/wipe), чтобы read-методы фильтровали данные корректно.
+  void setDuressMode(bool value) => _isDuressMode = value;
 
   // Метод для тестов: инициализация с готовой БД
   void initWithDatabase(Database db) {

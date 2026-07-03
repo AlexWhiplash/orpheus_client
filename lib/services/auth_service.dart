@@ -104,6 +104,15 @@ class AuthService {
   bool _isDuressMode = false;
   bool get isDuressMode => _isDuressMode;
 
+  /// Единая точка смены duress-режима. Кроме своего флага, ПРОТАЛКИВАЕТ его в
+  /// DatabaseService (разрыв цикла auth↔database, ARCH-1): раньше БД сама читала
+  /// `AuthService.instance.isDuressMode`. Все переходы duress идут через этот
+  /// метод, чтобы БД всегда фильтровала данные согласованно с режимом входа.
+  void _setDuressMode(bool value) {
+    _isDuressMode = value;
+    DatabaseService.instance.setDuressMode(value);
+  }
+
   /// Флаг: приложение разблокировано
   bool _isUnlocked = false;
   bool get isUnlocked => _isUnlocked;
@@ -220,7 +229,7 @@ class AuthService {
     if (await _verifyHash(pin, _config.pinSalt!, _config.pinHash!)) {
       await _resetFailedAttempts();
       _isUnlocked = true;
-      _isDuressMode = false;
+      _setDuressMode(false);
       // legacy → Argon2id при первом входе
       await _maybeUpgradeLegacyHash(pin, _config.pinSalt, _config.pinHash,
           (h) => _config.copyWith(pinHash: h));
@@ -243,7 +252,7 @@ class AuthService {
       if (await _verifyHash(pin, _config.duressSalt!, _config.duressHash!)) {
         await _resetFailedAttempts();
         _isUnlocked = true;
-        _isDuressMode = true;
+        _setDuressMode(true);
         await _maybeUpgradeLegacyHash(pin, _config.duressSalt, _config.duressHash,
             (h) => _config.copyWith(duressHash: h));
         DebugLogger.warn('AUTH', 'Duress code entered, empty profile activated');
@@ -349,7 +358,7 @@ class AuthService {
     );
     
     await _saveConfig();
-    _isDuressMode = false;
+    _setDuressMode(false);
     print("AUTH: Duress code disabled");
     return true;
   }
@@ -467,7 +476,7 @@ class AuthService {
   void lock() {
     if (_config.requiresUnlock) {
       _isUnlocked = false;
-      _isDuressMode = false;
+      _setDuressMode(false);
       print("AUTH: 🔒 App locked (requires ${_config.pinLength}-digit PIN)");
     }
   }
@@ -476,7 +485,8 @@ class AuthService {
   Future<bool> exitDuressMode(String mainPin) async {
     final result = await verifyPin(mainPin);
     if (result == PinVerifyResult.success) {
-      _isDuressMode = false;
+      // verifyPin(success) уже вызвал _setDuressMode(false) — оставляем явно для читаемости.
+      _setDuressMode(false);
       return true;
     }
     return false;
@@ -541,7 +551,7 @@ class AuthService {
     // 5. Сброс состояния (всегда)
     _config = SecurityConfig.empty;
     _isUnlocked = false;
-    _isDuressMode = false;
+    _setDuressMode(false);
 
     // 6. Всегда уведомляем UI (даже при частичных ошибках), чтобы навигация
     //    сбросилась и не осталась на «полу-стёртом» состоянии (аудит LOGIC-7).

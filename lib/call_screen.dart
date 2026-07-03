@@ -435,8 +435,17 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       } else if (type == 'ice-candidate') {
         await _webrtcService.addCandidate(data);
       } else if (type == 'hang-up' || type == 'call-rejected') {
-        _addLog("📞 Получен $type - завершаем звонок");
-        _onRemoteHangup();
+        // Проверяем call_id: устаревший hang-up/reject от ПРЕДЫДУЩЕГО захода
+        // (например, тайаут-reject старого звонка, долетевший поздно по
+        // HTTP-fallback) не должен завершать ТЕКУЩИЙ соединённый звонок.
+        // Если call_id нет (старые клиенты) — обрабатываем как раньше.
+        final signalCallId = data is Map ? data['call_id'] : null;
+        if (signalCallId != null && signalCallId != _callId) {
+          _addLog("📞 Игнорирую устаревший $type (call_id=$signalCallId ≠ $_callId)");
+        } else {
+          _addLog("📞 Получен $type - завершаем звонок");
+          _onRemoteHangup();
+        }
       }
     });
 

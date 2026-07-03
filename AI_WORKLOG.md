@@ -5,6 +5,21 @@
 
 ---
 
+## 2026-07-03 — Fix: второй звонок не проходит — освобождаем call_id на ВСЕХ завершениях
+
+После раунда 2 задвоение ушло, но device-лог показал: `CallIdStorage: отклоняю новый
+call-...688` — `trySetActiveCall` отклоняет ДРУГОЙ call_id, пока активен предыдущий,
+а `clear()` в раунде 2 добавлен только в CallScreen.dispose (отвеченные звонки).
+Незавершённые иначе входящие (отклонение/таймаут/сброс собеседником до ответа /
+CallKit-ended) оставляли id висеть до TTL 15с -> следующий звонок «занято».
+Fix: `CallIdStorage.clear()` (+ `_resetCallNavigationClaim()`) добавлен во все пути
+завершения: `CallEventActionCallEnded` (main_callkit), `_handleCallKitDecline`
+(decline+timeout), и входящий hang-up/call-rejected (incoming_message_handler).
+Дизайн-заметка: занятость «в звонке» гейтит isCallActive (реальное состояние экрана,
+handler:126), а registry нужен только для межизолятного дедупа одного call_id;
+trySetActiveCall НЕ трогал (аудит предупреждал про same-id=true). Проверки: analyze 0,
+test 353.
+
 ## 2026-07-03 — Fix: двойной экран звонка, раунд 2 (device-тест выявил ещё 2 причины)
 
 После call_id-claim (раунд 1) владелец на device всё равно увидел ДВА экрана: первый

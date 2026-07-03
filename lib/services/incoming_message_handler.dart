@@ -254,6 +254,10 @@ class IncomingMessageHandler {
         DebugLogger.warn('CALL', 'Error hiding CallKit: $e',
             context: {'call_id': callId, 'peer_pubkey': senderKey});
       }
+      // Освобождаем активный call_id: звонок завершён собеседником ДО ответа
+      // (CallScreen мог не открыться, dispose не сработает) — иначе следующий
+      // звонок отклонится как "занято" до истечения TTL 15с.
+      await CallIdStorage.clear();
       return;
     }
 

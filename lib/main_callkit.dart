@@ -21,6 +21,10 @@ void _initCallKit() {
 
       case CallEventActionCallEnded():
         DebugLogger.info('CALLKIT', 'Звонок завершён');
+        // Освобождаем активный call_id, иначе следующий звонок отклонится как
+        // "занято" (trySetActiveCall) до истечения TTL 15с.
+        await CallIdStorage.clear();
+        _resetCallNavigationClaim();
         break;
 
       case CallEventActionCallTimeout():
@@ -305,7 +309,12 @@ Future<void> _handleCallKitDecline(Map<String, dynamic>? body) async {
   
   // Очищаем буфер
   incomingCallBuffer.clearLastIncomingCall();
-  
+
+  // Освобождаем активный call_id: отклонённый/несостоявшийся входящий не должен
+  // блокировать следующий звонок до истечения TTL 15с.
+  await CallIdStorage.clear();
+  _resetCallNavigationClaim();
+
   // Отправляем call-rejected (WebSocket или HTTP fallback)
   // ВАЖНО: sendSignalingMessage сам использует HTTP fallback если WS не подключён!
   if (callerKey != null) {

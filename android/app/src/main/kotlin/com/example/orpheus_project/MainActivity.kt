@@ -168,18 +168,20 @@ class MainActivity: FlutterFragmentActivity() {
     }
 
     private fun enableCallMode() {
-        // Включаем показ поверх блокировки и включение экрана только во время звонка
+        // Показ экрана звонка ПОВЕРХ блокировки + включение экрана только на время
+        // звонка. НЕ снимаем keyguard (никакого requestDismissKeyguard /
+        // FLAG_DISMISS_KEYGUARD): setShowWhenLocked достаточно, чтобы показать и
+        // сделать интерактивным экран звонка над локскрином, а keyguard остаётся
+        // снизу. Иначе после завершения звонка на миг виден интерфейс приложения
+        // над разблокированным экраном (утечка), пока не сработает строгий лок.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
     }
@@ -193,8 +195,7 @@ class MainActivity: FlutterFragmentActivity() {
             @Suppress("DEPRECATION")
             window.clearFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
     }

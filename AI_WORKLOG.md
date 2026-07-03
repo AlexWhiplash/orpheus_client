@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-07-03 — ARCH-3: разбит god-файл contacts_screen (1310 → 433)
+
+Приватные виджет-классы (`_ContactRow`, `_Avatar`, `_UnreadPill`, `_AddContactDialog`,
+`_ContactActionsSheet`, `_ActionTile`, `_DeleteContactDialog`, `_OracleContactRow`,
+`_OracleAvatar`, `_AddContactHint`) вынесены в `contacts_screen_widgets.dart` через
+`part`/`part of` — физический split, одна библиотека, ноль изменений видимости/логики.
+Экран (state) теперь 433 строки вместо 1310. Проверки: analyze 0 ошибок, test 330 passed.
+
+---
+
 ## 2026-07-03 — ARCH-1: разрыв цикла AuthService ↔ DatabaseService (крупный рефактор)
 
 **Задача:** разорвать циклическую зависимость двух ядровых сервисов безопасности

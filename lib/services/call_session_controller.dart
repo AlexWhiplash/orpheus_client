@@ -50,15 +50,23 @@ class CallSessionController extends ChangeNotifier {
     required CallOps ops,
     RetryScheduler? scheduler,
     NowFn? now,
+    VoidCallback? onFatal,
     CallState initialState = CallState.Dialing,
   })  : _ops = ops,
         _schedule = scheduler ?? _defaultScheduler,
         _now = now ?? DateTime.now,
+        _onFatal = onFatal,
         _callState = initialState;
 
   final CallOps _ops;
   final RetryScheduler _schedule;
   final NowFn _now;
+
+  /// Вызывается при переходе в терминальный Failed (в т.ч. когда исчерпаны
+  /// попытки реконнекта) — виджет по нему авто-закрывает экран звонка. Раньше
+  /// закрытие делал `_onError` виджета, но внутренний max-attempts путь его
+  /// обходил (аудит ревью Stage B, регресс #2).
+  final VoidCallback? _onFatal;
 
   /// Максимум попыток ICE-restart перед тем как признать звонок упавшим.
   static const int maxReconnectAttempts = 5;
@@ -86,6 +94,10 @@ class CallSessionController extends ChangeNotifier {
 
   DateTime? _lastIceRestartTime;
   bool _isClosed = false;
+  // Идёт ли попытка ICE-restart прямо сейчас (в т.ч. await restartIce). Не даёт
+  // внешнему триггеру и запланированному повтору совпасть и запустить две
+  // параллельные цепочки реконнекта (аудит ревью Stage B, новый race).
+  bool _iceRestartInFlight = false;
 
   static void _defaultScheduler(Duration delay, VoidCallback action) {
     Future.delayed(delay, action);
@@ -127,7 +139,7 @@ class CallSessionController extends ChangeNotifier {
   /// Обновить состояние сети (из подписки NetworkMonitor во виджете).
   void updateNetworkState(NetworkState state) {
     _networkState = state;
-    notifyListeners();
+    _notify();
   }
 
   /// Обновить статус WebSocket (из подписки во виджете). Если WS восстановился
@@ -135,7 +147,7 @@ class CallSessionController extends ChangeNotifier {
   void updateWsStatus(ConnectionStatus status) {
     final previous = _wsStatus;
     _wsStatus = status;
-    notifyListeners();
+    _notify();
     if (previous != ConnectionStatus.Connected &&
         status == ConnectionStatus.Connected &&
         _isReconnecting) {
@@ -151,8 +163,22 @@ class CallSessionController extends ChangeNotifier {
       _reconnectAttempts = 0;
       _callState = CallState.Reconnecting;
       _debugStatus = 'Connection lost...';
-      notifyListeners();
+      _notify();
     }
+  }
+
+  /// Переход в Connecting: offer отправлен (исходящий) либо звонок принят
+  /// (входящий). Мирроринг `setState(() => _callState = Connecting)`.
+  void onConnecting() {
+    _callState = CallState.Connecting;
+    _notify();
+  }
+
+  /// Обновить отображаемый статус (напр. "Answer received", "ICE restart...").
+  /// Не меняет `callState` — только подпись для UI.
+  void setDebugStatus(String status) {
+    _debugStatus = status;
+    _notify();
   }
 
   /// Восстановление сети -> пробуем ICE-restart, если мы в реконнекте
@@ -163,7 +189,8 @@ class CallSessionController extends ChangeNotifier {
     }
   }
 
-  /// Попытка ICE-restart с дебаунсом, ограничением попыток и повторами
+  /// ВНЕШНЯЯ точка входа реконнекта (события сети/WS): с дебаунсом, чтобы
+  /// близкие по времени триггеры не запускали несколько параллельных цепочек
   /// (мирроринг `_attemptIceRestart`).
   Future<void> attemptIceRestart() async {
     if (_isClosed) return;
@@ -174,37 +201,53 @@ class CallSessionController extends ChangeNotifier {
         now.difference(_lastIceRestartTime!) < iceRestartDebounce) {
       return;
     }
-    _lastIceRestartTime = now;
+    await _runIceRestart();
+  }
 
-    if (_reconnectAttempts >= maxReconnectAttempts) {
-      onError('Failed to restore connection');
-      return;
-    }
-
-    _reconnectAttempts++;
-    _debugStatus = 'Reconnecting... ($_reconnectAttempts)';
-    notifyListeners();
-
-    // Ждём восстановления WebSocket, иначе рестарт-offer не уйдёт.
-    if (_wsStatus != ConnectionStatus.Connected) {
-      _scheduleRetry(const Duration(seconds: 2));
-      return;
-    }
-
+  /// Одна попытка ICE-restart + планирование повтора. Запланированные повторы
+  /// зовут ЭТОТ метод НАПРЯМУЮ, в обход дебаунса: иначе повтор с задержкой меньше
+  /// дебаунса всегда съедался бы и реконнект умирал после одной попытки
+  /// (аудит ревью Stage B, регресс #1).
+  Future<void> _runIceRestart() async {
+    // Гвард от параллельных цепочек: пока попытка в полёте (включая await
+    // restartIce), второй запуск не стартуем.
+    if (_isClosed || _iceRestartInFlight) return;
+    _iceRestartInFlight = true;
     try {
-      final ok = await _ops.restartIce();
-      if (!ok) {
+      _lastIceRestartTime = _now();
+
+      if (_reconnectAttempts >= maxReconnectAttempts) {
+        onError('Failed to restore connection');
+        return;
+      }
+
+      _reconnectAttempts++;
+      _debugStatus = 'Reconnecting... ($_reconnectAttempts)';
+      _notify();
+
+      // Ждём восстановления WebSocket, иначе рестарт-offer не уйдёт.
+      if (_wsStatus != ConnectionStatus.Connected) {
+        _scheduleRetry(const Duration(seconds: 2));
+        return;
+      }
+
+      try {
+        final ok = await _ops.restartIce();
+        if (!ok) {
+          _scheduleRetry(const Duration(seconds: 3));
+        }
+      } catch (_) {
         _scheduleRetry(const Duration(seconds: 3));
       }
-    } catch (_) {
-      _scheduleRetry(const Duration(seconds: 3));
+    } finally {
+      _iceRestartInFlight = false;
     }
   }
 
   void _scheduleRetry(Duration delay) {
     _schedule(delay, () {
       if (!_isClosed && _isReconnecting) {
-        attemptIceRestart();
+        _runIceRestart(); // намеренный повтор — минуя дебаунс
       }
     });
   }
@@ -215,7 +258,7 @@ class CallSessionController extends ChangeNotifier {
     _isReconnecting = false;
     _reconnectAttempts = 0;
     _callState = CallState.Connected;
-    notifyListeners();
+    _notify();
   }
 
   /// Собеседник положил трубку: терминальное состояние Rejected (навигацию/поп
@@ -223,14 +266,25 @@ class CallSessionController extends ChangeNotifier {
   void onRemoteHangup() {
     _isReconnecting = false;
     _callState = CallState.Rejected;
-    notifyListeners();
+    _notify();
   }
 
   /// Неустранимая ошибка (в т.ч. исчерпаны попытки реконнекта) -> Failed.
+  /// Дёргает [_onFatal], чтобы виджет авто-закрыл экран — в т.ч. на внутреннем
+  /// max-attempts пути, который раньше `_safePop` не вызывал (регресс #2).
   void onError(String message) {
     _isReconnecting = false;
     _callState = CallState.Failed;
     _debugStatus = message;
+    _notify();
+    _onFatal?.call();
+  }
+
+  /// notify с гуардом на закрытие: после dispose асинхронный сигналинг-колбэк
+  /// мог бы дёрнуть мутатор и уронить `notifyListeners` на disposed-объекте в
+  /// debug (аудит ревью Stage B). При _isClosed просто ничего не делаем.
+  void _notify() {
+    if (_isClosed) return;
     notifyListeners();
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orpheus_project/services/call_session_controller.dart';
 import 'package:orpheus_project/services/websocket_service.dart' show ConnectionStatus;
@@ -11,6 +13,18 @@ class _FakeOps implements CallOps {
   Future<bool> restartIce() async {
     restartIceCalls++;
     return result;
+  }
+}
+
+/// Peer с зависающим restartIce (через Completer) — чтобы проверить in-flight гвард.
+class _PendingOps implements CallOps {
+  int calls = 0;
+  final Completer<bool> completer = Completer<bool>();
+
+  @override
+  Future<bool> restartIce() {
+    calls++;
+    return completer.future;
   }
 }
 
@@ -86,6 +100,19 @@ void main() {
       expect(c.callState, CallState.Connected);
       expect(c.isReconnecting, isFalse);
       expect(c.reconnectAttempts, 0);
+    });
+
+    test('onConnecting -> Connecting', () {
+      final c = CallSessionController(ops: _FakeOps(), initialState: CallState.Dialing);
+      c.onConnecting();
+      expect(c.callState, CallState.Connecting);
+    });
+
+    test('setDebugStatus меняет подпись, не трогая callState', () {
+      final c = CallSessionController(ops: _FakeOps(), initialState: CallState.Connecting);
+      c.setDebugStatus('Answer received');
+      expect(c.debugStatus, 'Answer received');
+      expect(c.callState, CallState.Connecting);
     });
 
     test('onRemoteHangup -> Rejected', () {
@@ -172,6 +199,51 @@ void main() {
       expect(h.c.debugStatus, 'Failed to restore connection');
     });
 
+    test('запланированный повтор НЕ съедается дебаунсом (регресс #1)', () async {
+      final h = makeReconnecting(wsConnected: false);
+      await h.c.attemptIceRestart();
+      expect(h.c.reconnectAttempts, 1);
+      expect(h.scheduled, isNotEmpty);
+      // Запускаем запланированный повтор БЕЗ сдвига часов (в пределах 3с дебаунса).
+      // Должен пройти в обход дебаунса и инкрементнуть попытку.
+      h.scheduled.last();
+      await Future<void>.delayed(Duration.zero);
+      expect(h.c.reconnectAttempts, 2,
+          reason: 'намеренный повтор не должен быть задебаунсен');
+    });
+
+    test('onError дёргает onFatal (авто-закрытие, регресс #2)', () {
+      var fatal = 0;
+      final c = CallSessionController(
+        ops: _FakeOps(),
+        onFatal: () => fatal++,
+        initialState: CallState.Connected,
+      );
+      c.onError('boom');
+      expect(c.callState, CallState.Failed);
+      expect(fatal, 1);
+    });
+
+    test('исчерпание попыток реконнекта дёргает onFatal (регресс #2)', () async {
+      var fatal = 0;
+      var now = DateTime(2024, 1, 1);
+      final c = CallSessionController(
+        ops: _FakeOps(),
+        now: () => now,
+        scheduler: (d, a) {},
+        onFatal: () => fatal++,
+        initialState: CallState.Connected,
+      );
+      c.onNetworkLost();
+      for (var i = 0; i < CallSessionController.maxReconnectAttempts; i++) {
+        await c.attemptIceRestart();
+        now = now.add(const Duration(seconds: 4));
+      }
+      await c.attemptIceRestart(); // attempts >= max -> onError -> onFatal
+      expect(c.callState, CallState.Failed);
+      expect(fatal, 1);
+    });
+
     test('ws не Connected: restartIce НЕ зовётся, планируется повтор', () async {
       final h = makeReconnecting(wsConnected: false);
       await h.c.attemptIceRestart();
@@ -195,6 +267,27 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(h.c.reconnectAttempts, 1);
       expect(h.ops.restartIceCalls, 1);
+    });
+
+    test('in-flight гвард: внешний триггер во время await не запускает вторую цепочку',
+        () async {
+      var now = DateTime(2024, 1, 1);
+      final ops = _PendingOps();
+      final c = CallSessionController(
+        ops: ops,
+        now: () => now,
+        scheduler: (d, a) {},
+        initialState: CallState.Connected,
+      );
+      c.onNetworkLost(); // Reconnecting, ws Connected по умолчанию
+      final f1 = c.attemptIceRestart(); // _runIceRestart -> await restartIce (висит)
+      expect(ops.calls, 1);
+      // Сдвигаем часы за дебаунс и триггерим внешний вызов, пока restartIce в полёте.
+      now = now.add(const Duration(seconds: 5));
+      await c.attemptIceRestart(); // дебаунс пройден, но in-flight гвард блокирует
+      expect(ops.calls, 1, reason: 'вторая параллельная цепочка не должна стартовать');
+      ops.completer.complete(true);
+      await f1;
     });
 
     test('onNetworkRestored вне реконнекта — no-op', () async {

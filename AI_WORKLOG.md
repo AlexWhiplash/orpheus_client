@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-07-03 — ARCH-3/#1 шаг 3 (Stage B): перепровязка call_screen на контроллер
+
+Виджет `_CallScreenState` переведён на `CallSessionController`.
+
+Приём низкого риска: поля состояния (`_callState/_debugStatus/_networkState/
+_wsStatus/_isReconnecting/_reconnectAttempts`) стали ГЕТТЕРАМИ-делегатами к
+контроллеру -> все ЧТЕНИЯ (десятки, включая UI) не тронуты, меняли только ЗАПИСИ.
+- Создание контроллера в initState (+ `_WebRtcCallOps` — реализация CallOps поверх
+  WebRTCService/сигналинга); `addListener(_onControllerChanged)` ПОСЛЕДНИМ (чтобы
+  синхронные нач. правки сети/WS не дёргали setState в initState).
+- Переходы (`onConnecting/onConnected/onRemoteHangup/onError`), 3 подписки
+  (сеть/WS/onIceRestartNeeded), входящий ICE-restart (`setDebugStatus`) -> контроллер.
+- Удалены `_handleNetworkLost/_handleNetworkRestored/_attemptIceRestart` (в
+  контроллере); осталась WebRTC-операция `_performIceRestart` за `CallOps`.
+- dispose: removeListener + controller.dispose (стопит запланированные повторы).
+
+**Адверсариал-ревью Stage B поймало 2 РЕАЛЬНЫХ регресса реконнекта — исправлены:**
+1. (#1, major) запланированный повтор при ws-down ставился на 2с < дебаунса 3с ->
+   всегда съедался, реконнект умирал после 1 попытки. Фикс: split на debounced
+   `attemptIceRestart` (внешние триггеры) + `_runIceRestart` (повторы, минуя дебаунс).
+2. (#2) внутренний max-attempts путь звал `controller.onError` минуя `_safePop` ->
+   экран не закрывался. Фикс: callback `onFatal` (единый путь авто-закрытия для
+   прямых ошибок И исчерпания попыток).
+Плюс `_notify()` с гуардом `_isClosed` (нет throw notifyListeners после dispose).
+
+**Повторное ревью фиксов:** оба регресса CONFIRMED-FIXED, `_notify`-гуард sound.
+Нашло один НОВЫЙ минорный race: раз повторы минуют дебаунс, внешний триггер мог
+совпасть с запланированным повтором -> две параллельные цепочки. Закрыто флагом
+`_iceRestartInFlight` (try/finally вокруг `_runIceRestart`). На фиксы+гвард добавлено
+4 теста (повтор не дебаунсится, onError->onFatal, exhaustion->onFatal, in-flight гвард).
+
+**ОСТАЁТСЯ (device-gated, перед релизом):** прогон реального звонка — слышимость,
+реконнект при смене Wi-Fi<->cellular, звонок из убитого состояния, авто-закрытие.
+
+Проверки: analyze 0 ошибок, test 353 passed, debug APK собран, адверсариал-ревью x2.
+
+---
+
 ## 2026-07-03 — ARCH-3/#1 шаг 2: CallSessionController + тесты (dead code)
 
 Поэтапный вынос логики звонка (по выбору владельца: сначала контроллер+тесты как

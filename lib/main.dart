@@ -230,10 +230,16 @@ Future<void> _initializeApp() async {
       offerData = offerJson;
     }
     final callId = data['call_id'] ?? data['callId'] ?? data['id'];
+    // ВАЖНО: тап/полноэкранный показ уведомления входящего != согласие ответить.
+    // Открываем ЗВОНЯЩИЙ экран (рингтон + кнопка "Ответить") и ждём пользователя.
+    // На локскрине fullScreenIntent сам запускает активити и дёргает этот колбэк
+    // без реального нажатия — с autoAnswer:true это авто-поднимало трубку на
+    // заблокированном телефоне (могли слушать). Реальный "Ответить" идёт отдельным
+    // путём CallKit accept (main_callkit), там autoAnswer корректен.
     _navigateToCallScreen(
       callerKey.toString(),
       offerData,
-      autoAnswer: true,
+      autoAnswer: false,
       callId: callId?.toString(),
     );
   };

@@ -404,8 +404,7 @@ class IncomingMessageHandler {
     String displayName = callerName;
     bool hideCallerIdentity = false;
     try {
-      if (await DeviceSettingsService.isDeviceLocked() &&
-          !(await DeviceSettingsService.showCallerNameWhenLocked())) {
+      if (await DeviceSettingsService.hideCallerIdentityOnIncoming()) {
         hideCallerIdentity = true;
         displayName = await NotificationService.incomingEncryptedCallLabel();
       }

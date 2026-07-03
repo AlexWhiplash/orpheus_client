@@ -19,6 +19,7 @@ import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
+import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/incoming_call_buffer.dart';
 import 'package:orpheus_project/services/incoming_message_handler.dart';
 import 'package:orpheus_project/services/locale_service.dart';
@@ -429,6 +430,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Начальное значение foreground-флага (приватность имени звонка): true только
+    // если приложение реально стартует на переднем плане.
+    DeviceSettingsService.setAppInForeground(
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed);
     _keysExist = _hasKeys;
     _isLocked = authService.requiresUnlock;
     RawKeyboard.instance.addListener(_handleRawKeyEvent);
@@ -622,7 +627,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     
     // Обновляем глобальный флаг состояния приложения
     isAppInForeground = (state == AppLifecycleState.resumed);
-    
+    // Дублируем в SharedPreferences: push-изолят читает это, чтобы решить, прятать
+    // ли имя звонящего на входящем (приватность на локскрине).
+    DeviceSettingsService.setAppInForeground(isAppInForeground);
+
     if (state == AppLifecycleState.resumed) {
       DebugLogger.info('LIFECYCLE', 'App in foreground, reconnecting WS...');
       // Reconnect WebSocket on return to app

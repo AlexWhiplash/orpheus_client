@@ -45,15 +45,24 @@ class DeviceSettingsService {
     await prefs.setBool(_setupDialogDismissedKey, dismissed);
   }
 
-  /// Заблокирован ли экран устройства (keyguard). false при ошибке / не-Android /
-  /// вызове из фонового изолята без активити — тогда вызывающий код трактует это
-  /// консервативно (для приватности имени звонка лучше считать «залочено»).
+  /// Заблокирован ли экран устройства (keyguard).
+  ///
+  /// ВАЖНО: вызывается из показа входящего звонка, в т.ч. из ОТДЕЛЬНОГО изолята
+  /// push-сервиса, где method-channel к MainActivity недоступен -> invokeMethod
+  /// падает. В этом случае (и на не-Android нет — там lockscreen'а нет) НЕЛЬЗЯ
+  /// вернуть false: это раскрыло бы имя звонящего на локскрине. Раз подтвердить
+  /// «разблокировано» не можем — консервативно считаем «заблокировано» (true),
+  /// т.е. прячем имя. Реально false вернём только когда канал ответил false.
   static Future<bool> isDeviceLocked() async {
     if (!Platform.isAndroid) return false;
     try {
-      return await _settingsChannel.invokeMethod<bool>('isDeviceLocked') ?? false;
+      final locked =
+          await _settingsChannel.invokeMethod<bool>('isDeviceLocked');
+      // null (канал недоступен/не ответил) -> приватный дефолт «заблокировано».
+      return locked ?? true;
     } catch (e) {
-      return false;
+      // Канал недоступен (фоновый изолят) -> приватный дефолт «заблокировано».
+      return true;
     }
   }
 
@@ -70,6 +79,30 @@ class DeviceSettingsService {
   static Future<void> setShowCallerNameWhenLocked(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_showCallerNameWhenLockedKey, value);
+  }
+
+  static const String _appInForegroundKey = 'app_in_foreground';
+
+  /// Флаг «Orpheus на переднем плане». Пишется из main-изолята по lifecycle,
+  /// читается в ЛЮБОМ изоляте (SharedPreferences), в т.ч. push-изолятом — в
+  /// отличие от keyguard-проверки через method-channel (в push-изоляте недоступна).
+  static Future<void> setAppInForeground(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_appInForegroundKey, value);
+  }
+
+  /// Прятать ли имя звонящего на входящем (приватность). Прячем, когда Orpheus НЕ
+  /// на переднем плане (заблокировано / свёрнуто / убито) И флаг «показывать имя
+  /// на локскрине» выключен. Имя видно только когда ты реально в приложении.
+  static Future<bool> hideCallerIdentityOnIncoming() async {
+    final prefs = await SharedPreferences.getInstance();
+    // reload: флаг foreground пишет main-изолят, а читаем часто из push-изолята —
+    // SharedPreferences кешируются per-isolate, без reload увидим устаревшее.
+    try {
+      await prefs.reload();
+    } catch (_) {}
+    if (prefs.getBool(_showCallerNameWhenLockedKey) ?? false) return false;
+    return !(prefs.getBool(_appInForegroundKey) ?? false);
   }
 
   /// Получить производителя устройства

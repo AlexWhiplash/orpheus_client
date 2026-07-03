@@ -183,8 +183,7 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
     // после разблокировки Orpheus.
     bool hideCallerIdentity = false;
     try {
-      if (await DeviceSettingsService.isDeviceLocked() &&
-          !(await DeviceSettingsService.showCallerNameWhenLocked())) {
+      if (await DeviceSettingsService.hideCallerIdentityOnIncoming()) {
         hideCallerIdentity = true;
         callerName =
             (await NotificationService.notificationL10n()).incomingEncryptedCall;

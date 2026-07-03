@@ -115,7 +115,7 @@
   "yesterday": "Вчера",
   
   "incomingCall": "Входящий звонок",
-  "incomingEncryptedCall": "Входящий зашифрованный звонок",
+  "incomingEncryptedCall": "Закрытая связь",
   "outgoingCall": "Исходящий звонок",
   "missedCall": "Пропущен звонок",
   "callLabel": "Звонок",

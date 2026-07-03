@@ -290,7 +290,7 @@ class L10nEn extends L10n {
   String get incomingCall => 'Incoming call';
 
   @override
-  String get incomingEncryptedCall => 'Incoming encrypted call';
+  String get incomingEncryptedCall => 'Secure connection';
 
   @override
   String get outgoingCall => 'Outgoing call';

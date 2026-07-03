@@ -586,7 +586,7 @@ abstract class L10n {
   /// Neutral incoming-call label shown on a locked device so the caller identity is not leaked on the lockscreen
   ///
   /// In en, this message translates to:
-  /// **'Incoming encrypted call'**
+  /// **'Secure connection'**
   String get incomingEncryptedCall;
 
   /// Outgoing call status

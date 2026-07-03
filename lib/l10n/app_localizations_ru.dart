@@ -294,7 +294,7 @@ class L10nRu extends L10n {
   String get incomingCall => 'Входящий звонок';
 
   @override
-  String get incomingEncryptedCall => 'Входящий зашифрованный звонок';
+  String get incomingEncryptedCall => 'Закрытая связь';
 
   @override
   String get outgoingCall => 'Исходящий звонок';

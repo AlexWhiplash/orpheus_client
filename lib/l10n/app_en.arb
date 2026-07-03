@@ -277,7 +277,7 @@
   
   "incomingCall": "Incoming call",
   "@incomingCall": {"description": "Incoming call status"},
-  "incomingEncryptedCall": "Incoming encrypted call",
+  "incomingEncryptedCall": "Secure connection",
   "@incomingEncryptedCall": {"description": "Neutral incoming-call label shown on a locked device so the caller identity is not leaked on the lockscreen"},
   
   "outgoingCall": "Outgoing call",

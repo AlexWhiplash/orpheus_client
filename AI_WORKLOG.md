@@ -5,6 +5,20 @@
 
 ---
 
+## 2026-07-03 — Fix: приложение поверх системного локскрина (device-тест)
+
+Симптом: просыпаешь заблокированный телефон — сразу виден Orpheus, минуя PIN
+устройства. Причина: `AndroidManifest.xml` объявлял `android:showWhenLocked="true"`
++ `android:turnScreenOn="true"` БЕЗУСЛОВНО на MainActivity, хотя onCreate-комментарий
+и enableCallMode/disableCallMode задумывали рантайм-управление «только во время
+звонка». Манифестные флаги — забытый вестигиальный код. Убраны из манифеста →
+дефолт уважает keyguard, показ поверх блокировки остаётся через рантайм
+`enableCallMode` (call_screen initState). ТРЕБУЕТ device-проверки: (а) разбудил
+локскрин — виден keyguard телефона, не Orpheus; (б) ВХОДЯЩИЙ ЗВОНОК всё ещё
+показывается поверх локскрина (рантайм-путь).
+
+---
+
 ## 2026-07-03 — Строгая блокировка на background (по запросу владельца)
 
 `didChangeAppLifecycleState`: в ветке `paused` теперь сразу `authService.lock()` +

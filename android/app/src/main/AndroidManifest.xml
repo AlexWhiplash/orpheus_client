@@ -58,9 +58,12 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true">
+            android:windowSoftInputMode="adjustResize">
+            <!-- showWhenLocked/turnScreenOn НЕ в манифесте: иначе приложение всегда
+                 рисуется поверх системного локскрина (можно увидеть его, не разблокировав
+                 телефон). Эти флаги ставятся в рантайме ТОЛЬКО во время звонка
+                 (MainActivity.enableCallMode), чтобы экран звонка показывался поверх
+                 блокировки, а в остальное время приложение уважало keyguard. -->
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"

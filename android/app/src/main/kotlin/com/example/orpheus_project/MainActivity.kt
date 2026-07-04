@@ -54,6 +54,23 @@ class MainActivity: FlutterFragmentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) // чтобы дальнейший getIntent()/роутинг видели accept-intent
+        if (hasActiveCall()) enableCallMode()
+    }
+
+    // Ключевой хук: при ответе на звонок плагин flutter_callkit_incoming
+    // переиспользует существующий singleTop MainActivity (SINGLE_TOP|REORDER_TO_FRONT|
+    // CLEAR_TOP, без NEW_TASK) -> приходит onNewIntent/onStart/onResume, а onCreate НЕ
+    // вызывается. onStart выполняется РАНЬШЕ onResume и на холодном, и на тёплом
+    // пути, поэтому showWhenLocked успевает встать до компоновки окна над keyguard.
+    // Гейт hasActiveCall() -> вне живого звонка это no-op (ничего поверх локскрина).
+    override fun onStart() {
+        super.onStart()
+        if (hasActiveCall()) enableCallMode()
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         GeneratedPluginRegistrant.registerWith(flutterEngine)
 

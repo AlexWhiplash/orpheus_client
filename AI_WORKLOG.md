@@ -18,15 +18,28 @@ keyguard-фикс (убрал requestDismissKeyguard ради post-call флеш
 — но тот зовётся из CallScreen.initState, ПОЗЖЕ запуска активити; окно успевает выйти
 под keyguard -> PIN. А requestDismissKeyguard как раз показывал PIN-промпт.
 
-Итоговый fix: (1) в `MainActivity.onCreate` читаем межизолятный флаг активного звонка
-(`FlutterSharedPreferences` -> `flutter.orpheus_active_call_id` + `_ts`, TTL 15с, от
-CallIdStorage) и, если звонок активен, зовём `enableCallMode()` СРАЗУ — окно выходит
-поверх локскрина до показа. (2) Убрал requestDismissKeyguard/FLAG_DISMISS_KEYGUARD —
-keyguard не снимаем, showWhenLocked достаточно и интерактивно. (3) Оставил листенер
-`CallStateService.isCallActive` в main.dart: по завершении звонка при
-`DeviceSettingsService.isDeviceLocked()` -> `authService.lock()` (свой PIN вместо
-мелькания чата). Проверки: analyze 0, test 353. Урок: keyguard/lockscreen-флоу хрупкий,
-правки только с device-проверкой ОБОИХ сценариев (ответ И post-call).
+Первый заход onCreate-гейта НЕ помог — device-тест: ответ всё равно на PIN. Запустил
+multi-agent аудит (плагин + наш код + канонический паттерн). ТОЧНЫЙ корень: плагин
+flutter_callkit_incoming при accept форграундит приложение через
+getLaunchIntentForPackage + SINGLE_TOP|REORDER_TO_FRONT|CLEAR_TOP (без NEW_TASK). Наш
+MainActivity singleTop -> живой (свёрнутый) экземпляр ПЕРЕИСПОЛЬЗУЕТСЯ: приходит
+onNewIntent/onStart/onResume, а onCreate НЕ вызывается. Мой onCreate-гейт при живом
+приложении не срабатывал -> showWhenLocked не встал -> окно под keyguard -> PIN.
+setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕДУЮЩУЮ компоновку, не
+перекрывает уже показанный keyguard ретроактивно.
+
+Итоговый fix (MainActivity.kt): `enableCallMode()` под `hasActiveCall()` теперь в
+`onStart()` (выполняется раньше onResume и на холодном, и на тёплом пути — единственный
+хук, покрывающий все пути ответа) + `onNewIntent()` (setIntent для роутинга); onCreate-
+гейт оставлен для killed cold-start. Убрал requestDismissKeyguard. Листенер
+`CallStateService.isCallActive` в main.dart оставлен (post-call app-lock).
+
+ИЗВЕСТНЫЙ ОСТАТОК (follow-up): плагинный `CallkitIncomingActivity.onAcceptClick` сам
+зовёт `requestDismissKeyguard` -> на secure-устройстве возможен кратковременный PIN при
+ответе с ПОЛНОЭКРАННОГО ринга. Лечится ответом с heads-up уведомления
+(getAcceptPendingIntent, там requestDismissKeyguard нет) или форком плагина. Проверки:
+analyze 0, test 353. Урок: keyguard/lockscreen-флоу хрупкий, правки только с device-
+проверкой ОБОИХ сценариев (ответ И post-call).
 
 ## 2026-07-03 — Fix: перезвон в пределах 30с не звонит — уникальный call_id исходящего
 

@@ -46,3 +46,9 @@ test_results_*.txt
 
 # Vendored fork of flutter_callkit_incoming (see ORPHEUS_FORK.md)
 # example/ excluded; keep the rest tracked.
+
+# Локальный пакет для передачи партнёру (содержит крупный APK и копии docs)
+Колобанов/
+
+# APK-сборки не храним в гите (билд-артефакты)
+*.apk

@@ -342,7 +342,11 @@ void _listenForMessages() {
     },
     emitSignaling: (msg) => signalingStreamController.add(msg),
     emitChatUpdate: (senderKey) => messageUpdateController.add(senderKey),
-    isAppInForeground: () => isAppInForeground,
+    // Под локом (requiresUnlock) НЕ считаем приложение foreground для показа
+    // входящего: иначе handler открыл бы CallScreen напрямую поверх/под локскрином
+    // (недетерминированно, обходит лок). При locked -> ветка CallKit + pending,
+    // а ответ обрабатывается после ввода PIN Orpheus (processPendingCallAfterUnlock).
+    isAppInForeground: () => isAppInForeground && !authService.requiresUnlock,
     // КРИТИЧНО: передаём проверку активного звонка И обработки CallKit
     isCallActive: () => CallStateService.instance.isCallActive.value || _isProcessingCallKitAnswer,
   );

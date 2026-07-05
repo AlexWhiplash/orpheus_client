@@ -114,6 +114,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   final List<double> _audioWaveData = List.generate(20, (_) => 0.0);
   Timer? _waveTimer;
 
+  /// Watchdog: если после ОТВЕТА звонок не соединился — ICE-restart (отложенный
+  /// ответ на локе теряет ранние кандидаты звонящего). См. _scheduleAnswerConnectWatchdog.
+  Timer? _answerConnectWatchdog;
+
   @override
   void initState() {
     super.initState();
@@ -532,9 +536,33 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           );
         },
       );
+      _scheduleAnswerConnectWatchdog();
     } catch (e) {
       _onError("Connect Error");
     }
+  }
+
+  /// Watchdog после ОТВЕТА. Если за отведённое время звонок не соединился —
+  /// инициируем ICE-restart (пере-обмен кандидатами). Нужен для ОТЛОЖЕННОГО
+  /// ответа (звонок принят на заблокированном телефоне после ввода PIN): ранние
+  /// ICE-кандидаты звонящего теряются, пока приёмник ещё не готов/не подключён к
+  /// WS, и обычный обмен не связывается. Для нормального (быстрого) ответа звонок
+  /// успевает стать Connected раньше — тогда watchdog просто ничего не делает.
+  void _scheduleAnswerConnectWatchdog() {
+    _answerConnectWatchdog?.cancel();
+    _answerConnectWatchdog = Timer(const Duration(seconds: 6), () {
+      if (!mounted || _isDisposed) return;
+      if (_callState == CallState.Connected) return;
+      _addLog("⏱️ Нет коннекта через 6с после ответа — ICE-restart");
+      _performIceRestart();
+      // Вторая попытка, если и после restart не связалось.
+      _answerConnectWatchdog = Timer(const Duration(seconds: 8), () {
+        if (!mounted || _isDisposed) return;
+        if (_callState == CallState.Connected) return;
+        _addLog("⏱️ Всё ещё нет коннекта — повторный ICE-restart");
+        _performIceRestart();
+      });
+    });
   }
 
   void _endCallButton() async {
@@ -592,6 +620,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   }
 
   void _onConnected() {
+    _answerConnectWatchdog?.cancel();
     SoundService.instance.stopAllSounds();
     SoundService.instance.playConnectedSound();
 
@@ -1073,6 +1102,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _stopwatch.stop();
     _durationTimer?.cancel();
     _waveTimer?.cancel();
+    _answerConnectWatchdog?.cancel();
     _signalingSubscription?.cancel();
     _webrtcLogSubscription?.cancel();
     _networkSubscription?.cancel();

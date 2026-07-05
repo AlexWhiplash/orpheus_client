@@ -40,6 +40,22 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — Вариант A: ICE-restart watchdog после отложенного ответа
+
+Device: после форка+security+WS-wait ответ на локе доходит (ANSWERING, call-answer
+по WS Connected), но НИ одного входящего ICE-кандидата от звонящего -> нет Connected.
+Корень: звонящий шлёт кандидаты сразу после offer, а залоченный/стартующий приёмник
+готов их принять лишь через ~12с; сервер не очередует -> ранние кандидаты звонящего
+теряются. Обычный звонок (быстрый ответ) не страдает.
+
+Fix (A): в `_acceptCall` после `answerCall` ставим `_answerConnectWatchdog` — если за
+6с не Connected, вызываем `_performIceRestart` (приёмник инициирует ICE-restart:
+createOffer из stable валиден -> шлёт 'ice-restart' -> звонящий отвечает
+'ice-restart-answer' и ПЕРЕ-шлёт свои кандидаты через уже поднятый WS -> connect).
+Вторая попытка через +8с. Отмена в _onConnected и dispose. Для быстрого ответа
+watchdog не срабатывает (уже Connected). Проверки: analyze 0, test 353. Требует
+device-проверки: ответ на локе -> PIN -> через ~6с звонок соединяется со звуком.
+
 ## 2026-07-05 — SECURITY: PIN приложения обходился запушенным маршрутом поверх лока
 
 Владелец: разблокировал устройство (PIN телефона) -> открылся чат Orpheus В ОБХОД

@@ -117,6 +117,21 @@ class WebSocketService {
     _initConnection();
   }
 
+  /// Вызывать при возврате приложения на передний план / разблокировке.
+  ///
+  /// Обычный [connect] делает no-op при статусе Connecting — но после фона сокет
+  /// часто мёртв, а статус залип в Connecting (реконнект-таймер не тикал в фоне),
+  /// и приложение висело в Connecting до watchdog/backoff (особенно Samsung).
+  /// Здесь: если WS НЕ Connected — форсируем свежий реконнект (закрыть возможно
+  /// мёртвый сокет + переподключиться со сбросом backoff). Если уже Connected —
+  /// не трогаем (живость держит ping-pong).
+  void forceReconnectIfStale(String myPublicKey) {
+    _currentPublicKey = myPublicKey;
+    _isDisconnectingIntentional = false;
+    if (_statusController.value == ConnectionStatus.Connected) return;
+    _forceReconnect(reason: 'app resumed (was ${_statusController.value})');
+  }
+
   void _initConnection() {
     if (_currentPublicKey == null) return;
 
@@ -131,7 +146,9 @@ class WebSocketService {
     // .then по gen-guard — без второго живого сокета), ротируем хост и уходим в
     // реконнект.
     _connectTimeout?.cancel();
-    _connectTimeout = Timer(const Duration(seconds: 20), () {
+    // 8с (было 20): на флаки-сотовой (Samsung) connect часто зависает, и 20с
+    // держали WS в Connecting слишком долго. Быстрее сдаёмся -> быстрее реконнект.
+    _connectTimeout = Timer(const Duration(seconds: 8), () {
       if (gen != _connectionGeneration || _channel != null) return;
       DebugLogger.warn('WS', 'Connect timeout — abandoning attempt');
       _connectionGeneration++;

@@ -40,6 +40,21 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — Вариант А: живучесть основного WS (корень флаки Samsung)
+
+Взялись за корень (после чекпоинта). 3 точечные правки websocket_service + main.dart:
+1. connect-watchdog 20с -> 8с: на флаки-сотовой connect зависал, и 20с держали WS в
+   Connecting слишком долго -> быстрее сдаёмся, быстрее реконнект.
+2. Новый `forceReconnectIfStale(pubkey)`: если WS НЕ Connected — форсируем свежий
+   реконнект (закрыть возможно-мёртвый сокет + connect со сбросом backoff). Обычный
+   `connect()` делает no-op при Connecting, а после фона сокет часто мёртв, статус
+   залип в Connecting (реконнект-таймер не тикал в фоне) -> висели до watchdog/backoff.
+3. main.dart resume + `_onUnlocked` зовут `forceReconnectIfStale` вместо `connect`
+   (если уже Connected — не трогаем, живость держит ping-pong).
+Ожидание: после лока/фона основной WS у Samsung встаёт за пару секунд, сенды идут
+Connected -> разблокирует presence И answer-over-lock. Проверки: analyze 0 errors,
+test 353. Требует device-теста на Samsung.
+
 ## 2026-07-05 — ЧЕКПОИНТ answer-over-lock (владелец: Б, потом вернёмся к А)
 
 Зафиксировали состояние. Сделано и закоммичено: форк плагина (нет системного PIN),

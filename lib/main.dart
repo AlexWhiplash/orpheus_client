@@ -600,9 +600,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // гейтится на !_isLocked, а со строгим локом приложение часто СТАРТУЕТ
     // заблокированным; на холодном старте события resumed нет (уже resumed), так
     // что без этого основной WS не встаёт до ручного сворачивания-разворачивания
-    // (не работают presence и исходящие звонки). connect идемпотентен.
+    // (не работают presence и исходящие звонки). forceReconnectIfStale поднимает
+    // WS даже если он залип в Connecting после фона (частый кейс на Samsung).
     if (_keysExist && cryptoService.publicKeyBase64 != null) {
-      websocketService.connect(cryptoService.publicKeyBase64!);
+      websocketService.forceReconnectIfStale(cryptoService.publicKeyBase64!);
     }
 
     // Обработать отложенный звонок если есть
@@ -705,9 +706,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.resumed) {
       DebugLogger.info('LIFECYCLE', 'App in foreground, reconnecting WS...');
-      // Reconnect WebSocket on return to app
+      // Reconnect WebSocket on return to app. forceReconnectIfStale вместо connect:
+      // после фона сокет часто мёртв, а статус залип в Connecting -> connect() был бы
+      // no-op и WS висел бы в Connecting; здесь форсируем свежий реконнект.
       if (cryptoService.publicKeyBase64 != null) {
-        websocketService.connect(cryptoService.publicKeyBase64!);
+        websocketService.forceReconnectIfStale(cryptoService.publicKeyBase64!);
       }
       // Clear notification tray when user opens the app
       NotificationService.hideMessageNotifications();

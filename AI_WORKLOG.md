@@ -40,6 +40,23 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — Вариант Б: локальный форк flutter_callkit_incoming (убран dismissKeyguard)
+
+Владелец выбрал форк плагина (Б1, локальная копия). Исходник плагина 3.1.3:
+`CallkitIncomingActivity.onAcceptClick()` после запуска нашего приложения зовёт
+`dismissKeyguard()` -> `requestDismissKeyguard` -> на secure Samsung жёсткий PIN.
+
+Сделано: вендорил `flutter_callkit_incoming-3.1.3` в `third_party/` (без example),
+удалил ТОЛЬКО вызов `dismissKeyguard()` в onAcceptClick (метод оставлен, просто не
+зовётся). Подключил через `dependency_overrides: path` в pubspec.yaml; обычная
+`^3.1.3` в dependencies ОСТАВЛЕНА, чтобы `flutter pub outdated` видел upstream-апдейты.
+`flutter pub get` -> "3.1.3 from path ... (overridden)".
+
+Трекинг обновлений: `tool/check_callkit_fork.ps1` (сравнивает базу форка с pub.dev,
+exit 1 если новее) + `third_party/flutter_callkit_incoming/ORPHEUS_FORK.md` (диф +
+инструкция переприменения). Требует device-проверки: ответ на заблокированном
+Samsung И Pixel — открывается ли звонок поверх лока БЕЗ системного PIN.
+
 ## 2026-07-05 — Fix: Samsung жёстко на PIN при ответе — отключаем полноэкранный ринг
 
 Device: Pixel (GrapheneOS) после onStart-фикса отвечал (звонок Connected), но Samsung

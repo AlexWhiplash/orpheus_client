@@ -43,3 +43,6 @@ docs/PRESENTATION_Orpheus.md
 test_reports/
 test_results_*.txt
 *.tmp
+
+# Vendored fork of flutter_callkit_incoming (see ORPHEUS_FORK.md)
+# example/ excluded; keep the rest tracked.

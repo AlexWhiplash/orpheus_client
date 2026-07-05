@@ -69,6 +69,15 @@ dependencies:
   # Мониторинг ошибок
   sentry_flutter: ^9.23.0
 
+# Локальный форк flutter_callkit_incoming (база 3.1.3): удалён requestDismissKeyguard
+# в accept, чтобы ответ на заблокированном телефоне не выкидывал на системный PIN.
+# Обычная зависимость выше (^3.1.3) СПЕЦИАЛЬНО оставлена — тогда `flutter pub outdated`
+# продолжает сообщать о новых версиях upstream. См.
+# third_party/flutter_callkit_incoming/ORPHEUS_FORK.md
+dependency_overrides:
+  flutter_callkit_incoming:
+    path: third_party/flutter_callkit_incoming
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

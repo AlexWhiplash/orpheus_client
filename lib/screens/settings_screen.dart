@@ -8,6 +8,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/screens/debug_logs_screen.dart';
 import 'package:orpheus_project/screens/help_screen.dart';
+import 'package:orpheus_project/screens/purchase_screen.dart';
 import 'package:orpheus_project/screens/security_settings_screen.dart';
 import 'package:orpheus_project/screens/support_chat_screen.dart';
 import 'package:orpheus_project/services/auth_service.dart';
@@ -280,6 +281,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 14),
             _MenuCard(
               l10n: l10n,
+              onBuyPremium: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PurchaseScreen(
+                    onConfirmed: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+              ),
               onSecurity: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -539,6 +548,7 @@ class _StatsCard extends StatelessWidget {
 class _MenuCard extends StatelessWidget {
   const _MenuCard({
     required this.l10n,
+    required this.onBuyPremium,
     required this.onSecurity,
     required this.onSupport,
     required this.onHelp,
@@ -549,6 +559,7 @@ class _MenuCard extends StatelessWidget {
   });
 
   final L10n l10n;
+  final VoidCallback onBuyPremium;
   final VoidCallback onSecurity;
   final VoidCallback onSupport;
   final VoidCallback onHelp;
@@ -573,6 +584,9 @@ class _MenuCard extends StatelessWidget {
         type: MaterialType.transparency,
         child: Column(
           children: [
+            _tile(context, Icons.workspace_premium, l10n.buyLicense, null,
+                onBuyPremium),
+            _divider(),
             _tile(context, Icons.security, l10n.security, l10n.securityDesc,
                 onSecurity),
           _divider(),

@@ -1570,4 +1570,62 @@ class L10nRu extends L10n {
   @override
   String get verifyKeyHint =>
       'Сверьте этот ключ с контактом по доверенному каналу, чтобы убедиться, что переписку никто не перехватывает.';
+
+  @override
+  String get buyLicense => 'Купить лицензию';
+
+  @override
+  String get premiumPurchaseTitle => 'Покупка Premium';
+
+  @override
+  String get choosePlan => 'Выберите тариф';
+
+  @override
+  String get choosePlanHint =>
+      'Оплата в USDT (TRC-20). Лицензия активируется автоматически после оплаты.';
+
+  @override
+  String get plansLoadError =>
+      'Не удалось загрузить тарифы. Проверьте соединение и попробуйте снова.';
+
+  @override
+  String get createInvoiceError =>
+      'Не удалось создать счёт. Попробуйте ещё раз.';
+
+  @override
+  String get paymentNetworkWarning =>
+      'Отправляйте ТОЛЬКО USDT в сети TRON (TRC-20). Средства в любой другой сети будут потеряны.';
+
+  @override
+  String get walletAddress => 'Адрес кошелька';
+
+  @override
+  String get amountToPay => 'Сумма';
+
+  @override
+  String get scanQrHint =>
+      'Отсканируйте QR-код своим USDT (TRC-20) кошельком или скопируйте адрес ниже.';
+
+  @override
+  String get awaitingPayment => 'Ожидаем оплату…';
+
+  @override
+  String get awaitingPaymentHint =>
+      'Экран разблокируется автоматически, как только оплата подтвердится (около минуты).';
+
+  @override
+  String get iPaid => 'Я оплатил(а)';
+
+  @override
+  String get invoiceExpired => 'Время на оплату истекло.';
+
+  @override
+  String get newInvoice => 'Новый счёт';
+
+  @override
+  String get paymentConfirmedTitle => 'Оплата подтверждена';
+
+  @override
+  String get paymentConfirmedBody =>
+      'Лицензия активна. Добро пожаловать в Orpheus.';
 }

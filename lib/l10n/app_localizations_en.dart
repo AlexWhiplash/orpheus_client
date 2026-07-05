@@ -1558,4 +1558,62 @@ class L10nEn extends L10n {
   @override
   String get verifyKeyHint =>
       'Compare this key with your contact over a trusted channel to make sure no one is intercepting your messages.';
+
+  @override
+  String get buyLicense => 'Buy license';
+
+  @override
+  String get premiumPurchaseTitle => 'Buy Premium';
+
+  @override
+  String get choosePlan => 'Choose a plan';
+
+  @override
+  String get choosePlanHint =>
+      'Pay with USDT (TRC-20). Your license activates automatically after payment.';
+
+  @override
+  String get plansLoadError =>
+      'Couldn\'t load plans. Check your connection and try again.';
+
+  @override
+  String get createInvoiceError =>
+      'Couldn\'t create the payment. Please try again.';
+
+  @override
+  String get paymentNetworkWarning =>
+      'Send ONLY USDT on the TRON network (TRC-20). Funds sent on any other network will be lost.';
+
+  @override
+  String get walletAddress => 'Wallet address';
+
+  @override
+  String get amountToPay => 'Amount';
+
+  @override
+  String get scanQrHint =>
+      'Scan the QR code with your USDT (TRC-20) wallet, or copy the address below.';
+
+  @override
+  String get awaitingPayment => 'Awaiting payment…';
+
+  @override
+  String get awaitingPaymentHint =>
+      'This screen unlocks automatically once the payment is confirmed (about a minute).';
+
+  @override
+  String get iPaid => 'I\'ve paid';
+
+  @override
+  String get invoiceExpired => 'The payment time has expired.';
+
+  @override
+  String get newInvoice => 'New invoice';
+
+  @override
+  String get paymentConfirmedTitle => 'Payment confirmed';
+
+  @override
+  String get paymentConfirmedBody =>
+      'Your license is now active. Welcome to Orpheus.';
 }

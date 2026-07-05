@@ -2940,6 +2940,108 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Compare this key with your contact over a trusted channel to make sure no one is intercepting your messages.'**
   String get verifyKeyHint;
+
+  /// Button to open in-app license purchase
+  ///
+  /// In en, this message translates to:
+  /// **'Buy license'**
+  String get buyLicense;
+
+  /// Purchase screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Buy Premium'**
+  String get premiumPurchaseTitle;
+
+  /// Plan selection heading
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a plan'**
+  String get choosePlan;
+
+  /// Plan selection subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with USDT (TRC-20). Your license activates automatically after payment.'**
+  String get choosePlanHint;
+
+  /// Error loading tariffs
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load plans. Check your connection and try again.'**
+  String get plansLoadError;
+
+  /// Error creating an invoice
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create the payment. Please try again.'**
+  String get createInvoiceError;
+
+  /// Warning to send on the correct network
+  ///
+  /// In en, this message translates to:
+  /// **'Send ONLY USDT on the TRON network (TRC-20). Funds sent on any other network will be lost.'**
+  String get paymentNetworkWarning;
+
+  /// Label for the payment address
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet address'**
+  String get walletAddress;
+
+  /// Label for the amount to pay
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get amountToPay;
+
+  /// Hint under the payment QR code
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the QR code with your USDT (TRC-20) wallet, or copy the address below.'**
+  String get scanQrHint;
+
+  /// Payment pending status
+  ///
+  /// In en, this message translates to:
+  /// **'Awaiting payment…'**
+  String get awaitingPayment;
+
+  /// Hint under the awaiting-payment status
+  ///
+  /// In en, this message translates to:
+  /// **'This screen unlocks automatically once the payment is confirmed (about a minute).'**
+  String get awaitingPaymentHint;
+
+  /// Button to force a payment status re-check
+  ///
+  /// In en, this message translates to:
+  /// **'I\'ve paid'**
+  String get iPaid;
+
+  /// Invoice expired message
+  ///
+  /// In en, this message translates to:
+  /// **'The payment time has expired.'**
+  String get invoiceExpired;
+
+  /// Button to start a new invoice
+  ///
+  /// In en, this message translates to:
+  /// **'New invoice'**
+  String get newInvoice;
+
+  /// Success dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Payment confirmed'**
+  String get paymentConfirmedTitle;
+
+  /// Success dialog body
+  ///
+  /// In en, this message translates to:
+  /// **'Your license is now active. Welcome to Orpheus.'**
+  String get paymentConfirmedBody;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

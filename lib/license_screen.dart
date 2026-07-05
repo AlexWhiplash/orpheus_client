@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
+import 'package:orpheus_project/screens/purchase_screen.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:orpheus_project/widgets/app_card.dart';
@@ -55,6 +56,14 @@ class _LicenseScreenState extends State<LicenseScreen> {
     _wsSubscription?.cancel();
     _promoController.dispose();
     super.dispose();
+  }
+
+  void _openPurchase() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PurchaseScreen(onConfirmed: widget.onLicenseConfirmed),
+      ),
+    );
   }
 
   Future<void> _activatePromo() async {
@@ -134,6 +143,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
               Text(
                 l10n.activationCodeHint,
                 style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              AppButton(
+                label: l10n.buyLicense,
+                icon: Icons.workspace_premium,
+                onPressed: _openPurchase,
               ),
               const SizedBox(height: 16),
               AppCard(

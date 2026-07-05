@@ -436,7 +436,13 @@ class IncomingMessageHandler {
         // callkit 3.x: textAccept/textDecline теперь в AndroidParams.
         textAccept: 'Answer',
         textDecline: 'Decline',
-        isShowFullLockedScreen: true,
+        // false: НЕ показываем полноэкранный ринг плагина на локскрине — его accept
+        // зовёт requestDismissKeyguard и на secure-устройствах (Samsung One UI)
+        // жёстко выкидывает на PIN, ответить нельзя. Вместо этого heads-up
+        // уведомление: его accept идёт через TransparentActivity без
+        // requestDismissKeyguard, а MainActivity выходит поверх лока сам
+        // (setShowWhenLocked в onStart/onCreate по флагу активного звонка).
+        isShowFullLockedScreen: false,
         // КРИТИЧНО для пробуждения устройства:
         isImportant: true,
         incomingCallNotificationChannelName: 'Incoming calls',

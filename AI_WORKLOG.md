@@ -35,11 +35,25 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 `CallStateService.isCallActive` в main.dart оставлен (post-call app-lock).
 
 ИЗВЕСТНЫЙ ОСТАТОК (follow-up): плагинный `CallkitIncomingActivity.onAcceptClick` сам
-зовёт `requestDismissKeyguard` -> на secure-устройстве возможен кратковременный PIN при
-ответе с ПОЛНОЭКРАННОГО ринга. Лечится ответом с heads-up уведомления
-(getAcceptPendingIntent, там requestDismissKeyguard нет) или форком плагина. Проверки:
-analyze 0, test 353. Урок: keyguard/lockscreen-флоу хрупкий, правки только с device-
-проверкой ОБОИХ сценариев (ответ И post-call).
+зовёт `requestDismissKeyguard` -> на secure-устройстве возможен PIN при ответе с
+ПОЛНОЭКРАННОГО ринга. Лечится ответом с heads-up уведомления (getAcceptPendingIntent,
+там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
+с device-проверкой ОБОИХ сценариев (ответ И post-call).
+
+## 2026-07-05 — Fix: Samsung жёстко на PIN при ответе — отключаем полноэкранный ринг
+
+Device: Pixel (GrapheneOS) после onStart-фикса отвечал (звонок Connected), но Samsung
+(One UI) при ответе жёстко выкидывал на PIN, ANSWERING нет. Лог Samsung: звонок через
+PUSH-изолят (killed), CallKit показан, при ответе — SecKeyguardClock (системный
+keyguard). Подтвердило предсказанный остаток: полноэкранный ринг плагина
+(`CallkitIncomingActivity.onAcceptClick`) зовёт requestDismissKeyguard ДО запуска
+MainActivity -> на secure Samsung PIN блокирует раньше моих MainActivity-фиксов.
+
+Fix: `isShowFullLockedScreen: false` в обоих CallKitParams (incoming_message_handler
++ notification_service). Плагин показывает heads-up уведомление вместо полноэкранного
+ринга; его accept идёт через TransparentActivity БЕЗ requestDismissKeyguard, а окно
+звонка выходит поверх лока из MainActivity (showWhenLocked в onStart по флагу звонка).
+Требует device-проверки на Samsung И Pixel. Проверки: analyze 0, test 353.
 
 ## 2026-07-03 — Fix: перезвон в пределах 30с не звонит — уникальный call_id исходящего
 

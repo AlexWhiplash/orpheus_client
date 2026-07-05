@@ -806,7 +806,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         onPointerDown: (_) => _registerUserActivity('pointer'),
         onPointerMove: (_) => _registerUserActivity('pointer'),
         onPointerSignal: (_) => _registerUserActivity('pointer'),
-        child: child ?? const SizedBox.shrink(),
+        child: Stack(
+          children: [
+            child ?? const SizedBox.shrink(),
+            // LockScreen рисуется ПОВЕРХ Navigator'а (всех запушенных маршрутов —
+            // звонка, чата), а не как home. Иначе любой pushed-маршрут перекрывает
+            // LockScreen-как-home и PIN приложения обходится (security). _buildHome
+            // при этом отдаёт пустой чёрный экран, чтобы контент под локом не строился.
+            if (_isLocked && _keysExist)
+              Positioned.fill(
+                child: LockScreen(
+                  onUnlocked: _onUnlocked,
+                  onDuressMode: _onDuressMode,
+                  onWipe: _onWipe,
+                ),
+              ),
+          ],
+        ),
       ),
       home: _buildHome(),
     );
@@ -818,13 +834,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       return WelcomeScreen(onAuthComplete: _onAuthComplete);
     }
     
-    // 2. Приложение заблокировано — экран блокировки
+    // 2. Приложение заблокировано — контент НЕ строим (данные не грузим под локом).
+    // Сам LockScreen рисуется оверлеем поверх всего в MaterialApp.builder выше,
+    // чтобы перекрывать и запушенные маршруты (звонок/чат) — иначе PIN обходится.
     if (_isLocked) {
-      return LockScreen(
-        onUnlocked: _onUnlocked,
-        onDuressMode: _onDuressMode,
-        onWipe: _onWipe,
-      );
+      return const Scaffold(backgroundColor: Colors.black);
     }
     
     // 3. Проверка лицензии не завершена — загрузка

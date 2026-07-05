@@ -40,6 +40,19 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — SECURITY: PIN приложения обходился запушенным маршрутом поверх лока
+
+Владелец: разблокировал устройство (PIN телефона) -> открылся чат Orpheus В ОБХОД
+PIN Orpheus. Корень архитектурный: `LockScreen` возвращался как `home` (_buildHome),
+а CallScreen/чат пушатся через navigatorKey ПОВЕРХ home -> любой pushed-маршрут
+перекрывал лок. Call-флоу (openCallScreen при залоченном) это и запустил.
+
+Fix: LockScreen рисуется оверлеем в `MaterialApp.builder` (Stack поверх child =
+Navigator), а не как home; `_buildHome` под локом отдаёт чёрный Scaffold (контент не
+строится). Оверлей перекрывает ЛЮБЫЕ pushed-маршруты -> PIN не обойти. Проверки:
+analyze 0, test 353. Требует device-проверки: залочить с открытым чатом ->
+разблокировать устройство -> должен быть PIN Orpheus, не чат.
+
 ## 2026-07-05 — Fix: pending-ответ соединялся до поднятия WS -> звонок не устанавливался
 
 Device (форк): ответ на заблокированном Samsung теперь показывает PIN Orpheus (не

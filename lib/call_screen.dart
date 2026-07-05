@@ -117,6 +117,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   /// Watchdog: если после ОТВЕТА звонок не соединился — ICE-restart (отложенный
   /// ответ на локе теряет ранние кандидаты звонящего). См. _scheduleAnswerConnectWatchdog.
   Timer? _answerConnectWatchdog;
+  // Таймаут исходящего звонка: если абонент не ответил за отведённое время —
+  // авто-отбой, чтобы не звонить бесконечно (в т.ч. когда на той стороне нет
+  // аккаунта и она даже не может отклонить).
+  Timer? _outgoingRingWatchdog;
 
   @override
   void initState() {
@@ -506,10 +510,24 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           );
         },
       );
+      _startOutgoingRingWatchdog();
     } catch (e) {
       _addLog("ERROR: $e");
       _onError("Mic Error");
     }
+  }
+
+  /// Авто-отбой исходящего звонка при отсутствии ответа. Иначе экран «Calling…»
+  /// звонит бесконечно, пока пользователь сам не сбросит — особенно когда на той
+  /// стороне нет аккаунта (после wipe) и она не может даже отклонить.
+  void _startOutgoingRingWatchdog() {
+    _outgoingRingWatchdog?.cancel();
+    _outgoingRingWatchdog = Timer(const Duration(seconds: 45), () {
+      if (!mounted || _isDisposed) return;
+      if (_callState == CallState.Connected) return;
+      _addLog("⏱️ Нет ответа 45с — авто-отбой исходящего");
+      _endCallButton();
+    });
   }
 
   void _acceptCall() async {
@@ -624,6 +642,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   void _onConnected() {
     _answerConnectWatchdog?.cancel();
+    _outgoingRingWatchdog?.cancel();
     SoundService.instance.stopAllSounds();
     SoundService.instance.playConnectedSound();
 
@@ -1106,6 +1125,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _durationTimer?.cancel();
     _waveTimer?.cancel();
     _answerConnectWatchdog?.cancel();
+    _outgoingRingWatchdog?.cancel();
     _signalingSubscription?.cancel();
     _webrtcLogSubscription?.cancel();
     _networkSubscription?.cancel();

@@ -390,6 +390,20 @@ void _navigateToCallScreen(
 }) {
   final resolvedCallId = callId ??
       (offerData != null ? CallIdStorage.extractCallId(offerData, callerKey) : null);
+
+  // Нет аккаунта (после wipe / не зарегистрирован) — обрабатывать звонок нечем:
+  // нет ключей для ответа, основной WS не поднят. НЕ открываем экран и не отвечаем,
+  // гасим остатки CallKit. Первопричина зомби-звонков на стёртом телефоне — push-
+  // изолят держал старый pubkey (пофикшено reload prefs); это защита в глубину.
+  if (cryptoService.publicKeyBase64 == null) {
+    DebugLogger.warn('CALLKIT', 'Нет аккаунта — входящий звонок проигнорирован');
+    _pendingCall = null;
+    _isProcessingCallKitAnswer = false;
+    _resetCallNavigationClaim();
+    FlutterCallkitIncoming.endAllCalls();
+    return;
+  }
+
   // Проверяем что нет уже активного звонка
   if (CallStateService.instance.isCallActive.value) {
     DebugLogger.warn('CALLKIT', 'Уже есть активный звонок, игнорирую');

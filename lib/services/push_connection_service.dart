@@ -79,6 +79,9 @@ class PluginPushServiceBackend implements PushServiceBackend {
     required String channelName,
     required String description,
   }) async {
+    // Новый канал (id _v2) с showBadge=false: тихий постоянный сервис не должен вешать
+    // отметку «непрочитано» на иконку. Старый 'orpheus_connection' (showBadge=true)
+    // остаётся осиротевшим, но активного уведомления на нём не будет -> без отметки.
     final channel = AndroidNotificationChannel(
       channelId,
       channelName,
@@ -86,6 +89,7 @@ class PluginPushServiceBackend implements PushServiceBackend {
       importance: Importance.low, // тихое постоянное уведомление
       enableVibration: false,
       playSound: false,
+      showBadge: false, // не бэйджить иконку постоянным уведомлением сервиса
     );
     await _notifications
         .resolvePlatformSpecificImplementation<
@@ -135,7 +139,10 @@ class PluginPushServiceBackend implements PushServiceBackend {
 class PushConnectionService {
   static bool _isInitialized = false;
 
-  static const String channelId = 'orpheus_connection';
+  // v2: канал пересоздан с showBadge=false (старый 'orpheus_connection' вешал
+  // постоянную отметку «непрочитано» на иконку — foreground-уведомление сервиса
+  // всегда активно). Каналы Android неизменяемы, поэтому нужен новый id.
+  static const String channelId = 'orpheus_connection_v2';
   static const String channelName = 'Connection';
   static const int _notificationId = 887;
 
@@ -309,6 +316,12 @@ class _ServicePushRunner {
     if (_stopped) return;
     try {
       final prefs = await SharedPreferences.getInstance();
+      // Push-изолят — ОТДЕЛЬНЫЙ процесс со своим кэшем SharedPreferences. Без reload
+      // он не видит изменений от main-изолята — в т.ч. wipe (prefs.clear()) и смену
+      // pubkey. Из-за этого после стирания аккаунта сервис продолжал держать WS под
+      // СТАРЫМ ключом и на телефон без аккаунта приходили звонки (зомби-сессия).
+      // reload синхронизирует кэш с диском на каждом тике.
+      await prefs.reload();
       final pubkey = prefs.getString(kPrefUserPubkey);
       if (pubkey == null || pubkey.isEmpty) {
         // Нет личности (не зарегистрирован или после wipe) — не подключаемся.

@@ -1628,4 +1628,16 @@ class L10nRu extends L10n {
   @override
   String get paymentConfirmedBody =>
       'Лицензия активна. Добро пожаловать в Orpheus.';
+
+  @override
+  String get editNote => 'Редактировать';
+
+  @override
+  String get rotateConfirm => 'Ротировать';
+
+  @override
+  String get panicClearConfirm => 'Очистить';
+
+  @override
+  String get leaveConfirm => 'Выйти';
 }

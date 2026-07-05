@@ -1498,5 +1498,13 @@
   "paymentConfirmedTitle": "Payment confirmed",
   "@paymentConfirmedTitle": {"description": "Success dialog title"},
   "paymentConfirmedBody": "Your license is now active. Welcome to Orpheus.",
-  "@paymentConfirmedBody": {"description": "Success dialog body"}
+  "@paymentConfirmedBody": {"description": "Success dialog body"},
+  "editNote": "Edit",
+  "@editNote": {"description": "Edit note menu item"},
+  "rotateConfirm": "Rotate",
+  "@rotateConfirm": {"description": "Rotate invite confirm button (short)"},
+  "panicClearConfirm": "Clear",
+  "@panicClearConfirm": {"description": "Clear room history confirm button (short)"},
+  "leaveConfirm": "Leave",
+  "@leaveConfirm": {"description": "Leave room confirm button (short)"}
 }

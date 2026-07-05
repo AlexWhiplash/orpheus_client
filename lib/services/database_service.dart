@@ -594,6 +594,21 @@ class DatabaseService {
     });
   }
 
+  /// Обновить текст заметки (редактирование). Источник (source_type/label) не
+  /// трогаем — меняется только содержимое.
+  Future<void> updateNote({required int id, required String text}) async {
+    if (_isDuressMode) return;
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+    final db = await instance.database;
+    await db.update(
+      'notes',
+      {'text': trimmed},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   Future<List<Map<String, dynamic>>> getNotes() async {
     if (_isDuressMode) return [];
     final db = await instance.database;

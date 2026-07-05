@@ -323,7 +323,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
       icon: Icons.vpn_key_outlined,
       title: l10n.rotateInviteTitle,
       content: l10n.rotateInviteDesc,
-      primaryLabel: l10n.rotateInvite,
+      primaryLabel: l10n.rotateConfirm,
       secondaryLabel: l10n.cancel,
     );
     if (!ok) return;
@@ -347,7 +347,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
       icon: Icons.delete_forever,
       title: l10n.panicClearTitle,
       content: l10n.panicClearDesc,
-      primaryLabel: l10n.panicClear,
+      primaryLabel: l10n.panicClearConfirm,
       secondaryLabel: l10n.cancel,
       isDanger: true,
     );
@@ -375,7 +375,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
       icon: Icons.logout,
       title: l10n.leaveRoomTitle,
       content: l10n.leaveRoomDesc,
-      primaryLabel: l10n.leaveRoom,
+      primaryLabel: l10n.leaveConfirm,
       secondaryLabel: l10n.cancel,
       isDanger: true,
     );

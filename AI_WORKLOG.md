@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-07-05 — Визуальный QA (Samsung One UI): пачка RU-overflow фиксов + редактирование заметок
+
+Владелец прислал ~13 скринов с визуальными багами (RU-текст длиннее EN -> вылезает).
+Разобрано и починено:
+- «1 контактов» -> `contactsCount`/`messagesCount` plural (`status_screen`).
+- «Усиленный» криво переносился -> `FittedBox(scaleDown)` на value `_InfoCard`.
+- Бейдж «4-значный» уезжал за край -> `Row`->`Wrap` (`security_settings_screen`).
+- Кнопки диалогов («Копировать»/«Ротировать»/«Очистить»/«Выйти») вылезали ->
+  корень в `AppButton`: `Text(label)` без ограничения -> `Flexible`+ellipsis (общий
+  фикс для всех кнопок) + короткие подписи `rotateConfirm`/`panicClearConfirm`/
+  `leaveConfirm` для кнопок подтверждения в комнатах.
+- Список комнат показывал сырой `SYS:HISTORY_CLEARED` -> helper `_roomPreview`
+  маппит SYS-коды в локализованный текст (как чат через `_mapSystemMessage`).
+- Диалог «Настройка уведомлений» обрезал карточку шага -> `insetPadding` шире (RU
+  меньше переносится, шаги влезают).
+- Чейнджлог на английском (#3) и удаление комнаты у всех (#10) -> в серверные задачи
+  роадмапа (нужны админ-changelog RU + endpoint `POST /rooms/{id}/delete` owner-only).
+
+Плюс **редактирование заметок**: добавлен `DatabaseService.updateNote`, пункт
+«Редактировать» в меню заметки для manual-заметок + диалог правки текста
+(`notes_vault_screen._editNote`). Пересланные/Oracle не редактируются (метка источника).
+
+l10n: +`editNote`/`rotateConfirm`/`panicClearConfirm`/`leaveConfirm` (EN+RU), gen-l10n.
+Версия `1.1.7+13` -> `1.1.7+14`. `flutter analyze` — 0 ошибок.
+
+---
+
 ## 2026-07-05 — Device-тест раунд 2: зомби-звонки после wipe, ринг-таймаут, бэйдж, ICE-диагностика + бамп версии
 
 Логи обоих телефонов (Samsung↔Pixel):

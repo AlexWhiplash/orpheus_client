@@ -61,6 +61,15 @@ class _NotesVaultScreenState extends State<NotesVaultScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
+              // Редактировать — только свои (manual) заметки: пересланные/из Oracle
+              // оставляем как есть (иначе метка источника разойдётся с текстом).
+              if (note.sourceType == NoteSourceType.manual)
+                ListTile(
+                  leading:
+                      const Icon(Icons.edit_outlined, color: AppColors.action),
+                  title: Text(l10n.editNote),
+                  onTap: () => Navigator.pop(context, 'edit'),
+                ),
               ListTile(
                 leading: const Icon(Icons.copy, color: AppColors.action),
                 title: Text(l10n.copy),
@@ -83,6 +92,8 @@ class _NotesVaultScreenState extends State<NotesVaultScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.copied)),
       );
+    } else if (action == 'edit' && note.id != null) {
+      await _editNote(note);
     } else if (action == 'delete' && note.id != null) {
       final ok = await AppDialog.show(
         context: context,
@@ -95,6 +106,47 @@ class _NotesVaultScreenState extends State<NotesVaultScreen> {
       );
       if (!ok) return;
       await DatabaseService.instance.deleteNote(note.id!);
+      if (!mounted) return;
+      setState(() {});
+    }
+  }
+
+  /// Редактирование текста своей (manual) заметки.
+  Future<void> _editNote(NoteEntry note) async {
+    final l10n = L10n.of(context);
+    final controller = TextEditingController(text: note.text);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text(l10n.editNote),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: null,
+          minLines: 3,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: InputDecoration(
+            hintText: l10n.notesPlaceholder,
+            hintStyle: const TextStyle(color: AppColors.textTertiary),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.save),
+          ),
+        ],
+      ),
+    );
+    final newText = controller.text;
+    controller.dispose();
+    if (saved == true && note.id != null && newText.trim().isNotEmpty) {
+      await DatabaseService.instance.updateNote(id: note.id!, text: newText);
       if (!mounted) return;
       setState(() {});
     }

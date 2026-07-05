@@ -288,6 +288,9 @@ class DeviceSettingsService {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        // Шире стандартного (меньше боковые отступы) — RU-текст меньше переносится,
+        // шаги влезают без обрезки на границе скролла (баг на крупном шрифте Samsung).
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         title: Row(
           children: [
             Icon(

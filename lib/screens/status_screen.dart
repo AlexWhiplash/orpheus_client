@@ -313,8 +313,9 @@ class _StatusScreenState extends State<StatusScreen>
                   title: l10n.storage,
                   icon: Icons.storage_rounded,
                   value: '$_messagesCount',
-                  subtitle: l10n.messagesLabel,
-                  secondaryValue: '$_contactsCount ${l10n.contactsLabel}',
+                  subtitle: l10n.messagesCount(_messagesCount),
+                  secondaryValue:
+                      '$_contactsCount ${l10n.contactsCount(_contactsCount)}',
                 ),
               ),
               const SizedBox(width: 12),
@@ -509,11 +510,18 @@ class _InfoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Text(
-            value,
-            style: t.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: valueColor ?? AppColors.textPrimary,
+          // FittedBox: длинные значения (напр. RU «Усиленный») ужимаются в одну
+          // строку, а не переносятся уродливо в узкой (половина ряда) карточке.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: t.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: valueColor ?? AppColors.textPrimary,
+              ),
             ),
           ),
           const SizedBox(height: 4),

@@ -1616,4 +1616,16 @@ class L10nEn extends L10n {
   @override
   String get paymentConfirmedBody =>
       'Your license is now active. Welcome to Orpheus.';
+
+  @override
+  String get editNote => 'Edit';
+
+  @override
+  String get rotateConfirm => 'Rotate';
+
+  @override
+  String get panicClearConfirm => 'Clear';
+
+  @override
+  String get leaveConfirm => 'Leave';
 }

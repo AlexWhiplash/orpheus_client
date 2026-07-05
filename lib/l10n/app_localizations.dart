@@ -3042,6 +3042,30 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Your license is now active. Welcome to Orpheus.'**
   String get paymentConfirmedBody;
+
+  /// Edit note menu item
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get editNote;
+
+  /// Rotate invite confirm button (short)
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get rotateConfirm;
+
+  /// Clear room history confirm button (short)
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get panicClearConfirm;
+
+  /// Leave room confirm button (short)
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get leaveConfirm;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

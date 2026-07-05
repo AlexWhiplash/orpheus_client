@@ -11,6 +11,23 @@ import 'package:orpheus_project/widgets/app_dialog.dart';
 import 'package:orpheus_project/widgets/app_scaffold.dart';
 import 'package:orpheus_project/widgets/app_states.dart';
 
+/// Превью последнего сообщения в списке комнат. Системные сообщения приходят как
+/// сырой код `SYS:HISTORY_CLEARED` — маппим их в локализованный текст (как чат),
+/// иначе в списке торчит служебный код.
+String _roomPreview(String? raw, L10n l10n) {
+  final text = raw ?? '';
+  if (text.startsWith('SYS:')) {
+    switch (text.substring(4).toUpperCase()) {
+      case 'HISTORY_CLEARED':
+        return l10n.roomSystemHistoryCleared;
+      case 'INVITE_ROTATED':
+        return l10n.roomSystemInviteRotated;
+    }
+    return ''; // неизвестный код — лучше пусто, чем сырой SYS:
+  }
+  return text;
+}
+
 class RoomsScreen extends StatefulWidget {
   const RoomsScreen({super.key});
 
@@ -392,7 +409,7 @@ class _RoomRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = room.lastMessagePreview ?? '';
+    final subtitle = _roomPreview(room.lastMessagePreview, L10n.of(context));
     return Material(
       color: AppColors.surface,
       borderRadius: AppRadii.md,

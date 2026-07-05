@@ -527,7 +527,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                // Wrap, а не Row: длинный RU-заголовок + бейдж не влезали в строку —
+                // бейдж «4-значный» уезжал за правый край. Теперь при нехватке места
+                // бейдж переносится под заголовок.
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       l10n.pinCodeSet,
@@ -537,7 +543,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                         fontSize: 15,
                       ),
                     ),
-                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,

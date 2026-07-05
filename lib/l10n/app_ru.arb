@@ -581,5 +581,9 @@
   "invoiceExpired": "Время на оплату истекло.",
   "newInvoice": "Новый счёт",
   "paymentConfirmedTitle": "Оплата подтверждена",
-  "paymentConfirmedBody": "Лицензия активна. Добро пожаловать в Orpheus."
+  "paymentConfirmedBody": "Лицензия активна. Добро пожаловать в Orpheus.",
+  "editNote": "Редактировать",
+  "rotateConfirm": "Ротировать",
+  "panicClearConfirm": "Очистить",
+  "leaveConfirm": "Выйти"
 }

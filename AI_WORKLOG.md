@@ -40,6 +40,21 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — Fix: pending-ответ соединялся до поднятия WS -> звонок не устанавливался
+
+Device (форк): ответ на заблокированном Samsung теперь показывает PIN Orpheus (не
+системный) — владелец: «в целом ок». Но после ввода PIN звонок не соединялся. Лог:
+после разблокировки pending обработан -> ANSWERING -> `call-answer → Status:
+Connecting` (WS ещё не поднят). Samsung ОТПРАВИЛ answer + свои ICE (WS+HTTP), но НИ
+одного входящего кандидата от звонящего — потому что входящие приходят ТОЛЬКО по WS
+(HTTP-fallback лишь на отправку), а WS был Connecting. Итог: нет Connected.
+
+Fix: `processPendingCallAfterUnlock` теперь async и ЖДЁТ `websocketService.currentStatus
+== Connected` (поллинг 150мс, таймаут 6с) перед `_navigateToCallScreen`/авто-ответом.
+Так приёмник успевает подключить WS и получить кандидаты звонящего. Проверки:
+analyze 0, test 353. Требует device-проверки: ответ на заблокированном -> PIN Orpheus
+-> ввод -> звонок СОЕДИНЯЕТСЯ со звуком.
+
 ## 2026-07-05 — Вариант Б: локальный форк flutter_callkit_incoming (убран dismissKeyguard)
 
 Владелец выбрал форк плагина (Б1, локальная копия). Исходник плагина 3.1.3:

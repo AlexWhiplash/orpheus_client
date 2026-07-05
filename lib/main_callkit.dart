@@ -486,17 +486,24 @@ void _navigateToCallScreen(
 }
 
 /// Обработать отложенный звонок после разблокировки
-void processPendingCallAfterUnlock() {
+Future<void> processPendingCallAfterUnlock() async {
   final pending = _pendingCall;
   _pendingCall = null;
-  
+
   if (pending == null) return;
-  
+
   if (!pending.isValid) {
     DebugLogger.warn('CALLKIT', '⏰ Pending call устарел (>${30}s), игнорирую');
     return;
   }
-  
+
+  // Ждём поднятия основного WS перед авто-ответом. Pending-звонок отвечается на
+  // ВХОДЯЩИЙ, а входящие ICE-кандидаты звонящего приходят ТОЛЬКО по WS (HTTP-
+  // fallback только для отправки). Если ответить пока WS ещё Connecting (типично
+  // сразу после разблокировки), приёмник не получит кандидаты и звонок не
+  // соединится. Таймаут — всё равно пробуем (лучше попытка, чем ничего).
+  await _waitForWebSocketConnected(const Duration(seconds: 6));
+
   DebugLogger.info('CALLKIT', '🔓 Обработка pending call после разблокировки, autoAnswer=${pending.autoAnswer}');
   _navigateToCallScreen(
     pending.callerKey,
@@ -504,6 +511,18 @@ void processPendingCallAfterUnlock() {
     autoAnswer: pending.autoAnswer,
     callId: pending.callId,
   );
+}
+
+/// Ждёт, пока основной WebSocket не станет Connected (или не выйдет таймаут).
+Future<void> _waitForWebSocketConnected(Duration timeout) async {
+  if (websocketService.currentStatus == ConnectionStatus.Connected) return;
+  final deadline = DateTime.now().add(timeout);
+  while (websocketService.currentStatus != ConnectionStatus.Connected &&
+      DateTime.now().isBefore(deadline)) {
+    await Future.delayed(const Duration(milliseconds: 150));
+  }
+  DebugLogger.info('CALLKIT',
+      'WS перед pending-ответом: ${websocketService.currentStatus}');
 }
 
 /// Проверка активных CallKit звонков при возврате из background

@@ -271,11 +271,9 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
         incomingCallNotificationChannelName: 'Incoming calls',
         missedCallNotificationChannelName: 'Missed calls',
         isShowCallID: false,
-        // false: полноэкранный ринг плагина зовёт requestDismissKeyguard и на
-        // secure Samsung выкидывает на PIN (ответить нельзя). heads-up уведомление
-        // отвечает через TransparentActivity без requestDismissKeyguard; окно
-        // звонка выходит поверх лока из MainActivity (showWhenLocked в onStart).
-        isShowFullLockedScreen: false,
+        // ПРИМЕЧАНИЕ: false (heads-up вместо полноэкранного ринга) не помог обойти
+        // плагинный requestDismissKeyguard — PIN оставался. Вернули true.
+        isShowFullLockedScreen: true,
       ),
       ios: IOSParams(
         iconName: 'AppIcon',

@@ -18,6 +18,7 @@ import 'package:orpheus_project/screens/lock_screen.dart';
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/incoming_call_buffer.dart';
@@ -118,7 +119,7 @@ Future<void> main() async {
 
   if (!telemetryEnabled) {
     await _initializeApp();
-    runApp(const MyApp());
+    _runOrpheus();
     return;
   }
 
@@ -127,7 +128,7 @@ Future<void> main() async {
     (options) {
       options.dsn = _sentryDsn;
       // Версия приложения для отслеживания регрессий
-      options.release = 'orpheus@1.1.6+12';
+      options.release = 'orpheus@${AppConfig.appVersion}';
       options.environment = kReleaseMode ? 'production' : 'development';
       // Отслеживание производительности (10% транзакций)
       options.tracesSampleRate = 0.1;
@@ -145,8 +146,30 @@ Future<void> main() async {
     },
     appRunner: () async {
       await _initializeApp();
-      runApp(const MyApp());
+      _runOrpheus();
     },
+  );
+}
+
+/// Запускает приложение в Zone, перехватывающей `print` (Dart) в DebugLogger —
+/// иначе логи сервисов на `print` (WS/WebRTC) не попадали в файл/буфер (перехвачен
+/// был только debugPrint). Ошибки Zone тоже логируются. Только для тест-сборок
+/// (за флагом AppConfig.debugFileLogging).
+void _runOrpheus() {
+  if (!AppConfig.debugFileLogging) {
+    runApp(const MyApp());
+    return;
+  }
+  runZonedGuarded(
+    () => runApp(const MyApp()),
+    (error, stack) =>
+        DebugLogger.error('ZONE', '$error', context: {'stack': '$stack'}),
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) {
+        DebugLogger.info('PRINT', line);
+        parent.print(zone, line);
+      },
+    ),
   );
 }
 
@@ -177,6 +200,13 @@ Future<void> _initializeApp() async {
     FlutterError.presentError(details);
   };
   
+  // Персистентное файловое логирование (тест-сборки): все логи пишутся в файл,
+  // переживают рестарт приложения и выгружаются кнопкой «Поделиться» в экране
+  // отладки — не нужно подключать телефон к ПК.
+  if (AppConfig.debugFileLogging) {
+    await DebugLogger.enableFileLogging();
+  }
+
   DebugLogger.info('APP', '🚀 Orpheus запускается...');
 
   // Инициализация сервиса локализации
@@ -882,6 +912,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return LicenseScreen(onLicenseConfirmed: () {
       setState(() => _isLicensed = true);
       _persistLicense(true);
+      // После активации лицензии убеждаемся, что WS поднят свежей сессией — иначе
+      // онлайн/presence мог не встать до перезапуска приложения (device-тест: у
+      // некоторых Samsung после активации онлайн не поднимался до рестарта).
+      if (cryptoService.publicKeyBase64 != null) {
+        websocketService.forceReconnectIfStale(cryptoService.publicKeyBase64!);
+      }
     });
   }
 }

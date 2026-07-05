@@ -2,6 +2,11 @@ class AppConfig {
   // Final Release 1.0.0
   static const String appVersion = "v1.1.7";
 
+  // Тест-сборки: писать все логи в файл (переживает рестарт) + перехват print +
+  // шаринг из экрана отладки. Перед РЕАЛЬНЫМ релизом ставить false — persist-логи
+  // наружу не нужны (privacy).
+  static const bool debugFileLogging = true;
+
   // === HOST ===
   static const String primaryApiHost = 'api.orpheus.click';
 

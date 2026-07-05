@@ -1,7 +1,9 @@
 // lib/services/debug_logger_service.dart
 
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 
 /// Глобальный сервис логирования для отладки на реальных устройствах
 /// 
@@ -30,6 +32,51 @@ class DebugLogger {
   static final StreamController<LogEntry> _entryController = StreamController.broadcast();
   static Stream<LogEntry> get onEntry => _entryController.stream;
 
+  // === Персистентное файловое логирование (для тест-сборок) ===
+  // Пишем логи в файл, чтобы они переживали рестарт приложения и их можно было
+  // выгрузить/переслать (кнопка «Поделиться» в экране отладки) без подключения
+  // телефона к ПК. Включается через enableFileLogging() из main (за флагом
+  // AppConfig.debugFileLogging).
+  static IOSink? _fileSink;
+  static File? _logFile;
+  static bool _fileEnabled = false;
+  static const int _maxFileBytes = 4 * 1024 * 1024; // ~4 МБ, дальше ротация
+
+  /// Включить запись логов в файл (переживают рестарт). Идемпотентно, best-effort.
+  static Future<void> enableFileLogging() async {
+    if (_fileEnabled) return;
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final f = File('${dir.path}/orpheus_debug.log');
+      // Ротация: слишком большой файл -> оставляем последнюю половину.
+      if (await f.exists() && await f.length() > _maxFileBytes) {
+        final content = await f.readAsString();
+        await f.writeAsString(content.substring(content.length ~/ 2));
+      }
+      _logFile = f;
+      _fileSink = f.openWrite(mode: FileMode.append);
+      _fileEnabled = true;
+      _fileSink!.writeln(
+          '\n=== SESSION START ${DateTime.now().toIso8601String()} ===');
+      // Досыпаем накопленное в RAM до включения файла.
+      for (final e in _logs) {
+        _fileSink!.writeln(e.toFormattedString());
+      }
+    } catch (_) {
+      _fileEnabled = false;
+    }
+  }
+
+  static bool get isFileLoggingEnabled => _fileEnabled;
+
+  /// Путь к файлу логов (для шаринга). Сбрасывает буфер на диск.
+  static Future<String?> flushAndGetLogFilePath() async {
+    try {
+      await _fileSink?.flush();
+    } catch (_) {}
+    return _logFile?.path;
+  }
+
   /// Добавить лог
   static void log(
     String tag,
@@ -55,6 +102,13 @@ class DebugLogger {
     // Уведомляем UI и телеметрию
     _updateController.add(null);
     _entryController.add(entry);
+
+    // Персистентная запись в файл (тест-сборки) — переживает рестарт.
+    if (_fileEnabled) {
+      try {
+        _fileSink?.writeln(entry.toFormattedString());
+      } catch (_) {}
+    }
 
     // В release НЕ пишем в системный logcat (утечка метаданных/событий
     // безопасности на рутованном устройстве / в bug-report — аудит QUAL-1/OPS-6).

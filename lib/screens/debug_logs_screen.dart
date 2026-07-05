@@ -171,10 +171,25 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
           IconButton(
             icon: const Icon(Icons.share),
             tooltip: l10n.share,
-            onPressed: () {
-              final text = DebugLogger.exportToText();
-              SharePlus.instance
-                  .share(ShareParams(text: text, subject: 'Orpheus Debug Logs'));
+            onPressed: () async {
+              // Шарим ФАЙЛ логов (полная история, переживает рестарт), если файловое
+              // логирование включено; иначе — текущий RAM-буфер текстом.
+              final path = await DebugLogger.flushAndGetLogFilePath();
+              if (path != null) {
+                await SharePlus.instance.share(
+                  ShareParams(
+                    files: [XFile(path)],
+                    subject: 'Orpheus Debug Logs',
+                  ),
+                );
+              } else {
+                await SharePlus.instance.share(
+                  ShareParams(
+                    text: DebugLogger.exportToText(),
+                    subject: 'Orpheus Debug Logs',
+                  ),
+                );
+              }
             },
           ),
           // Очистить логи

@@ -527,7 +527,25 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     DebugLogger.info('APP', 'Keys exist: $_keysExist');
     DebugLogger.info('APP', 'Locked: $_isLocked');
 
-    // Слушаем статус лицензии
+    // Проверка лицензии (подписка на WS + 10с таймаут-фолбэк). Вынесено в метод,
+    // чтобы пере-армить после создания аккаунта: иначе после wipe+создания в одной
+    // сессии подписка уже отменена, а таймаут израсходован -> _isCheckCompleted
+    // навсегда false -> приложение виснет на тёмном экране загрузки.
+    _startLicenseCheck();
+
+    // Подключаем WebSocket здесь, ПОСЛЕ регистрации _licenseSubscription,
+    // чтобы не пропустить license-status из-за race condition с broadcast stream.
+    if (_keysExist && !_isLocked && cryptoService.publicKeyBase64 != null) {
+      websocketService.connect(cryptoService.publicKeyBase64!);
+    }
+  }
+
+  /// Проверка лицензии: слушает license-status по WS + 10с таймаут-фолбэк на показ
+  /// экрана лицензии. Идемпотентно (отменяет прошлую подписку). Вызывается при старте
+  /// И после создания нового аккаунта — иначе после wipe+создания в одной сессии
+  /// подписка уже отменена, а таймаут израсходован, и экран лицензии не показывается.
+  void _startLicenseCheck() {
+    _licenseSubscription?.cancel();
     _licenseSubscription = websocketService.stream.listen((message) {
       try {
         // Быстрый фильтр — не парсим JSON на каждом сообщении.
@@ -571,12 +589,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         });
       }
     });
-
-    // Подключаем WebSocket здесь, ПОСЛЕ регистрации _licenseSubscription,
-    // чтобы не пропустить license-status из-за race condition с broadcast stream.
-    if (_keysExist && !_isLocked && cryptoService.publicKeyBase64 != null) {
-      websocketService.connect(cryptoService.publicKeyBase64!);
-    }
   }
 
   void _onAuthComplete() {
@@ -584,10 +596,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // when Navigator rebuilds during the same frame as WelcomeScreen disposal.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() => _keysExist = true);
+      setState(() {
+        _keysExist = true;
+        // Свежий аккаунт: лицензии ещё нет — проверку надо начать заново.
+        _isCheckCompleted = false;
+        _isLicensed = false;
+      });
       if (cryptoService.publicKeyBase64 != null) {
         websocketService.connect(cryptoService.publicKeyBase64!);
       }
+      // Пере-армить проверку лицензии — иначе после wipe экран лицензии не покажется
+      // (подписка была отменена, таймаут израсходован) и экран зависнет чёрным.
+      _startLicenseCheck();
     });
   }
 

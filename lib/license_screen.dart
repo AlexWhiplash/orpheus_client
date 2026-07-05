@@ -7,6 +7,7 @@ import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/screens/purchase_screen.dart';
+import 'package:orpheus_project/screens/support_chat_screen.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:orpheus_project/widgets/app_card.dart';
@@ -63,6 +64,12 @@ class _LicenseScreenState extends State<LicenseScreen> {
       MaterialPageRoute(
         builder: (_) => PurchaseScreen(onConfirmed: widget.onLicenseConfirmed),
       ),
+    );
+  }
+
+  void _openSupport() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SupportChatScreen()),
     );
   }
 
@@ -231,6 +238,13 @@ class _LicenseScreenState extends State<LicenseScreen> {
                     .textTheme
                     .labelMedium
                     ?.copyWith(color: AppColors.textTertiary),
+              ),
+              const SizedBox(height: 4),
+              AppButton(
+                label: l10n.support,
+                icon: Icons.support_agent,
+                variant: AppButtonVariant.tertiary,
+                onPressed: _openSupport,
               ),
             ],
           ),

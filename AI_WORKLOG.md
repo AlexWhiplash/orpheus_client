@@ -40,6 +40,17 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — ЧЕКПОИНТ answer-over-lock (владелец: Б, потом вернёмся к А)
+
+Зафиксировали состояние. Сделано и закоммичено: форк плагина (нет системного PIN),
+security-оверлей LockScreen (нет обхода PIN приложения), детерминированный путь
+(isAppInForeground && !requiresUnlock), WS-wait перед pending-ответом, ICE-restart
+watchdog. НЕ сходится: надёжное соединение при ответе на локе — КОРЕНЬ = флаки WS у
+Samsung (постоянно Disconnected, медленный reconnect). Обычные звонки на
+разблокированном работают полностью. Вернуться = вариант А (надёжность WS Samsung).
+Проверки: analyze 0 errors (554 info/6 warn — предсуществующий tech-debt: avoid_print,
+deprecated). Добавил `analyzer.exclude: third_party/**` (вендоренный плагин не линтим).
+
 ## 2026-07-05 — Вариант A: ICE-restart watchdog после отложенного ответа
 
 Device: после форка+security+WS-wait ответ на локе доходит (ANSWERING, call-answer

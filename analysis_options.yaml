@@ -9,6 +9,12 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # Вендоренный форк flutter_callkit_incoming (third_party/) — сторонний код,
+  # не линтим его нашими правилами (avoid_print/deprecated и т.п. — не наши).
+  exclude:
+    - third_party/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

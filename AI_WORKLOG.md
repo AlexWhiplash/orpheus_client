@@ -40,6 +40,20 @@ setShowWhenLocked биндится к ActivityRecord и влияет на СЛЕ
 там requestDismissKeyguard нет). Урок: keyguard/lockscreen-флоу хрупкий, правки только
 с device-проверкой ОБОИХ сценариев (ответ И post-call).
 
+## 2026-07-05 — Полиш answer-over-lock: ускорение + убрать CallKit-иконку
+
+Владелец подтвердил: ответ на локе РАБОТАЕТ (PIN Orpheus -> ~7с -> Connected, звук,
+переживает сворачивание). Лог: ANSWERING -> +6с ICE-restart -> +1с Connected. Два
+полиша по запросу:
+1. Ускорение: watchdog ICE-restart 6с -> 4с (первая попытка), повтор 8с -> 6с. На
+   обычном звонке no-op (Connected раньше). -> соединение на локе ~5с вместо ~7с.
+2. Убрать иконку CallKit во время ожидания PIN: `_handleCallKitAccept` при
+   `authService.requiresUnlock` (звонок ушёл в pending) зовёт `endAllCalls()` — иконка/
+   таймер уходят, а ответ покрыт PendingCallStorage (сохранён выше) + RAM _pendingCall.
+   Killed-случай не полагается на этот путь (там activeCalls). CallEnded-очистка
+   застрахована: чистит call_id/claim только если нет _pendingCall и не идёт
+   _isProcessingCallKitAnswer (иначе сломала бы handoff). Проверки: analyze 0, test 353.
+
 ## 2026-07-05 — Вариант А: живучесть основного WS (корень флаки Samsung)
 
 Взялись за корень (после чекпоинта). 3 точечные правки websocket_service + main.dart:

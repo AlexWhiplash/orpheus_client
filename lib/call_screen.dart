@@ -550,13 +550,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   /// успевает стать Connected раньше — тогда watchdog просто ничего не делает.
   void _scheduleAnswerConnectWatchdog() {
     _answerConnectWatchdog?.cancel();
-    _answerConnectWatchdog = Timer(const Duration(seconds: 6), () {
+    // 4с: быстрый ответ (обычный звонок) успевает Connected раньше -> no-op; для
+    // отложенного ответа на локе (кандидаты потеряны) чем раньше ICE-restart, тем
+    // быстрее соединение. Меньше не берём — дать шанс штатному ICE на медленной сети.
+    _answerConnectWatchdog = Timer(const Duration(seconds: 4), () {
       if (!mounted || _isDisposed) return;
       if (_callState == CallState.Connected) return;
-      _addLog("⏱️ Нет коннекта через 6с после ответа — ICE-restart");
+      _addLog("⏱️ Нет коннекта через 4с после ответа — ICE-restart");
       _performIceRestart();
       // Вторая попытка, если и после restart не связалось.
-      _answerConnectWatchdog = Timer(const Duration(seconds: 8), () {
+      _answerConnectWatchdog = Timer(const Duration(seconds: 6), () {
         if (!mounted || _isDisposed) return;
         if (_callState == CallState.Connected) return;
         _addLog("⏱️ Всё ещё нет коннекта — повторный ICE-restart");

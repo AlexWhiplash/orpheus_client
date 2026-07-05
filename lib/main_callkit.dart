@@ -21,10 +21,15 @@ void _initCallKit() {
 
       case CallEventActionCallEnded():
         DebugLogger.info('CALLKIT', 'Звонок завершён');
-        // Освобождаем активный call_id, иначе следующий звонок отклонится как
-        // "занято" (trySetActiveCall) до истечения TTL 15с.
-        await CallIdStorage.clear();
-        _resetCallNavigationClaim();
+        // НЕ чистим состояние во время нашего handoff'а: при ответе на локе мы сами
+        // гасим CallKit-UI (убрать иконку/таймер), пока звонок ждёт PIN в pending —
+        // тогда есть _pendingCall / идёт _isProcessingCallKitAnswer, и call_id/claim
+        // нужны для авто-ответа после разблокировки. Чистим только на реальном
+        // завершении, иначе следующий звонок отклонится как "занято" до TTL 15с.
+        if (_pendingCall == null && !_isProcessingCallKitAnswer) {
+          await CallIdStorage.clear();
+          _resetCallNavigationClaim();
+        }
         break;
 
       case CallEventActionCallTimeout():
@@ -259,6 +264,14 @@ Future<void> _handleCallKitAccept(Map<String, dynamic>? body) async {
     );
     
     _openCallScreenFromCallKit(callerKey, callExtra, callId: callId);
+    // На локе звонок ушёл в pending (CallScreen откроется после ввода PIN). Гасим
+    // нативный CallKit-UI, чтобы не висела иконка+таймер до реального соединения —
+    // ответ покрыт PendingCallStorage (сохранён выше) + RAM _pendingCall. Тёплый
+    // случай (эта ветка отработала) не полагается на activeCalls(). CallEnded не
+    // почистит состояние (guard по _pendingCall/_isProcessingCallKitAnswer).
+    if (authService.requiresUnlock) {
+      await FlutterCallkitIncoming.endAllCalls();
+    }
   } else {
     DebugLogger.error('CALLKIT', '❌ callerKey is null! Нет данных для звонка!');
     _isProcessingCallKitAnswer = false; // Сбрасываем флаг при ошибке

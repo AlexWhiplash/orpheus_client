@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:orpheus_project/config.dart';
 
 class ReleaseNote {
   final int versionCode;
@@ -39,10 +40,6 @@ class ReleaseNote {
 }
 
 class ReleaseNotesService {
-  static const List<String> _baseUrls = [
-    'https://api.orpheus.click',
-  ];
-
   ReleaseNotesService({http.Client? httpClient}) : _http = httpClient ?? http.Client();
 
   final http.Client _http;
@@ -53,7 +50,8 @@ class ReleaseNotesService {
   Future<List<ReleaseNote>> fetchPublicReleases({int limit = 30}) async {
     Object? lastError;
 
-    final bases = debugBaseUrlsOverride ?? _baseUrls;
+    // Follows the runtime active host (prod/test) instead of a hardcoded prod URL.
+    final bases = debugBaseUrlsOverride ?? ['https://${AppConfig.serverIp}'];
 
     for (final base in bases) {
       final url = Uri.parse('$base/api/public/releases?limit=$limit');

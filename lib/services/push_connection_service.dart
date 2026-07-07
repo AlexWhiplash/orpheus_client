@@ -285,6 +285,9 @@ class _ServicePushRunner {
   bool _stopped = false;
   bool _connecting = false;
   int _hostIndex = 0;
+  // Хост текущего живого сокета — чтобы заметить runtime-смену сервера (prod/test)
+  // и переподключиться на новый.
+  String? _connectedHost;
 
   static const _ignoredTypes = <String>{
     'error',
@@ -322,6 +325,15 @@ class _ServicePushRunner {
       // СТАРЫМ ключом и на телефон без аккаунта приходили звонки (зомби-сессия).
       // reload синхронизирует кэш с диском на каждом тике.
       await prefs.reload();
+      // Активный API-хост (prod/test) из prefs. Изолят — ОТДЕЛЬНЫЙ процесс со своим
+      // AppConfig, поэтому хидратим _activeHost здесь же (после reload); тогда и WS,
+      // и фоновые httpUrls в этом изоляте идут на выбранный сервер. Если хост сменился
+      // под живым сокетом — рвём его, чтобы редайл ушёл на новый сервер.
+      final desiredHost = await AppConfig.reloadActiveHostFromPrefs(prefs);
+      if (_channel != null && desiredHost != _connectedHost) {
+        await _closeSocket();
+        _hostIndex = 0;
+      }
       final pubkey = prefs.getString(kPrefUserPubkey);
       if (pubkey == null || pubkey.isEmpty) {
         // Нет личности (не зарегистрирован или после wipe) — не подключаемся.
@@ -359,6 +371,7 @@ class _ServicePushRunner {
       }
       ws.pingInterval = const Duration(seconds: 10);
       _channel = IOWebSocketChannel(ws);
+      _connectedHost = host;
       _sub = _channel!.stream.listen(
         (message) => _onFrame(message),
         onDone: () => _onSocketClosed(),
@@ -400,6 +413,7 @@ class _ServicePushRunner {
       await _channel?.sink.close();
     } catch (_) {}
     _channel = null;
+    _connectedHost = null;
   }
 
   Future<void> _onFrame(dynamic message) async {

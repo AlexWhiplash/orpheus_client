@@ -1628,4 +1628,43 @@ class L10nEn extends L10n {
 
   @override
   String get leaveConfirm => 'Leave';
+
+  @override
+  String get serverSwitchTitle => 'Server';
+
+  @override
+  String get serverProduction => 'Production';
+
+  @override
+  String get serverTest => 'Test server';
+
+  @override
+  String serverCurrent(String host) {
+    return 'Current: $host';
+  }
+
+  @override
+  String get serverTestConnection => 'Test connection';
+
+  @override
+  String serverConnectionOk(int ms) {
+    return 'Reachable ($ms ms)';
+  }
+
+  @override
+  String get serverConnectionFailed => 'Server unreachable';
+
+  @override
+  String get serverApply => 'Apply & reconnect';
+
+  @override
+  String get serverResetProd => 'Reset to production';
+
+  @override
+  String get serverTestBanner => 'TEST SERVER';
+
+  @override
+  String serverSwitched(String host) {
+    return 'Switched to $host';
+  }
 }

@@ -1640,4 +1640,43 @@ class L10nRu extends L10n {
 
   @override
   String get leaveConfirm => 'Выйти';
+
+  @override
+  String get serverSwitchTitle => 'Сервер';
+
+  @override
+  String get serverProduction => 'Прод';
+
+  @override
+  String get serverTest => 'Тестовый сервер';
+
+  @override
+  String serverCurrent(String host) {
+    return 'Текущий: $host';
+  }
+
+  @override
+  String get serverTestConnection => 'Проверить связь';
+
+  @override
+  String serverConnectionOk(int ms) {
+    return 'Доступен ($ms мс)';
+  }
+
+  @override
+  String get serverConnectionFailed => 'Сервер недоступен';
+
+  @override
+  String get serverApply => 'Применить и переподключить';
+
+  @override
+  String get serverResetProd => 'Сбросить на прод';
+
+  @override
+  String get serverTestBanner => 'ТЕСТОВЫЙ СЕРВЕР';
+
+  @override
+  String serverSwitched(String host) {
+    return 'Переключено на $host';
+  }
 }

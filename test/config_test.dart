@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:orpheus_project/config.dart';
 
 void main() {
@@ -87,6 +88,51 @@ void main() {
         final version = entry['version'] as String;
         expect(version, isNotEmpty);
       }
+    });
+  });
+
+  group('AppConfig runtime host switch', () {
+    setUp(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    tearDown(() async {
+      // static _activeHost — сбрасываем на прод, чтобы не протекало между тестами.
+      await AppConfig.setActiveHost(AppConfig.primaryApiHost);
+    });
+
+    test('setActiveHost на тестовый хост — serverIp/apiHosts/httpUrl следуют',
+        () async {
+      await AppConfig.setActiveHost(AppConfig.testApiHost);
+      expect(AppConfig.serverIp, AppConfig.testApiHost);
+      expect(AppConfig.apiHosts, [AppConfig.testApiHost]);
+      expect(AppConfig.isTestHost, isTrue);
+      expect(AppConfig.httpUrl('/x'), 'https://${AppConfig.testApiHost}/x');
+    });
+
+    test('хост вне allowlist игнорируется', () async {
+      await AppConfig.setActiveHost(AppConfig.testApiHost);
+      await AppConfig.setActiveHost('evil.example.com');
+      expect(AppConfig.serverIp, AppConfig.testApiHost);
+    });
+
+    test('reloadActiveHostFromPrefs: мусор -> откат на прод', () async {
+      SharedPreferences.setMockInitialValues(
+          {AppConfig.kPrefActiveHost: 'evil.example.com'});
+      final prefs = await SharedPreferences.getInstance();
+      final resolved = await AppConfig.reloadActiveHostFromPrefs(prefs);
+      expect(resolved, AppConfig.primaryApiHost);
+      expect(AppConfig.serverIp, AppConfig.primaryApiHost);
+    });
+
+    test('reloadActiveHostFromPrefs: валидный тестовый хост применяется',
+        () async {
+      SharedPreferences.setMockInitialValues(
+          {AppConfig.kPrefActiveHost: AppConfig.testApiHost});
+      final prefs = await SharedPreferences.getInstance();
+      final resolved = await AppConfig.reloadActiveHostFromPrefs(prefs);
+      expect(resolved, AppConfig.testApiHost);
     });
   });
 }

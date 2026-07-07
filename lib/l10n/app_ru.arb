@@ -585,5 +585,16 @@
   "editNote": "Редактировать",
   "rotateConfirm": "Ротировать",
   "panicClearConfirm": "Очистить",
-  "leaveConfirm": "Выйти"
+  "leaveConfirm": "Выйти",
+  "serverSwitchTitle": "Сервер",
+  "serverProduction": "Прод",
+  "serverTest": "Тестовый сервер",
+  "serverCurrent": "Текущий: {host}",
+  "serverTestConnection": "Проверить связь",
+  "serverConnectionOk": "Доступен ({ms} мс)",
+  "serverConnectionFailed": "Сервер недоступен",
+  "serverApply": "Применить и переподключить",
+  "serverResetProd": "Сбросить на прод",
+  "serverTestBanner": "ТЕСТОВЫЙ СЕРВЕР",
+  "serverSwitched": "Переключено на {host}"
 }

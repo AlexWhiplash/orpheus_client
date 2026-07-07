@@ -3066,6 +3066,72 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Leave'**
   String get leaveConfirm;
+
+  /// Server switch dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Server'**
+  String get serverSwitchTitle;
+
+  /// Production server option
+  ///
+  /// In en, this message translates to:
+  /// **'Production'**
+  String get serverProduction;
+
+  /// Test server option
+  ///
+  /// In en, this message translates to:
+  /// **'Test server'**
+  String get serverTest;
+
+  /// Current active host label
+  ///
+  /// In en, this message translates to:
+  /// **'Current: {host}'**
+  String serverCurrent(String host);
+
+  /// Test connection button
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
+  String get serverTestConnection;
+
+  /// Connection OK result
+  ///
+  /// In en, this message translates to:
+  /// **'Reachable ({ms} ms)'**
+  String serverConnectionOk(int ms);
+
+  /// Connection failed result
+  ///
+  /// In en, this message translates to:
+  /// **'Server unreachable'**
+  String get serverConnectionFailed;
+
+  /// Apply server switch button
+  ///
+  /// In en, this message translates to:
+  /// **'Apply & reconnect'**
+  String get serverApply;
+
+  /// Reset to production button
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to production'**
+  String get serverResetProd;
+
+  /// Banner shown when a non-production host is active
+  ///
+  /// In en, this message translates to:
+  /// **'TEST SERVER'**
+  String get serverTestBanner;
+
+  /// Snackbar after switching server
+  ///
+  /// In en, this message translates to:
+  /// **'Switched to {host}'**
+  String serverSwitched(String host);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -238,6 +238,10 @@ Future<void> _initializeApp() async {
   // flutter_secure_storage v10 (новые шифры). ДО первого чтения ключей.
   await ensureSecureStorageMigrated();
 
+  // 3.6. Активный API-хост (prod/test) из prefs — ДО любого сетевого сервиса,
+  // чтобы первый WebSocket/HTTP шёл уже на выбранный сервер (тест-сборки).
+  await AppConfig.loadActiveHost();
+
   // 4. Криптография
   DebugLogger.info('APP', 'Инициализация криптографии...');
   _hasKeys = await cryptoService.init();
@@ -334,6 +338,21 @@ void _startPushConnectionAndHeartbeat() {
       Timer.periodic(const Duration(seconds: 4), (_) => beat());
 
   PushConnectionService.start();
+}
+
+/// Переключить активный API-сервер (prod/test) и переподключить main-WS на новый
+/// хост. Персист в prefs; push-изолят подхватит новый хост при следующем коннекте
+/// (пока приложение живо, он держит сокет закрытым). Хост вне allowlist игнорируется.
+Future<void> switchApiServer(String host) async {
+  await AppConfig.setActiveHost(host);
+  // disconnect ПЕРВЫМ: connect() — no-op, если сокет уже Connected/Connecting.
+  try {
+    websocketService.disconnect();
+  } catch (_) {}
+  final pubkey = cryptoService.publicKeyBase64;
+  if (pubkey != null && pubkey.isNotEmpty) {
+    websocketService.connect(pubkey);
+  }
 }
 
 /// Инициализация CallKit для обработки нативного UI входящих звонков
@@ -533,6 +552,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       } catch (_) {}
       try {
         PushConnectionService.stop();
+      } catch (_) {}
+      // Panic-wipe/duress: возвращаем клиент на прод, чтобы стёртая личность не
+      // пересоздавалась против тестового сервера.
+      try {
+        AppConfig.resetHostToProd();
       } catch (_) {}
     };
 

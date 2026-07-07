@@ -73,6 +73,215 @@ class _LicenseScreenState extends State<LicenseScreen> {
     );
   }
 
+  /// Проверка доступности хоста (без переключения). Возвращает латентность в мс
+  /// или null, если хост недоступен.
+  ///
+  /// На бэке НЕТ /health (он отдаёт 404), поэтому бьём лёгкий публичный эндпоинт и
+  /// считаем ДОСТУПНОСТЬЮ любой HTTP-ответ: сервер ответил => DNS+TLS+сеть в порядке
+  /// (даже 4xx подтверждает, что хост живой). Недоступность = только исключение или
+  /// таймаут (не резолвится DNS / нет сети / сервер не отвечает).
+  Future<int?> _pingHost(String host) async {
+    try {
+      final sw = Stopwatch()..start();
+      await http
+          .get(Uri.parse(
+              AppConfig.httpUrl('/api/public/releases?limit=1', host: host)))
+          .timeout(const Duration(seconds: 8));
+      sw.stop();
+      return sw.elapsedMilliseconds;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Постоянный баннер, когда активен не-прод сервер (чтобы «пустые контакты» на
+  /// тестовом сервере не приняли за поломку).
+  Widget _testServerBanner(BuildContext context) {
+    final l10n = L10n.of(context);
+    return Container(
+      width: double.infinity,
+      color: AppColors.danger.withOpacity(0.15),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      child: Text(
+        '${l10n.serverTestBanner}: ${AppConfig.serverIp}',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.danger,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+          letterSpacing: 1,
+        ),
+      ),
+    );
+  }
+
+  /// Скрытый (long-press по заголовку, только тест-сборки) диалог выбора сервера:
+  /// prod / test из фиксированного allowlist, проверка связи, применить, сброс на прод.
+  Future<void> _showServerDialog() async {
+    final l10n = L10n.of(context);
+    String selected = AppConfig.serverIp;
+    bool testing = false;
+    String? testMsg;
+    Color testColor = AppColors.textSecondary;
+
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (dialogCtx, setInner) {
+          Widget option(String host, String label) {
+            final active = selected == host;
+            return InkWell(
+              borderRadius: AppRadii.sm,
+              onTap: () => setInner(() {
+                selected = host;
+                testMsg = null;
+              }),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppColors.action.withOpacity(0.10)
+                      : Colors.transparent,
+                  borderRadius: AppRadii.sm,
+                  border: Border.all(
+                    color: active ? AppColors.action : AppColors.outline,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      active
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 20,
+                      color: active ? AppColors.action : AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label,
+                              style: Theme.of(dialogCtx).textTheme.labelLarge),
+                          Text(
+                            host,
+                            style: Theme.of(dialogCtx)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: AppColors.textTertiary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return Dialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadii.lg,
+              side: BorderSide(color: AppColors.outline),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.serverSwitchTitle,
+                      style: Theme.of(dialogCtx).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.serverCurrent(AppConfig.serverIp),
+                    style: Theme.of(dialogCtx)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AppColors.textTertiary),
+                  ),
+                  const SizedBox(height: 16),
+                  option(AppConfig.primaryApiHost, l10n.serverProduction),
+                  option(AppConfig.testApiHost, l10n.serverTest),
+                  if (testMsg != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      testMsg!,
+                      style: Theme.of(dialogCtx)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: testColor),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  AppButton(
+                    label: l10n.serverTestConnection,
+                    variant: AppButtonVariant.secondary,
+                    isLoading: testing,
+                    onPressed: testing
+                        ? null
+                        : () async {
+                            setInner(() {
+                              testing = true;
+                              testMsg = null;
+                            });
+                            final ms = await _pingHost(selected);
+                            setInner(() {
+                              testing = false;
+                              if (ms != null) {
+                                testMsg = l10n.serverConnectionOk(ms);
+                                testColor = AppColors.success;
+                              } else {
+                                testMsg = l10n.serverConnectionFailed;
+                                testColor = AppColors.danger;
+                              }
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          label: l10n.serverResetProd,
+                          variant: AppButtonVariant.tertiary,
+                          onPressed: () => Navigator.pop(
+                              dialogCtx, AppConfig.primaryApiHost),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: AppButton(
+                          label: l10n.serverApply,
+                          onPressed: () => Navigator.pop(dialogCtx, selected),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (chosen == null || !mounted) return;
+    if (chosen == AppConfig.serverIp) {
+      setState(() {});
+      return;
+    }
+    await switchApiServer(chosen);
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.serverSwitched(chosen))),
+    );
+  }
+
   Future<void> _activatePromo() async {
     final l10n = L10n.of(context);
     final code = _promoController.text.trim();
@@ -127,7 +336,15 @@ class _LicenseScreenState extends State<LicenseScreen> {
       child: AppScaffold(
         safeArea: false,
         appBar: AppBar(
-          title: Text(l10n.activation),
+          // Тест-сборки: long-press по заголовку открывает выбор сервера (prod/test).
+          // В релизе (debugFileLogging=false) — обычный текст, переключатель недоступен.
+          title: AppConfig.debugFileLogging
+              ? GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onLongPress: _showServerDialog,
+                  child: Text(l10n.activation),
+                )
+              : Text(l10n.activation),
           // «Назад» показываем ТОЛЬКО если есть куда возвращаться. Как стартовый
           // гейт лицензии экран — корневой, под ним пусто: pop увёл бы в пустой
           // Navigator → чёрный мёртвый экран. canPop=false → кнопки нет.
@@ -138,12 +355,16 @@ class _LicenseScreenState extends State<LicenseScreen> {
                 )
               : null,
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
+        body: Column(
+          children: [
+            if (AppConfig.isTestHost) _testServerBanner(context),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
               Text(l10n.enterCode,
                   style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 6),
@@ -248,6 +469,9 @@ class _LicenseScreenState extends State<LicenseScreen> {
               ),
             ],
           ),
+        ),
+            ),
+          ],
         ),
       ),
     );

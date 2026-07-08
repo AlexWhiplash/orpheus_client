@@ -5,6 +5,42 @@
 
 ---
 
+## 2026-07-08 — Фикс: ответ на звонок с локскрина не соединялся (glare)
+
+**Симптом (device-тест, 2 телефона):** A звонит B; B отвечает **с заблокированного
+экрана** (нативный CallKit) → соединение НЕ встаёт, обе стороны отваливаются по
+таймауту. В разблокированном состоянии (in-app экран «Ответить») звонок соединялся.
+
+**Диагностика (лог B):** при ответе с лока приложение стартует «с нуля»
+(`PANIC: Service initialized` + свежий WS-коннект), и вместо ответа логирует
+`--- [WebRTC] INITIATING CALL (OFFER) ---` → шлёт СВОЙ `call-offer`. A при этом висит
+на `⏳ ICE Queued (Waiting for SDP)` (ждёт answer, которого нет) → оба таймаутят (glare).
+
+**Корневая причина (разбор кода, 3 агента + синтез):** роль offer/answer выбирается
+ТОЛЬКО по наличию offer (`CallSessionController.initialStateFor`: `autoAnswer && hasOffer`
+-> Connecting; иначе `Dialing`). SDP offer звонящего ехал к отвечающему **только внутри
+native `extra` CallKit**; на cold-start с лока `extra` не доезжает до свежего listener'а
+(`activeCalls()` пуст, RAM-буфер — другого изолята), offer==null -> `Dialing` ->
+`initiateCall()`. Т.е. отвечающий становился звонящим.
+
+Сделано (4 файла, локально):
+- `pending_call_storage.dart`: disk-кэш offer по `callId` (`cacheOffer`/`loadCachedOffer`,
+  TTL 90с, сверка callId). Это НЕ триггер авто-открытия — только хранилище offer.
+- `notification_service.dart` (`_showNativeIncomingCall`, push-изолят): при показе
+  входящего кладёт offer в disk-кэш.
+- `main_callkit.dart` (`_handleCallKitAccept` + `_checkActiveCallOnStart`): если offer
+  не пришёл через `extra`/буфер — достаёт из disk-кэша по `callId`.
+- `call_screen.dart` (`_initCallSequence`): guard — при `autoAnswer` проверяем ПЕРВЫМ;
+  offer==null -> чистый обрыв (`_onError`), НИКОГДА не `initiateCall` (страховка от glare).
+
+**Проверено на устройстве (сборка +20):** ответ с лока → `--- [WebRTC] ANSWERING CALL ---`
+→ `WS SEND [call-answer]` → ICE `Connected`/`Completed`, `ICE-STATS sent/recv` (медиа в обе
+стороны). Разблокированный путь и исходящий звонок не задеты.
+
+Версия `1.1.7+19` -> `1.1.7+20`. `flutter analyze` — 0 ошибок, `flutter test` — 357/357.
+
+---
+
 ## 2026-07-08 — Удаление комнаты (владелец) + освежён офлайн-changelog
 
 **Контекст:** коллега по бэкенду закрыл серверные задачи №2–№5 (кроме оплаты).

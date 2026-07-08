@@ -15,6 +15,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
+import 'package:orpheus_project/services/pending_call_storage.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
@@ -234,7 +235,23 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
     if (data['offer_data'] != null) {
       offerDataJson = data['offer_data'].toString();
     }
-    
+
+    // Кладём offer на диск по callId. При ответе с ЗАБЛОКИРОВАННОГО экрана main-изолят
+    // стартует «с нуля», и native `extra` CallKit часто не доносит offer до свежего
+    // listener'а -> отвечающий создавал СВОЙ offer вместо answer (glare, звонок не
+    // соединялся). Теперь main-изолят достанет offer отсюда (см. main_callkit).
+    // Это НЕ авто-открытие звонка — только хранилище offer (TTL + сверка callId).
+    if (offerDataJson != null) {
+      try {
+        await PendingCallStorage.instance.cacheOffer(
+          callId: callId,
+          offerData: json.decode(offerDataJson) as Map<String, dynamic>,
+        );
+      } catch (e) {
+        print("📞 CALLKIT: cacheOffer error: $e");
+      }
+    }
+
     print("📞 CALLKIT: Показываю входящий звонок от $callerName (id=$callId), hasOffer=${offerDataJson != null}");
     
     final l10n = await NotificationService.notificationL10n();

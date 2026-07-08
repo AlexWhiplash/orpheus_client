@@ -181,8 +181,13 @@ Future<void> _checkActiveCallOnStart() async {
             callExtra['offerData'] = json.encode(bufferOffer);
           }
         }
+        // Cold-start с лока: offer из дискового кэша по callId (см. _handleCallKitAccept).
+        if (callExtra['offerData'] == null) {
+          final cached = await PendingCallStorage.instance.loadCachedOffer(callId);
+          if (cached != null) callExtra['offerData'] = json.encode(cached);
+        }
         callExtra['callerKey'] = callerKey;
-        
+
         _openCallScreenFromCallKit(callerKey, callExtra, callId: callId);
       } else {
         DebugLogger.warn('CALLKIT', 'callerKey is null, не могу открыть CallScreen');
@@ -241,7 +246,19 @@ Future<void> _handleCallKitAccept(Map<String, dynamic>? body) async {
         DebugLogger.info('CALLKIT', '📥 offerData взят из буфера');
       }
     }
-    
+
+    // Cold-start с лока: буфер пуст (это другой изолят), а offer не доехал через
+    // native extra CallKit. Достаём offer из дискового кэша по callId (положен
+    // push-изолятом при показе входящего). Без этого отвечающий создавал СВОЙ offer
+    // вместо answer -> glare -> звонок не соединялся.
+    if (callExtra['offerData'] == null) {
+      final cached = await PendingCallStorage.instance.loadCachedOffer(callId);
+      if (cached != null) {
+        callExtra['offerData'] = json.encode(cached);
+        DebugLogger.info('CALLKIT', '📥 offerData взят из disk-кэша (cold start)');
+      }
+    }
+
     callExtra['callerKey'] = callerKey;
     
     // КРИТИЧНО: Сохраняем в persistent storage СРАЗУ!

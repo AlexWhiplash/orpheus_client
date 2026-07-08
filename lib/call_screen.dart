@@ -472,19 +472,26 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       }
     }
 
-    if (_callState == CallState.Dialing) {
-      SoundService.instance.playDialingSound();
-      _startOutgoingCall();
-    } else {
-      // Входящий звонок
-      if (widget.autoAnswer) {
+    if (widget.autoAnswer) {
+      // Экран открыт, чтобы ОТВЕТИТЬ на входящий (CallKit/автоответ). Отвечающий
+      // НИКОГДА не должен инициировать свой offer.
+      if (widget.offer != null) {
         // Автоответ через CallKit — сразу принимаем без рингтона
         DebugLogger.info('CALL', '📞 AutoAnswer: принимаю звонок автоматически');
         _acceptCall();
       } else {
-        // Обычный входящий — показываем рингтон и ждём ответа
-        SoundService.instance.playIncomingRingtone();
+        // Offer потерян (напр. ответ с заблокированного экрана при cold-start, когда
+        // offer не доехал). НЕ создаём свой offer — это дало бы glare (обе стороны
+        // «звонящие»), и звонок бы не соединился. Обрываем чисто.
+        DebugLogger.error('CALL', '📞 AutoAnswer без offer — обрыв (защита от glare)');
+        _onError("Call Error");
       }
+    } else if (_callState == CallState.Dialing) {
+      SoundService.instance.playDialingSound();
+      _startOutgoingCall();
+    } else {
+      // Обычный входящий (не автоответ) — рингтон, ждём ручного ответа
+      SoundService.instance.playIncomingRingtone();
     }
   }
 

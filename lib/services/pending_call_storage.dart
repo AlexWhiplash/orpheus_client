@@ -131,6 +131,60 @@ class PendingCallStorage {
     }
   }
   
+  // --- Offer-кэш по callId (cold-start answer с лока) ---
+  //
+  // Проблема: при ответе с заблокированного экрана main-изолят стартует «с нуля»,
+  // и SDP offer от звонящего, который едет ТОЛЬКО в native `extra` CallKit, часто
+  // не доезжает до свежего listener'а. Тогда offer==null -> отвечающий по ошибке
+  // создаёт СВОЙ offer (glare) вместо answer. Решение: push-изолят при ПОКАЗЕ
+  // входящего кладёт offer на диск по callId (это НЕ авто-открытие звонка — только
+  // хранилище), а при ответе main-изолят достаёт offer отсюда, если не было в extra.
+  static const _keyCachedOfferCallId = 'cached_incoming_offer_call_id';
+  static const _keyCachedOfferData = 'cached_incoming_offer_data';
+  static const _keyCachedOfferTs = 'cached_incoming_offer_ts';
+
+  /// TTL offer-кэша: рингтон 45с + запас на cold-start.
+  static const int cachedOfferMaxAgeSeconds = 90;
+
+  /// Положить offer входящего звонка (вызывает push-изолят при показе CallKit).
+  Future<void> cacheOffer({
+    required String callId,
+    required Map<String, dynamic> offerData,
+  }) async {
+    try {
+      final prefs = await _getPrefs;
+      await prefs.setString(_keyCachedOfferCallId, callId);
+      await prefs.setString(_keyCachedOfferData, json.encode(offerData));
+      await prefs.setInt(_keyCachedOfferTs, DateTime.now().millisecondsSinceEpoch);
+      DebugLogger.info('PENDING_CALL', '💾 Offer cached for callId=$callId');
+    } catch (e) {
+      DebugLogger.error('PENDING_CALL', 'cacheOffer error: $e');
+    }
+  }
+
+  /// Достать закэшированный offer, если он для этого callId и не устарел.
+  /// callId==null -> отдаём последний непротухший (fallback, когда id неизвестен).
+  Future<Map<String, dynamic>?> loadCachedOffer(String? callId) async {
+    try {
+      final prefs = await _getPrefs;
+      final storedId = prefs.getString(_keyCachedOfferCallId);
+      final dataStr = prefs.getString(_keyCachedOfferData);
+      if (storedId == null || dataStr == null) return null;
+
+      final ts = prefs.getInt(_keyCachedOfferTs) ?? 0;
+      final ageSeconds = (DateTime.now().millisecondsSinceEpoch - ts) ~/ 1000;
+      if (ageSeconds > cachedOfferMaxAgeSeconds) return null;
+
+      // Если callId известен и не совпадает — это offer от другого звонка.
+      if (callId != null && callId.isNotEmpty && storedId != callId) return null;
+
+      return json.decode(dataStr) as Map<String, dynamic>;
+    } catch (e) {
+      DebugLogger.warn('PENDING_CALL', 'loadCachedOffer error: $e');
+      return null;
+    }
+  }
+
   /// Проверить есть ли валидный pending call (без загрузки)
   Future<bool> hasPendingCall() async {
     try {

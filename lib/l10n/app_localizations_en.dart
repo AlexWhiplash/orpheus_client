@@ -1423,6 +1423,16 @@ class L10nEn extends L10n {
       'You will stop receiving messages from this room.';
 
   @override
+  String get deleteRoom => 'Delete room';
+
+  @override
+  String get deleteRoomTitle => 'Delete room?';
+
+  @override
+  String get deleteRoomDesc =>
+      'The room and all its messages will be permanently deleted for every member. This cannot be undone.';
+
+  @override
   String get create => 'Create';
 
   @override
@@ -1628,6 +1638,9 @@ class L10nEn extends L10n {
 
   @override
   String get leaveConfirm => 'Leave';
+
+  @override
+  String get deleteConfirm => 'Delete';
 
   @override
   String get serverSwitchTitle => 'Server';

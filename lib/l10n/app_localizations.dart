@@ -2689,6 +2689,24 @@ abstract class L10n {
   /// **'You will stop receiving messages from this room.'**
   String get leaveRoomDesc;
 
+  /// Delete room action (owner only)
+  ///
+  /// In en, this message translates to:
+  /// **'Delete room'**
+  String get deleteRoom;
+
+  /// Delete room confirm title
+  ///
+  /// In en, this message translates to:
+  /// **'Delete room?'**
+  String get deleteRoomTitle;
+
+  /// Delete room confirm description
+  ///
+  /// In en, this message translates to:
+  /// **'The room and all its messages will be permanently deleted for every member. This cannot be undone.'**
+  String get deleteRoomDesc;
+
   /// Create button
   ///
   /// In en, this message translates to:
@@ -3066,6 +3084,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Leave'**
   String get leaveConfirm;
+
+  /// Delete room confirm button (short)
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get deleteConfirm;
 
   /// Server switch dialog title
   ///

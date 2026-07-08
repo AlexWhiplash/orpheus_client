@@ -1435,6 +1435,16 @@ class L10nRu extends L10n {
       'Вы перестанете получать сообщения из этой комнаты.';
 
   @override
+  String get deleteRoom => 'Удалить комнату';
+
+  @override
+  String get deleteRoomTitle => 'Удалить комнату?';
+
+  @override
+  String get deleteRoomDesc =>
+      'Комната и все её сообщения будут безвозвратно удалены у всех участников. Это действие необратимо.';
+
+  @override
   String get create => 'Создать';
 
   @override
@@ -1640,6 +1650,9 @@ class L10nRu extends L10n {
 
   @override
   String get leaveConfirm => 'Выйти';
+
+  @override
+  String get deleteConfirm => 'Удалить';
 
   @override
   String get serverSwitchTitle => 'Сервер';

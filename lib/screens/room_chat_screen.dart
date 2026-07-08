@@ -393,6 +393,31 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     }
   }
 
+  Future<void> _confirmDeleteRoom() async {
+    final l10n = L10n.of(context);
+    final ok = await AppDialog.show(
+      context: context,
+      icon: Icons.delete_forever,
+      title: l10n.deleteRoomTitle,
+      content: l10n.deleteRoomDesc,
+      primaryLabel: l10n.deleteConfirm,
+      secondaryLabel: l10n.cancel,
+      isDanger: true,
+    );
+    if (!ok) return;
+
+    try {
+      await _service.deleteRoom(widget.room.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.connectionError)),
+      );
+    }
+  }
+
   Future<void> _showInviteCodeDialog(String inviteCode) async {
     final l10n = L10n.of(context);
     final ok = await AppDialog.show(
@@ -434,6 +459,9 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                 case 'leave':
                   _confirmLeaveRoom();
                   break;
+                case 'delete':
+                  _confirmDeleteRoom();
+                  break;
               }
             },
             itemBuilder: (context) => [
@@ -458,6 +486,11 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                 PopupMenuItem(
                   value: 'leave',
                   child: Text(l10n.leaveRoom),
+                ),
+              if (widget.room.isOwner && !_isOrpheusRoom)
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(l10n.deleteRoom),
                 ),
             ],
           ),

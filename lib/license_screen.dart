@@ -318,6 +318,11 @@ class _LicenseScreenState extends State<LicenseScreen> {
           content: l10n.licenseActivated,
           primaryLabel: l10n.ok,
         );
+        // Активация подтверждена сервером (HTTP ok) — входим в приложение СРАЗУ.
+        // Раньше вход ждал пуш license-status: active по WebSocket, но сервер его
+        // после activate-promo не шлёт -> лицензия списывалась, а приложение не
+        // пускало (device-тест). onLicenseConfirmed идемпотентен (setState+persist).
+        if (mounted) widget.onLicenseConfirmed();
       } else {
         setState(() => _promoError = data['message'] ?? l10n.invalidCode);
       }

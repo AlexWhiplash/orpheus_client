@@ -242,6 +242,11 @@ Future<void> _initializeApp() async {
   // чтобы первый WebSocket/HTTP шёл уже на выбранный сервер (тест-сборки).
   await AppConfig.loadActiveHost();
 
+  // 3.7. Скриншоты: в тест-сборках снимаем FLAG_SECURE (тестировщику нужны скрины),
+  // в релизе окно защищено (нативный дефолт FLAG_SECURE не трогаем). Один флаг —
+  // тот же, что и для файловых логов, отдельного тумблера крутить не нужно.
+  DeviceSettingsService.setScreenSecure(!AppConfig.debugFileLogging);
+
   // 4. Криптография
   DebugLogger.info('APP', 'Инициализация криптографии...');
   _hasKeys = await cryptoService.init();

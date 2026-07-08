@@ -194,6 +194,19 @@ class DeviceSettingsService {
     }
   }
 
+  /// Управление защитой от скриншотов (FLAG_SECURE). В тест-сборках отключаем
+  /// (можно делать скрины), в релизе включено (защита экрана). По умолчанию окно
+  /// стартует с FLAG_SECURE (нативно), поэтому релиз защищён с первого кадра.
+  static Future<void> setScreenSecure(bool enabled) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _settingsChannel
+          .invokeMethod('setScreenSecure', {'enabled': enabled});
+    } catch (e) {
+      print("DeviceSettings: setScreenSecure error: $e");
+    }
+  }
+
   /// Открыть настройки автозапуска (для китайских OEM)
   static Future<void> openAutoStartSettings() async {
     if (!Platform.isAndroid) return;

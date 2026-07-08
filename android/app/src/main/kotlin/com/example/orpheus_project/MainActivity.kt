@@ -138,6 +138,19 @@ class MainActivity: FlutterFragmentActivity() {
                     openFullScreenIntentSettings()
                     result.success(true)
                 }
+                "setScreenSecure" -> {
+                    // Управление FLAG_SECURE из Dart: в тест-сборках снимаем (можно
+                    // делать скриншоты), в релизе держим включённым (защита экрана).
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    runOnUiThread {
+                        if (enabled) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                    }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

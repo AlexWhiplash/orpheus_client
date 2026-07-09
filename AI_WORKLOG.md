@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-09 — PoP эпик: клиентский крипто-фундамент (Ed25519 идентичность), шаг 7/14
+
+**Контекст:** эпик mandatory proof-of-possession для WS (закрывает имперсонацию по known-pubkey,
+находка аудита). Серверная сторона уже готова (ветка сервера `feat/pop-ed25519`, 165 тестов).
+Дизайн — `docs/POP_WEBSOCKET_DESIGN.md` §7–8. Живых клиентов нет → clean-slate, mandatory.
+
+**Сделано (ветка `feat/pop-ed25519`):** `lib/services/crypto_service.dart` переведён на модель
+одного root-seed. Из 32-байтного `orpheus_root_seed` через HKDF-SHA256 (salt `orpheus-hkdf-v1`,
+info-метки на ed/x) выводятся **Ed25519** (сетевой АДРЕС `addressBase64` = b64url ed_pub + подпись
+PoP) и **X25519** (`encryptionKeyBase64` = enc-ключ, ECDH-путь `encrypt/decrypt` без изменений).
+Новое API: `signPopProof(nonce, ts)` (домен-разделённая подпись хендшейка) и `identityBundle()`
+(самоподписанная связка адрес↔enc для directory/QR). `init/generateNewKeys/importPrivateKey/
+getPrivateKeyBase64/deleteAccount` перевязаны на seed; legacy X25519-ключи чистятся.
+
+**Интероп ДОКАЗАН:** `test/crypto_pop_test.dart` сверяет эталонный вектор, вычисленный на сервере
+(Python `cryptography` HKDF + PyNaCl Ed25519 + X25519). Адрес, enc-ключ, pop-подпись и bind-подпись
+совпадают байт-в-байт. `flutter test` — 2 passed. Значит Dart-подписи проверяются на Python-сервере.
+Зависимостей не добавляли (`package:cryptography` уже умеет Ed25519/HKDF/X25519).
+
+**Дальше (шаги 8–14):** публикация bundle на регистрации (`POST /api/identity`); PoP-хендшейк +
+cert pinning в `websocket_service` и `push_connection_service` (изолят); `Contact.encryptionKey` +
+directory-резолв enc-ключа незнакомца; QR = подписанный bundle. Деплой сервер+клиент только вместе.
+
 ## 2026-07-08 — Фикс: ответ на звонок с локскрина не соединялся (glare)
 
 **Симптом (device-тест, 2 телефона):** A звонит B; B отвечает **с заблокированного

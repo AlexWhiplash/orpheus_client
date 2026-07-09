@@ -24,9 +24,16 @@ getPrivateKeyBase64/deleteAccount` перевязаны на seed; legacy X25519
 совпадают байт-в-байт. `flutter test` — 2 passed. Значит Dart-подписи проверяются на Python-сервере.
 Зависимостей не добавляли (`package:cryptography` уже умеет Ed25519/HKDF/X25519).
 
-**Дальше (шаги 8–14):** публикация bundle на регистрации (`POST /api/identity`); PoP-хендшейк +
-cert pinning в `websocket_service` и `push_connection_service` (изолят); `Contact.encryptionKey` +
-directory-резолв enc-ключа незнакомца; QR = подписанный bundle. Деплой сервер+клиент только вместе.
+**Шаг 9a (сделан):** PoP-хендшейк в `websocket_service` — статус `Authenticating` между `Connecting`
+и `Connected`; после открытия сокета клиент ждёт `pop-challenge`, подписывает `signPopProof(nonce, ts)`,
+шлёт `pop-proof`, и только на `pop-ok` становится `Connected` (стартует ping-pong + слив pending).
+Таймаут хендшейка 12с. Компилируется (`dart analyze` — только преждние `avoid_print`-инфо).
+
+**Дальше (связанный цельный заход — шаги 10+12):** свитч ВСЕХ routing/account-идентичностей
+(`cryptoService.publicKeyBase64` → `addressBase64`) в main.dart (WS-коннект/реконнект), license/
+support/rooms/telemetry/call/purchase — атомарно (иначе лицензия под X25519 vs WS под Ed25519);
+хендшейк в `push_connection_service` (изолят читает seed, деривит Ed25519); затем `Contact.encryptionKey`
++ directory-резолв + QR-bundle (шаги 11,13). Деплой сервер+клиент только вместе.
 
 ## 2026-07-08 — Фикс: ответ на звонок с локскрина не соединялся (glare)
 

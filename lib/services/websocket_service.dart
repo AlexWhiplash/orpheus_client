@@ -6,18 +6,27 @@ import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:orpheus_project/config.dart';
+import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
 import 'package:orpheus_project/services/pending_actions_service.dart';
 import 'package:rxdart/rxdart.dart';
 
-enum ConnectionStatus { Disconnected, Connecting, Connected }
+// Authenticating: сокет открыт, идёт обязательный PoP-хендшейк (challenge->proof->ok);
+// до pop-ok сессия НЕ считается живой (не шлём pending, не считаем Connected).
+enum ConnectionStatus { Disconnected, Connecting, Authenticating, Connected }
 
 class WebSocketService {
   WebSocketService({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
 
   WebSocketChannel? _channel;
   final http.Client _httpClient;
+  Timer? _authTimeout;
+
+  static List<int> _b64urlDecode(String s) {
+    final pad = (4 - s.length % 4) % 4;
+    return base64Url.decode(s + ('=' * pad));
+  }
 
   final _socketResponseController = StreamController<String>.broadcast();
   Stream<String> get stream => _socketResponseController.stream;
@@ -174,18 +183,63 @@ class WebSocketService {
           _channel?.sink.close();
         } catch (_) {}
         _channel = IOWebSocketChannel(ws);
-        _statusController.add(ConnectionStatus.Connected);
-        _reconnectAttempt = 0; // Сброс backoff при успешном подключении
-        print("WS: Соединение установлено!");
-        DebugLogger.success('WS', 'Соединение установлено!');
+        // Сокет открыт, но НЕ Connected: сначала обязательный PoP-хендшейк
+        // (pop-challenge -> pop-proof -> pop-ok). До pop-ok не шлём pending и не
+        // считаем сессию живой (сервер закроет сокет 1008, если proof не пройдёт).
+        _statusController.add(ConnectionStatus.Authenticating);
+        DebugLogger.info('WS', 'Сокет открыт, ожидаем PoP-challenge...');
+        bool authed = false;
 
-        _startPingPong();
-        
-        // Отправляем pending сообщения после восстановления соединения
-        _sendPendingMessages();
+        _authTimeout?.cancel();
+        _authTimeout = Timer(const Duration(seconds: 12), () {
+          if (gen != _connectionGeneration || authed) return;
+          DebugLogger.warn('WS', 'PoP handshake timeout — abandoning');
+          _handleDisconnect();
+        });
 
         _channel!.stream.listen(
-              (message) {
+              (message) async {
+            if (!authed) {
+              try {
+                final data = json.decode(message);
+                final type = data['type'];
+                if (type == 'pop-challenge') {
+                  final nonce = _b64urlDecode(data['nonce'] as String);
+                  final ts = data['ts'] as int;
+                  final sig = await CryptoService.instance.signPopProof(nonce, ts);
+                  if (gen != _connectionGeneration) return;
+                  _channel?.sink.add(json.encode({
+                    'type': 'pop-proof',
+                    'v': 1,
+                    'address': _currentPublicKey,
+                    'sig': sig,
+                  }));
+                  return;
+                } else if (type == 'pop-ok') {
+                  authed = true;
+                  _authTimeout?.cancel();
+                  if (gen != _connectionGeneration) return;
+                  _statusController.add(ConnectionStatus.Connected);
+                  _reconnectAttempt = 0; // Сброс backoff при успешном подключении
+                  print("WS: PoP ok — соединение установлено!");
+                  DebugLogger.success('WS', 'PoP ok — соединение установлено!');
+                  _startPingPong();
+                  // Отправляем pending сообщения после аутентификации
+                  _sendPendingMessages();
+                  return;
+                } else {
+                  DebugLogger.error('WS', 'Неожиданный фрейм до PoP: $type');
+                  if (gen != _connectionGeneration) return;
+                  _handleDisconnect();
+                  return;
+                }
+              } catch (e) {
+                DebugLogger.error('WS', 'Ошибка PoP-хендшейка: $e');
+                if (gen != _connectionGeneration) return;
+                _handleDisconnect();
+                return;
+              }
+            }
             _socketResponseController.add(message);
             // Логируем входящие сообщения (кроме pong)
             try {
@@ -267,6 +321,7 @@ class WebSocketService {
     _connectionGeneration++;
     _reconnectTimer?.cancel();
     _connectTimeout?.cancel();
+    _authTimeout?.cancel();
     _stopPingPong();
     _networkSubscription?.cancel();
     _networkSubscription = null;

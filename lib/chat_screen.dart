@@ -12,6 +12,7 @@ import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/note_model.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
+import 'package:orpheus_project/services/identity_directory_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
@@ -213,8 +214,13 @@ class _ChatScreenState extends State<ChatScreen>
     await DatabaseService.instance
         .addMessage(sentMessage, widget.contact.publicKey);
     try {
-      final payload =
-          await cryptoService.encrypt(widget.contact.publicKey, messageText);
+      // Шифруем на X25519 enc-ключ контакта (роутинг — по адресу publicKey).
+      final encKey = widget.contact.encryptionKey ??
+          await IdentityDirectoryService.instance.resolveEncKey(widget.contact.publicKey);
+      if (encKey == null || encKey.isEmpty) {
+        throw Exception('Ключ шифрования контакта недоступен');
+      }
+      final payload = await cryptoService.encrypt(encKey, messageText);
       websocketService.sendChatMessage(widget.contact.publicKey, payload,
           messageId: messageId);
       // Успех: сообщение передано в сеть или поставлено в offline-очередь.

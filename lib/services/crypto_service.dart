@@ -41,7 +41,13 @@ class CryptoService {
   SimplePublicKey? _publicKey; // X25519 pub (enc key)
   SimpleKeyPair? _edKeyPair; // Ed25519 (идентичность/подпись)
   SimplePublicKey? _edPublicKey; // Ed25519 pub (адрес)
+  List<int>? _rootSeed; // root seed в памяти (для экспорта; как старый код держал приватник)
+  Map<String, String>? _cachedBundle; // {address, enc, sig} — считается один раз при деривации
   DateTime? _registrationDate;
+
+  /// Кэшированная самоподписанная связка {address, enc, sig} для синхронного
+  /// прикрепления к исходящим сообщениям (inline-резолв enc-ключа у получателя).
+  Map<String, String>? get cachedIdentityBundle => _cachedBundle;
 
   /// X25519 enc-ключ (base64). Совместимость: publicKeyBase64 == encryptionKeyBase64.
   String? get publicKeyBase64 => _publicKey != null ? base64.encode(_publicKey!.bytes) : null;
@@ -57,6 +63,7 @@ class CryptoService {
   // --- ИНИЦИАЛИЗАЦИЯ И УПРАВЛЕНИЕ КЛЮЧАМИ ---
 
   Future<void> _deriveFromSeed(List<int> rootBytes) async {
+    _rootSeed = List<int>.of(rootBytes);
     final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
     final edSeed = await (await hkdf.deriveKey(
       secretKey: SecretKey(rootBytes),
@@ -73,6 +80,7 @@ class CryptoService {
     _edPublicKey = await _edKeyPair!.extractPublicKey();
     _keyPair = await keyExchangeAlgorithm.newKeyPairFromSeed(xSeed);
     _publicKey = await _keyPair!.extractPublicKey();
+    _cachedBundle = await identityBundle();
   }
 
   /// Только для тестов: деривация ключей из seed без обращения к secure storage.
@@ -129,6 +137,7 @@ class CryptoService {
 
   /// Экспорт бэкапа = base64(root_seed).
   Future<String> getPrivateKeyBase64() async {
+    if (_rootSeed != null) return base64.encode(_rootSeed!);
     final rootB64 = await _secureStorage.read(key: _rootSeedStoreKey);
     if (rootB64 == null) throw Exception("No keys available");
     return rootB64;
@@ -145,6 +154,8 @@ class CryptoService {
     _publicKey = null;
     _edKeyPair = null;
     _edPublicKey = null;
+    _rootSeed = null;
+    _cachedBundle = null;
     _registrationDate = null;
 
     print("Account deleted.");
@@ -164,6 +175,28 @@ class CryptoService {
     final msg = _popMessage(_edPublicKey!.bytes, nonce, tsMs);
     final sig = await _signAlgorithm.sign(msg, keyPair: _edKeyPair!);
     return _b64urlNoPad(sig.bytes);
+  }
+
+  static List<int> _b64urlDecode(String s) {
+    final pad = (4 - s.length % 4) % 4;
+    return base64Url.decode(s + ('=' * pad));
+  }
+
+  /// Проверка самоподписи связки адрес<->enc (Ed25519). Используется при приёме
+  /// inline-bundle в сообщениях и при резолве из directory — enc-ключ незнакомца
+  /// принимаем ТОЛЬКО если он подписан владельцем адреса.
+  Future<bool> verifyIdentityBundle(String addressB64url, String encB64, String sigB64url) async {
+    try {
+      final edPub = _b64urlDecode(addressB64url);
+      final xPub = base64.decode(encB64);
+      final sig = _b64urlDecode(sigB64url);
+      if (edPub.length != 32 || xPub.length != 32 || sig.length != 64) return false;
+      final bindMsg = <int>[...utf8.encode(_bindContext), 0, ...edPub, ...xPub];
+      final pubKey = SimplePublicKey(edPub, type: KeyPairType.ed25519);
+      return await _signAlgorithm.verify(bindMsg, signature: Signature(sig, publicKey: pubKey));
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Самоподписанная связка адрес<->enc-ключ для directory/QR: {address, enc, sig}.

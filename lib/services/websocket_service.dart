@@ -359,11 +359,16 @@ class WebSocketService {
   }
 
   void sendChatMessage(String recipientPublicKey, String payload, {String? messageId}) {
+    // Прикрепляем свой подписанный enc-ключ inline, чтобы получатель (в т.ч.
+    // незнакомец) мог зарезолвить X25519 для расшифровки без directory-запроса.
+    final bundle = CryptoService.instance.cachedIdentityBundle;
     final msg = {
       "recipient_pubkey": recipientPublicKey,
       "type": "chat",
       "payload": payload,
       if (messageId != null) "message_id": messageId,
+      if (bundle != null) "senc": bundle['enc'],
+      if (bundle != null) "ssig": bundle['sig'],
     };
 
     // Если нет соединения - сохраняем в очередь
@@ -414,11 +419,14 @@ class WebSocketService {
           break;
         }
 
+        final bundle = CryptoService.instance.cachedIdentityBundle;
         _sendMessage({
           "recipient_pubkey": msg.recipientKey,
           "type": "chat",
           "payload": msg.encryptedPayload,
           if (msg.messageId != null) "message_id": msg.messageId,
+          if (bundle != null) "senc": bundle['enc'],
+          if (bundle != null) "ssig": bundle['sig'],
         });
         sentCount++;
 

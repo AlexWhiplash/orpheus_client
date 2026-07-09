@@ -39,7 +39,7 @@ class SupportChatService {
   String? get error => _error;
 
   /// Получить pubkey пользователя (из глобального cryptoService)
-  String? get _pubkey => cryptoService.publicKeyBase64;
+  String? get _pubkey => cryptoService.addressBase64;
 
   /// HTTP заголовки с pubkey
   Map<String, String> get _headers => {

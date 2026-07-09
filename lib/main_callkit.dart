@@ -412,7 +412,7 @@ void _navigateToCallScreen(
   // нет ключей для ответа, основной WS не поднят. НЕ открываем экран и не отвечаем,
   // гасим остатки CallKit. Первопричина зомби-звонков на стёртом телефоне — push-
   // изолят держал старый pubkey (пофикшено reload prefs); это защита в глубину.
-  if (cryptoService.publicKeyBase64 == null) {
+  if (cryptoService.addressBase64 == null) {
     DebugLogger.warn('CALLKIT', 'Нет аккаунта — входящий звонок проигнорирован');
     _pendingCall = null;
     _isProcessingCallKitAnswer = false;

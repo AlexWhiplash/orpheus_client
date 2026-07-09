@@ -11,7 +11,7 @@ class RoomsService {
 
   final http.Client _httpClient;
 
-  String? get _pubkey => cryptoService.publicKeyBase64;
+  String? get _pubkey => cryptoService.addressBase64;
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',

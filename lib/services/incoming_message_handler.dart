@@ -10,12 +10,17 @@ import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/notification_service.dart';
 
 abstract interface class IncomingMessageCrypto {
-  Future<String> decrypt(String senderPublicKeyBase64, String encryptedPayload);
+  /// Расшифровка: [senderEncKeyBase64] — X25519 enc-ключ отправителя (НЕ адрес!).
+  Future<String> decrypt(String senderEncKeyBase64, String encryptedPayload);
+
+  /// Проверка самоподписи связки адрес<->enc отправителя (Ed25519).
+  Future<bool> verifyIdentityBundle(String address, String enc, String sig);
 }
 
 abstract interface class IncomingMessageDatabase {
   Future<void> addMessage(ChatMessage message, String contactPublicKey);
-  Future<void> addContactIfMissing(String publicKey);
+  Future<void> addContactIfMissing(String publicKey, {String? encryptionKey});
+  Future<String?> getContactEncryptionKey(String publicKey);
   Future<String?> getContactName(String publicKey);
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps);
   Future<int> deleteMessagesByMessageIds(String contactKey, List<String> messageIds);
@@ -310,7 +315,25 @@ class IncomingMessageHandler {
         _lastChatTimestampBySender[senderKey] = now;
       }
 
-      final decryptedMessage = await _crypto.decrypt(senderKey, payload);
+      // senderKey — это Ed25519-АДРЕС; для ECDH нужен X25519 enc-ключ отправителя.
+      // Берём inline-bundle из сообщения (senc/ssig, verified) или сохранённый у контакта.
+      final senc = messageData['senc'] as String?;
+      final ssig = messageData['ssig'] as String?;
+      String? encKey;
+      if (senc != null && senc.isNotEmpty && ssig != null && ssig.isNotEmpty) {
+        if (await _crypto.verifyIdentityBundle(senderKey, senc, ssig)) {
+          encKey = senc;
+        } else {
+          DebugLogger.warn('CHAT', 'inline-bundle отправителя не прошёл проверку подписи');
+        }
+      }
+      encKey ??= await _db.getContactEncryptionKey(senderKey);
+      if (encKey == null || encKey.isEmpty) {
+        DebugLogger.warn('CHAT', 'Нет enc-ключа отправителя — сообщение не расшифровать');
+        return;
+      }
+
+      final decryptedMessage = await _crypto.decrypt(encKey, payload);
 
       final receivedMessage = ChatMessage(
         messageId: messageId,
@@ -320,9 +343,9 @@ class IncomingMessageHandler {
         isRead: false,
       );
 
-      // Авто-добавляем неизвестного отправителя в контакты, иначе сообщение
-      // сохранится, но не появится в списке чатов (аудит DB-6).
-      await _db.addContactIfMissing(senderKey);
+      // Авто-добавляем неизвестного отправителя в контакты (и запоминаем его enc-ключ),
+      // иначе сообщение сохранится, но не появится в списке чатов (аудит DB-6).
+      await _db.addContactIfMissing(senderKey, encryptionKey: encKey);
       await _db.addMessage(receivedMessage, senderKey);
       _emitChatUpdate(senderKey);
 

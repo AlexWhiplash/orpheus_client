@@ -31,6 +31,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/io.dart';
 
 import 'package:orpheus_project/config.dart';
+import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/notification_service.dart';
 
 /// Публичный ключ пользователя (НЕ секрет — распространяется через QR), чтобы
@@ -289,6 +290,17 @@ class _ServicePushRunner {
   // и переподключиться на новый.
   String? _connectedHost;
 
+  // PoP: изолят должен доказать владение адресом (подписать challenge). Своя копия
+  // CryptoService (отдельный процесс), инициализируется из secure storage лениво.
+  final CryptoService _crypto = CryptoService();
+  bool _authed = false;
+  String? _connectedAddress;
+
+  static List<int> _b64urlDecode(String s) {
+    final pad = (4 - s.length % 4) % 4;
+    return base64Url.decode(s + ('=' * pad));
+  }
+
   static const _ignoredTypes = <String>{
     'error',
     'payment-confirmed',
@@ -372,8 +384,16 @@ class _ServicePushRunner {
       ws.pingInterval = const Duration(seconds: 10);
       _channel = IOWebSocketChannel(ws);
       _connectedHost = host;
+      _connectedAddress = pubkey;
+      _authed = false; // сначала обязательный PoP-хендшейк
       _sub = _channel!.stream.listen(
-        (message) => _onFrame(message),
+        (message) async {
+          if (!_authed) {
+            await _handlePopFrame(message);
+          } else {
+            await _onFrame(message);
+          }
+        },
         onDone: () => _onSocketClosed(),
         onError: (_) => _onSocketClosed(),
         cancelOnError: true,
@@ -414,6 +434,41 @@ class _ServicePushRunner {
     } catch (_) {}
     _channel = null;
     _connectedHost = null;
+    _authed = false;
+  }
+
+  /// Обязательный PoP-хендшейк в изоляте: на challenge подписываем и шлём proof;
+  /// на pop-ok переходим в рабочий режим. Иначе сервер закроет сокет (1008).
+  Future<void> _handlePopFrame(dynamic message) async {
+    try {
+      final data = json.decode(message as String);
+      if (data is! Map<String, dynamic>) return;
+      final type = data['type'];
+      if (type == 'pop-challenge') {
+        if (_crypto.addressBase64 == null) {
+          await _crypto.init(); // читает root_seed из secure storage, деривит ключи
+        }
+        if (_crypto.addressBase64 == null) {
+          await _closeSocket();
+          return;
+        }
+        final nonce = _b64urlDecode(data['nonce'] as String);
+        final ts = data['ts'] as int;
+        final sig = await _crypto.signPopProof(nonce, ts);
+        _channel?.sink.add(json.encode({
+          'type': 'pop-proof',
+          'v': 1,
+          'address': _connectedAddress,
+          'sig': sig,
+        }));
+      } else if (type == 'pop-ok') {
+        _authed = true;
+      } else {
+        await _closeSocket();
+      }
+    } catch (_) {
+      await _closeSocket();
+    }
   }
 
   Future<void> _onFrame(dynamic message) async {

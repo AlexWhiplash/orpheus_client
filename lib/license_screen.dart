@@ -296,7 +296,7 @@ class _LicenseScreenState extends State<LicenseScreen> {
     });
 
     try {
-      final myPubkey = cryptoService.publicKeyBase64;
+      final myPubkey = cryptoService.addressBase64;
       if (myPubkey == null) throw Exception(l10n.keysNotInitialized);
 
       final url = Uri.parse(AppConfig.httpUrl('/api/activate-promo'));

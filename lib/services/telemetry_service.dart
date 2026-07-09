@@ -98,7 +98,7 @@ class TelemetryService {
 
   Future<void> flush() async {
     if (!_enabled || _sending || _queue.isEmpty) return;
-    final pubkey = cryptoService.publicKeyBase64;
+    final pubkey = cryptoService.addressBase64;
     if (pubkey == null || pubkey.isEmpty) return;
 
     _sending = true;

@@ -324,7 +324,7 @@ Future<void> _initializeApp() async {
 /// постоянного сервиса. Пока main-изолят жив и пишет heartbeat, сервис молчит;
 /// когда приложение убито и heartbeat протухает — сервис берёт доставку на себя.
 void _startPushConnectionAndHeartbeat() {
-  final pubkey = cryptoService.publicKeyBase64;
+  final pubkey = cryptoService.addressBase64;
   if (!_hasKeys || pubkey == null || pubkey.isEmpty) return;
 
   Future<void> beat() async {
@@ -354,7 +354,7 @@ Future<void> switchApiServer(String host) async {
   try {
     websocketService.disconnect();
   } catch (_) {}
-  final pubkey = cryptoService.publicKeyBase64;
+  final pubkey = cryptoService.addressBase64;
   if (pubkey != null && pubkey.isNotEmpty) {
     websocketService.connect(pubkey);
   }
@@ -420,8 +420,13 @@ class _IncomingCryptoAdapter implements IncomingMessageCrypto {
   _IncomingCryptoAdapter(this._crypto);
   final CryptoService _crypto;
   @override
-  Future<String> decrypt(String senderPublicKeyBase64, String encryptedPayload) {
-    return _crypto.decrypt(senderPublicKeyBase64, encryptedPayload);
+  Future<String> decrypt(String senderEncKeyBase64, String encryptedPayload) {
+    return _crypto.decrypt(senderEncKeyBase64, encryptedPayload);
+  }
+
+  @override
+  Future<bool> verifyIdentityBundle(String address, String enc, String sig) {
+    return _crypto.verifyIdentityBundle(address, enc, sig);
   }
 }
 
@@ -435,8 +440,13 @@ class _IncomingDatabaseAdapter implements IncomingMessageDatabase {
   }
 
   @override
-  Future<void> addContactIfMissing(String publicKey) {
-    return _db.addContactIfMissing(publicKey);
+  Future<void> addContactIfMissing(String publicKey, {String? encryptionKey}) {
+    return _db.addContactIfMissing(publicKey, encryptionKey: encryptionKey);
+  }
+
+  @override
+  Future<String?> getContactEncryptionKey(String publicKey) {
+    return _db.getContactEncryptionKey(publicKey);
   }
 
   @override
@@ -594,8 +604,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     // Подключаем WebSocket здесь, ПОСЛЕ регистрации _licenseSubscription,
     // чтобы не пропустить license-status из-за race condition с broadcast stream.
-    if (_keysExist && !_isLocked && cryptoService.publicKeyBase64 != null) {
-      websocketService.connect(cryptoService.publicKeyBase64!);
+    if (_keysExist && !_isLocked && cryptoService.addressBase64 != null) {
+      websocketService.connect(cryptoService.addressBase64!);
     }
   }
 
@@ -661,8 +671,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         _isCheckCompleted = false;
         _isLicensed = false;
       });
-      if (cryptoService.publicKeyBase64 != null) {
-        websocketService.connect(cryptoService.publicKeyBase64!);
+      if (cryptoService.addressBase64 != null) {
+        websocketService.connect(cryptoService.addressBase64!);
       }
       // Пере-армить проверку лицензии — иначе после wipe экран лицензии не покажется
       // (подписка была отменена, таймаут израсходован) и экран зависнет чёрным.
@@ -681,8 +691,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // что без этого основной WS не встаёт до ручного сворачивания-разворачивания
     // (не работают presence и исходящие звонки). forceReconnectIfStale поднимает
     // WS даже если он залип в Connecting после фона (частый кейс на Samsung).
-    if (_keysExist && cryptoService.publicKeyBase64 != null) {
-      websocketService.forceReconnectIfStale(cryptoService.publicKeyBase64!);
+    if (_keysExist && cryptoService.addressBase64 != null) {
+      websocketService.forceReconnectIfStale(cryptoService.addressBase64!);
     }
 
     // Обработать отложенный звонок если есть
@@ -788,8 +798,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Reconnect WebSocket on return to app. forceReconnectIfStale вместо connect:
       // после фона сокет часто мёртв, а статус залип в Connecting -> connect() был бы
       // no-op и WS висел бы в Connecting; здесь форсируем свежий реконнект.
-      if (cryptoService.publicKeyBase64 != null) {
-        websocketService.forceReconnectIfStale(cryptoService.publicKeyBase64!);
+      if (cryptoService.addressBase64 != null) {
+        websocketService.forceReconnectIfStale(cryptoService.addressBase64!);
       }
       // Clear notification tray when user opens the app
       NotificationService.hideMessageNotifications();
@@ -944,8 +954,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // После активации лицензии убеждаемся, что WS поднят свежей сессией — иначе
       // онлайн/presence мог не встать до перезапуска приложения (device-тест: у
       // некоторых Samsung после активации онлайн не поднимался до рестарта).
-      if (cryptoService.publicKeyBase64 != null) {
-        websocketService.forceReconnectIfStale(cryptoService.publicKeyBase64!);
+      if (cryptoService.addressBase64 != null) {
+        websocketService.forceReconnectIfStale(cryptoService.addressBase64!);
       }
     });
   }

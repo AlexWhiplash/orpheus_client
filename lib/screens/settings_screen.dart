@@ -237,7 +237,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    final myKey = cryptoService.publicKeyBase64 ?? l10n.error;
+    final myKey = cryptoService.addressBase64 ?? l10n.error;
     final versionLabel = _appVersionLabel ?? AppConfig.appVersion;
 
     return Scaffold(

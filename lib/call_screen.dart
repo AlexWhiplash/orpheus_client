@@ -146,7 +146,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
         ?? (widget.offer != null
             ? CallIdStorage.extractCallId(widget.offer!, widget.contactPublicKey)
             : CallIdStorage.generateUniqueCallId(
-                cryptoService.publicKeyBase64 ?? widget.contactPublicKey,
+                cryptoService.addressBase64 ?? widget.contactPublicKey,
               ));
 
     // Контроллер логики звонка (машина состояний + реконнект/ICE-restart).

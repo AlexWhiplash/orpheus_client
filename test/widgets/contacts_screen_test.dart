@@ -34,7 +34,8 @@ void main() {
             CREATE TABLE contacts (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               name TEXT NOT NULL,
-              publicKey TEXT NOT NULL UNIQUE
+              publicKey TEXT NOT NULL UNIQUE,
+              encryptionKey TEXT
             )
           ''');
           await db.execute('''

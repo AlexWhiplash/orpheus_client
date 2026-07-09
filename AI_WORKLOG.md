@@ -29,11 +29,25 @@ getPrivateKeyBase64/deleteAccount` перевязаны на seed; legacy X25519
 шлёт `pop-proof`, и только на `pop-ok` становится `Connected` (стартует ping-pong + слив pending).
 Таймаут хендшейка 12с. Компилируется (`dart analyze` — только преждние `avoid_print`-инфо).
 
-**Дальше (связанный цельный заход — шаги 10+12):** свитч ВСЕХ routing/account-идентичностей
-(`cryptoService.publicKeyBase64` → `addressBase64`) в main.dart (WS-коннект/реконнект), license/
-support/rooms/telemetry/call/purchase — атомарно (иначе лицензия под X25519 vs WS под Ed25519);
-хендшейк в `push_connection_service` (изолят читает seed, деривит Ed25519); затем `Contact.encryptionKey`
-+ directory-резолв + QR-bundle (шаги 11,13). Деплой сервер+клиент только вместе.
+**Шаги 8,10,11,12,13 (СДЕЛАНЫ) — клиентская фаза завершена:**
+- **Свитч идентичности (12):** `cryptoService.publicKeyBase64` → `addressBase64` во всех routing/account
+  местах (main.dart WS-коннект/реконнект + push-heartbeat + switchApiServer, license/support/rooms/
+  telemetry/call/purchase/room_chat/settings/status/main_callkit). Идентичность = Ed25519-адрес везде.
+- **Контакты (11):** `Contact.encryptionKey` (X25519) + колонка в БД (v9 миграция) + `getContactEncryptionKey`;
+  `addContactIfMissing(pubkey, {encryptionKey})` дописывает enc при узнавании.
+- **Расшифровка (12):** `incoming_message_handler` резолвит X25519 enc-ключ отправителя из inline-bundle
+  сообщения (`senc`/`ssig`, проверка самоподписи `verifyIdentityBundle`) или сохранённого контакта;
+  `sendChatMessage` прикрепляет свой подписанный enc-bundle inline; чат шифруется на `contact.encryptionKey`
+  (роутинг — по адресу). Новый `IdentityDirectoryService` (резолв `GET /api/identity` с проверкой подписи).
+- **Изолят (10):** `push_connection_service` читает root_seed из secure storage, деривит Ed25519 и проходит
+  PoP-хендшейк (иначе сервер отклонял бы фоновое подключение).
+- **Публикация (8):** на регистрации/импорте клиент публикует связку в directory (`POST /api/identity`).
+- Тесты: обновлены фейки/схемы (contacts.encryptionKey, новые методы интерфейсов). `flutter test` — **359 passed**, `dart analyze` — 0 ошибок. Интероп-вектор Dart↔Python — зелёный.
+
+**НЕ покрыто автотестами (нужна ручная проверка):** e2e на устройстве (register → publish → connect+PoP →
+сообщение от незнакомца → звонок) + сборка/установка APK. **Cert pinning (9b)** вынесен отдельным
+контролем — слепой деплой без проверки на устройстве может закирпичить связь. QR по-прежнему несёт адрес
+(offline in-person add дорезолвит enc через directory/inline) — bundle-QR как follow-up.
 
 ## 2026-07-08 — Фикс: ответ на звонок с локскрина не соединялся (glare)
 

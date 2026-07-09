@@ -8,13 +8,17 @@ class _FakeCrypto implements IncomingMessageCrypto {
   final Future<String> Function(String sender, String payload) _decryptFn;
 
   @override
-  Future<String> decrypt(String senderPublicKeyBase64, String encryptedPayload) {
-    return _decryptFn(senderPublicKeyBase64, encryptedPayload);
+  Future<String> decrypt(String senderEncKeyBase64, String encryptedPayload) {
+    return _decryptFn(senderEncKeyBase64, encryptedPayload);
   }
+
+  @override
+  Future<bool> verifyIdentityBundle(String address, String enc, String sig) async => true;
 }
 
 class _FakeDb implements IncomingMessageDatabase {
   final Map<String, String> contactNames = {};
+  final Map<String, String> contactEncKeys = {};
   final List<(ChatMessage message, String contactKey)> saved = [];
 
   final Set<String> ensuredContacts = {};
@@ -25,8 +29,15 @@ class _FakeDb implements IncomingMessageDatabase {
   }
 
   @override
-  Future<void> addContactIfMissing(String publicKey) async {
+  Future<void> addContactIfMissing(String publicKey, {String? encryptionKey}) async {
     ensuredContacts.add(publicKey);
+    if (encryptionKey != null) contactEncKeys[publicKey] = encryptionKey;
+  }
+
+  @override
+  Future<String?> getContactEncryptionKey(String publicKey) async {
+    // Возвращаем не-null, чтобы chat-декрипт в тестах проходил (fake decrypt ключ игнорирует).
+    return contactEncKeys[publicKey] ?? 'fake-enc';
   }
 
   @override

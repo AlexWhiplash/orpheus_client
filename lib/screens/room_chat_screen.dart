@@ -68,7 +68,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
   bool get _isOrpheusRoom => widget.room.id == _orpheusRoomId;
 
   Future<void> _loadMyBadge() async {
-    final myKey = cryptoService.publicKeyBase64;
+    final myKey = cryptoService.addressBase64;
     if (myKey == null) return;
     final badge = await BadgeService.instance.getBadge(myKey);
     if (!mounted) return;
@@ -296,7 +296,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
           RoomMessage(
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             text: text,
-            senderKey: cryptoService.publicKeyBase64,
+            senderKey: cryptoService.addressBase64,
             senderName: _isOrpheusRoom && _sendAsOrpheus
                 ? l10n.orpheusOfficialName
                 : null,
@@ -791,7 +791,7 @@ class _RoomMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myKey = cryptoService.publicKeyBase64;
+    final myKey = cryptoService.addressBase64;
     final isOfficial = message.authorType == 'orpheus';
     final isMine = !message.isSystem &&
         !isOfficial &&

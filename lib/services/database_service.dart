@@ -58,7 +58,7 @@ class DatabaseService {
       final db = await openDatabase(
         path,
         password: dbKey,
-        version: 8,
+        version: 9,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
         singleInstance: true, // Важно для избежания блокировок
@@ -197,6 +197,15 @@ class DatabaseService {
           DebugLogger.warn('DB', 'Ошибка индекса v8: $e');
         }
       }
+      if (oldVersion < 9) {
+        // PoP: contacts.publicKey теперь = Ed25519-адрес; отдельный X25519 enc-ключ.
+        DebugLogger.info('DB', 'Миграция до версии 9 — contacts.encryptionKey');
+        try {
+          await db.execute("ALTER TABLE contacts ADD COLUMN encryptionKey TEXT");
+        } catch (e) {
+          DebugLogger.warn('DB', 'Ошибка миграции v9: $e');
+        }
+      }
       print("DB: Миграция завершена");
     } catch (e) {
       print("DB: ОШИБКА миграции: $e");
@@ -209,7 +218,8 @@ class DatabaseService {
       CREATE TABLE contacts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        publicKey TEXT NOT NULL UNIQUE
+        publicKey TEXT NOT NULL UNIQUE,
+        encryptionKey TEXT
       )
     ''');
   }
@@ -292,14 +302,22 @@ class DatabaseService {
   /// префикс публичного ключа (пользователь может переименовать). Duress НЕ
   /// проверяем — как и addMessage, чтобы реальный набор данных был консистентен
   /// (в duress-режиме список контактов всё равно пуст на чтении).
-  Future<void> addContactIfMissing(String publicKey) async {
+  Future<void> addContactIfMissing(String publicKey, {String? encryptionKey}) async {
     if (publicKey.isEmpty) return;
     final db = await instance.database;
     final existing = await db.query('contacts',
-        columns: ['id'], where: 'publicKey = ?', whereArgs: [publicKey], limit: 1);
-    if (existing.isNotEmpty) return;
+        columns: ['id', 'encryptionKey'], where: 'publicKey = ?', whereArgs: [publicKey], limit: 1);
+    if (existing.isNotEmpty) {
+      // Контакт уже есть: допишем enc-ключ, если раньше его не знали, а теперь узнали.
+      final currentEnc = existing.first['encryptionKey'] as String?;
+      if (encryptionKey != null && encryptionKey.isNotEmpty && (currentEnc == null || currentEnc.isEmpty)) {
+        await db.update('contacts', {'encryptionKey': encryptionKey},
+            where: 'publicKey = ?', whereArgs: [publicKey]);
+      }
+      return;
+    }
     final name = publicKey.length >= 8 ? publicKey.substring(0, 8) : publicKey;
-    await db.insert('contacts', {'name': name, 'publicKey': publicKey},
+    await db.insert('contacts', {'name': name, 'publicKey': publicKey, 'encryptionKey': encryptionKey},
         conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
@@ -313,23 +331,39 @@ class DatabaseService {
     // 1. Контакты с недавними сообщениями — сверху
     // 2. Контакты без сообщений — снизу (по имени)
     final maps = await db.rawQuery('''
-      SELECT c.id, c.name, c.publicKey,
+      SELECT c.id, c.name, c.publicKey, c.encryptionKey,
              COALESCE(MAX(m.timestamp), 0) as lastMessageTime
       FROM contacts c
       LEFT JOIN messages m ON c.publicKey = m.contactPublicKey
-      GROUP BY c.id, c.name, c.publicKey
+      GROUP BY c.id, c.name, c.publicKey, c.encryptionKey
       ORDER BY lastMessageTime DESC, c.name ASC
     ''');
-    
+
     return List.generate(maps.length, (i) {
       final lastTs = maps[i]['lastMessageTime'] as int?;
       return Contact(
         id: maps[i]['id'] as int,
         name: maps[i]['name'] as String,
         publicKey: maps[i]['publicKey'] as String,
+        encryptionKey: maps[i]['encryptionKey'] as String?,
         lastMessageTime: (lastTs == null || lastTs == 0) ? null : lastTs,
       );
     });
+  }
+
+  /// X25519 enc-ключ контакта (для расшифровки/шифрования). null, если контакта
+  /// нет или enc-ключ ещё не известен.
+  Future<String?> getContactEncryptionKey(String publicKey) async {
+    if (_isDuressMode) return null;
+    try {
+      final db = await instance.database;
+      final maps = await db.query('contacts',
+          columns: ['encryptionKey'], where: 'publicKey = ?', whereArgs: [publicKey], limit: 1);
+      if (maps.isEmpty) return null;
+      return maps[0]['encryptionKey'] as String?;
+    } catch (e) {
+      return null;
+    }
   }
 
   /// Получить контакт по publicKey
@@ -354,6 +388,7 @@ class DatabaseService {
         id: maps[0]['id'] as int,
         name: maps[0]['name'] as String,
         publicKey: maps[0]['publicKey'] as String,
+        encryptionKey: maps[0]['encryptionKey'] as String?,
       );
     } catch (e) {
       print("DB ERROR: Failed to get contact by publicKey: $e");

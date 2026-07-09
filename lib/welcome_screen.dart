@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
+import 'package:orpheus_project/services/identity_directory_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
@@ -128,6 +129,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     setState(() => _isCreating = true);
     try {
       await cryptoService.generateNewKeys();
+      // Публикуем подписанную связку адрес<->enc в directory (best-effort),
+      // чтобы контакты могли зарезолвить наш enc-ключ.
+      IdentityDirectoryService.instance.publishSelf();
       widget.onAuthComplete();
     } catch (e) {
       if (!mounted) return;
@@ -145,6 +149,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Future<void> _importAccount(String key) async {
     HapticFeedback.lightImpact();
     await cryptoService.importPrivateKey(key);
+    IdentityDirectoryService.instance.publishSelf();
     widget.onAuthComplete();
   }
 

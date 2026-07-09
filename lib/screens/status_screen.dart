@@ -151,7 +151,7 @@ class _StatusScreenState extends State<StatusScreen>
       final crypto = CryptoService.instance;
       await crypto.init();
 
-      final pubKey = widget.debugPublicKeyBase64 ?? crypto.publicKeyBase64;
+      final pubKey = widget.debugPublicKeyBase64 ?? crypto.addressBase64;
       final regDate = crypto.registrationDate;
 
       if (!mounted) return;
@@ -381,6 +381,11 @@ class _ConnectionCard extends StatelessWidget {
               Icons.cloud_done_rounded
             ),
           ConnectionStatus.Connecting => (
+              l10n.connecting,
+              AppColors.warning,
+              Icons.cloud_sync_rounded
+            ),
+          ConnectionStatus.Authenticating => (
               l10n.connecting,
               AppColors.warning,
               Icons.cloud_sync_rounded

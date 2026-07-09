@@ -71,7 +71,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   }
 
   Future<void> _selectTariff(Tariff t) async {
-    final pubkey = cryptoService.publicKeyBase64;
+    final pubkey = cryptoService.addressBase64;
     if (pubkey == null) return;
     setState(() => _phase = _Phase.creatingInvoice);
     try {

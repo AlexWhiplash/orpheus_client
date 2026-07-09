@@ -1,0 +1,87 @@
+diff --git a/app/public_api.py b/app/public_api.py
+index fbeb74e..fd29edc 100644
+--- a/app/public_api.py
++++ b/app/public_api.py
+@@ -59,6 +59,7 @@ def build_public_router(ctx: Dict):
+         out: List[dict] = []
+         for r in rows:
+             d = dict(r)
++            d.pop("internal_notes", None)  # приватность: внутренние заметки не отдаём в публичном ответе
+             if (d.get("public_changelog") or "").strip():
+                 out.append(d)
+         return out
+@@ -112,9 +113,9 @@ def build_public_router(ctx: Dict):
+                 "download_url": "",
+                 "created_at": None,
+                 "public_changelog": "",
+-                "internal_notes": "",
+             }
+         payload = dict(latest)
++        payload.pop("internal_notes", None)  # приватность: не отдаём внутренние заметки
+         if not (payload.get("public_changelog") or "").strip():
+             payload["public_changelog"] = ""
+         return payload
+diff --git a/main.py b/main.py
+index 283151f..4131222 100644
+--- a/main.py
++++ b/main.py
+@@ -2522,7 +2522,9 @@ async def startup():
+             await log_event("ORACLE", f"KB auto-seed error: {e}", level="error")
+ 
+     if PAYMENTS_ENABLED:
+-        asyncio.create_task(payment_watcher(database, manager))
++        # notify_license_activated -> единый путь доставки license-status (fan-out +
++        # Redis cross-node + offline), тот же, что у promo/admin активации.
++        asyncio.create_task(payment_watcher(database, manager, notify_license_activated))
+         await log_event("PAYMENTS", "Payment watcher ENABLED", details={"enabled": True})
+     else:
+         await log_event("PAYMENTS", "Payment watcher DISABLED", details={"enabled": False})
+diff --git a/payments.py b/payments.py
+index d760619..e7deebb 100644
+--- a/payments.py
++++ b/payments.py
+@@ -208,7 +208,10 @@ async def get_trx_balance(address):
+             return 0.0
+ 
+ 
+-async def payment_watcher(database, manager=None):
++async def payment_watcher(database, manager=None, notify=None):
++    # notify = notify_license_activated (прокидывается из main). Если задан — доставка
++    # license-status идёт единым путём (fan-out во все сокеты + Redis cross-node +
++    # offline). manager оставлен для обратной совместимости/тестов.
+     print("[WATCHER] Запущен мониторинг блокчейна...")
+     while True:
+         try:
+@@ -239,10 +242,19 @@ async def payment_watcher(database, manager=None):
+                 if bal >= expected:
+                     print(f"[WATCHER] ОПЛАТА ПОЛУЧЕНА! {address} -> {bal} TRX")
+                     print(f"[WATCHER] Подтверждение лицензии для {pubkey[:16]}...")
+-                    await confirm_license(database, pubkey, address, "trx_auto_detected", bal, payment_id)
+-
+-                    # Уведомляем клиента через WebSocket (во все живые сессии pubkey)
+-                    if manager is not None:
++                    # tx_id должен быть УНИКАЛЬНЫМ (licenses.tx_id имеет UNIQUE-констрейнт).
++                    # Было "trx_auto_detected" (константа) -> 2-й авто-детект падал на
++                    # IntegrityError и НЕ активировался. TODO: заменить на реальный tx_hash,
++                    # когда вотчер перейдёт на разбор TRC-20 транзакций.
++                    await confirm_license(database, pubkey, address, f"trx_auto_{payment_id}", bal, payment_id)
++
++                    # Доставка статуса лицензии. Предпочтительно через notify_license_activated
++                    # (единый путь: fan-out во ВСЕ сокеты pubkey + Redis cross-node + offline).
++                    # Иначе — прямой fallback через manager.
++                    if notify is not None:
++                        print(f"[WATCHER] license-status через notify_license_activated для {pubkey[:16]}...")
++                        await notify(pubkey)
++                    elif manager is not None:
+                         print(f"[WATCHER] Отправка уведомления о платеже через WebSocket для {pubkey[:16]}...")
+                         delivered = await manager.send_personal_message({
+                             "type": "license-status",
+@@ -261,7 +273,7 @@ async def payment_watcher(database, manager=None):
+             print(f"[WATCHER ERROR] Критическая ошибка в watcher: {e}")
+             print(f"[WATCHER ERROR] Traceback: {traceback.format_exc()}")
+ 
+-        await asyncio.sleep(60)  # Проверка раз в 15 секунд
++        await asyncio.sleep(60)  # Проверка раз в 60 секунд
+ 
+ 
+ async def manual_activate_license(database, pubkey: str):

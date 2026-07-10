@@ -20,6 +20,7 @@ abstract interface class IncomingMessageCrypto {
 abstract interface class IncomingMessageDatabase {
   Future<void> addMessage(ChatMessage message, String contactPublicKey);
   Future<void> addContactIfMissing(String publicKey, {String? encryptionKey});
+  Future<bool> isContact(String publicKey);
   Future<String?> getContactEncryptionKey(String publicKey);
   Future<String?> getContactName(String publicKey);
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps);
@@ -113,6 +114,14 @@ class IncomingMessageHandler {
 
     // Пропускаем служебные сообщения и любые пакеты без sender_pubkey.
     if (type == null || senderKey == null || _ignoredTypes.contains(type)) return;
+
+    // Строгий mutual-add: сообщения/звонки принимаем ТОЛЬКО от добавленных контактов.
+    // Не-контакты дропаем целиком (без расшифровки, без показа, без авто-добавления).
+    // Комнаты/Оракул сюда не приходят (у них свои пути), support-reply обработан выше.
+    if (!await _db.isContact(senderKey)) {
+      DebugLogger.info('SECURITY', 'Дроп $type от не-контакта (строгий mutual-add)');
+      return;
+    }
 
     // === ЗВОНКИ ===
     if (type == 'call-offer') {

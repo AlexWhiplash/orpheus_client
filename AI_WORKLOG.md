@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-07-10 — Строгий mutual-add для сообщений и звонков (продуктовое решение)
+
+**Задача (владелец):** high-risk-модель — принимать сообщения/звонки ТОЛЬКО от добавленных контактов;
+не-контакты дропать целиком. Раньше неизвестный отправитель авто-добавлялся, его сообщение
+расшифровывалось и показывалось (поведение оригинального Orpheus).
+
+**Ключевое (перепроверено перед реализацией):** сервер zero-knowledge — о контактах не знает,
+enforcement только на получателе. В **фоне (killed-app) зашифрованная БД ненадёжна** (`getContact` там
+best-effort с таймаутом), поэтому фоновый гейт нельзя по БД — иначе звонок от реального контакта отвалится.
+
+**Реализация (client-only):**
+- **Foreground** (`incoming_message_handler.handleDecoded`): после проверок sender добавлен гейт
+  `if (!await _db.isContact(senderKey)) return;` — дропает chat/call-offer/ice/answer/hang-up/
+  delete-for-both от не-контактов (без расшифровки/показа/авто-добавления). Комнаты/Оракул сюда не
+  приходят (свои пути), support-reply обработан выше.
+- **Background** (`notification_service.handleBackgroundPush`): гейт для peer-типов (call-offer/chat/
+  new_message) по **allow-list** адресов контактов из secure storage; комнаты (`room-*`)/support не гейтим.
+- **Allow-list**: `DatabaseService` пишет адреса контактов в secure storage (`kContactAllowlistKey`,
+  Keystore-шифр) при add/delete; `DatabaseService.loadContactAllowlist()` (static) читает без БД — для изолята.
+- `isContact()` + адаптер в main.dart. Тесты: `test/services/incoming_message_handler_test.dart` —
+  строгий гейт (не-контакт chat+call → дроп, контакт → проходит). Allow-list синкается разово при первом
+открытии БД (геттер `database`) — покрывает существующие контакты после апгрейда. **flutter test — 360 passed, analyze 0.**
+
 ## 2026-07-09 — PoP эпик: клиентский крипто-фундамент (Ed25519 идентичность), шаг 7/14
 
 **Контекст:** эпик mandatory proof-of-possession для WS (закрывает имперсонацию по known-pubkey,

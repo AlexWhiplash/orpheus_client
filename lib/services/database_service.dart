@@ -18,6 +18,9 @@ class DatabaseService {
   static const String _dbFileName = 'orpheus.db';
   // Ключ шифрования БД (SQLCipher). Хранится в Keystore-backed secure storage.
   static const String _dbKeyStoreKey = 'orpheus_db_key';
+  // Allow-list адресов контактов в secure storage — для строгого mutual-add гейта
+  // в фоновом изоляте (там зашифрованная БД ненадёжна). Keystore-шифр, граф не утекает.
+  static const String kContactAllowlistKey = 'orpheus_contact_addrs';
   final FlutterSecureStorage _secureStorage = appSecureStorage;
   bool _isWiping = false;
   DatabaseService._init();
@@ -43,6 +46,9 @@ class DatabaseService {
     if (_isWiping) throw StateError('Database is being wiped');
     if (_database != null) return _database!;
     _database = await _initDB(_dbFileName);
+    // Разово при первом открытии синкаем allow-list адресов контактов в secure storage
+    // (для фонового строгого-mutual-add гейта; покрывает и существующие контакты после апгрейда).
+    _syncContactAllowlist();
     return _database!;
   }
 
@@ -294,6 +300,7 @@ class DatabaseService {
 
     final db = await instance.database;
     await db.insert('contacts', contact.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    await _syncContactAllowlist();
   }
 
   /// Добавить контакт, ТОЛЬКО если его ещё нет. Нужно для авто-создания контакта
@@ -319,6 +326,7 @@ class DatabaseService {
     final name = publicKey.length >= 8 ? publicKey.substring(0, 8) : publicKey;
     await db.insert('contacts', {'name': name, 'publicKey': publicKey, 'encryptionKey': encryptionKey},
         conflictAlgorithm: ConflictAlgorithm.ignore);
+    await _syncContactAllowlist();
   }
 
   Future<List<Contact>> getContacts() async {
@@ -349,6 +357,45 @@ class DatabaseService {
         lastMessageTime: (lastTs == null || lastTs == 0) ? null : lastTs,
       );
     });
+  }
+
+  /// Строгий mutual-add: является ли адрес нашим контактом. Duress -> false
+  /// (в duress контактов "нет"). Используется как гейт приёма сообщений/звонков.
+  Future<bool> isContact(String publicKey) async {
+    if (_isDuressMode || publicKey.isEmpty) return false;
+    try {
+      final db = await instance.database;
+      final rows = await db.query('contacts',
+          columns: ['id'], where: 'publicKey = ?', whereArgs: [publicKey], limit: 1);
+      return rows.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Пересобрать allow-list адресов контактов в secure storage (для фонового изолята).
+  Future<void> _syncContactAllowlist() async {
+    try {
+      final db = await instance.database;
+      final rows = await db.query('contacts', columns: ['publicKey']);
+      final addrs = rows.map((r) => r['publicKey'] as String).toList();
+      await _secureStorage.write(key: kContactAllowlistKey, value: json.encode(addrs));
+    } catch (_) {
+      // best-effort: если не удалось — фоновый гейт просто отработает по последнему снимку
+    }
+  }
+
+  /// Читает allow-list адресов контактов из secure storage БЕЗ открытия БД —
+  /// для фонового изолята (там зашифрованная БД ненадёжна). Пустое множество
+  /// при ошибке/отсутствии (тогда фоновый гейт дропнет всё — безопасный дефолт).
+  static Future<Set<String>> loadContactAllowlist() async {
+    try {
+      final raw = await appSecureStorage.read(key: kContactAllowlistKey);
+      if (raw == null || raw.isEmpty) return <String>{};
+      final decoded = json.decode(raw);
+      if (decoded is List) return decoded.map((e) => e.toString()).toSet();
+    } catch (_) {}
+    return <String>{};
   }
 
   /// X25519 enc-ключ контакта (для расшифровки/шифрования). null, если контакта
@@ -402,6 +449,7 @@ class DatabaseService {
       await txn.delete('messages', where: 'contactPublicKey = ?', whereArgs: [publicKey]);
       await txn.delete('contacts', where: 'id = ?', whereArgs: [id]);
     });
+    await _syncContactAllowlist();
   }
 
   /// Обновить имя контакта

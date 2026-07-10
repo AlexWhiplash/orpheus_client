@@ -34,6 +34,22 @@ Future<void> handleBackgroundPush(Map<String, dynamic> data) async {
   final type = data['type'];
   print("PUSH BACKGROUND type: $type");
 
+  // Строгий mutual-add (фон): peer-звонки и peer-сообщения показываем ТОЛЬКО от
+  // добавленных контактов. Проверка по allow-list из secure storage (в фоновом
+  // изоляте зашифрованная БД ненадёжна). Комнаты (room-*) и support-reply не гейтим.
+  final peerSender = (data['caller_key'] ?? data['sender_pubkey'])?.toString();
+  final isPeerType = type == 'incoming_call' ||
+      type == 'call-offer' ||
+      type == 'new_message' ||
+      type == 'chat';
+  if (isPeerType && peerSender != null && peerSender.isNotEmpty) {
+    final allow = await DatabaseService.loadContactAllowlist();
+    if (!allow.contains(peerSender)) {
+      print("PUSH BACKGROUND: drop $type from non-contact (strict mutual-add)");
+      return;
+    }
+  }
+
   // === ВХОДЯЩИЙ ЗВОНОК ===
   // Показываем нативный UI звонка через flutter_callkit_incoming
   if (type == 'incoming_call' || type == 'call-offer') {

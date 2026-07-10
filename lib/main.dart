@@ -445,6 +445,11 @@ class _IncomingDatabaseAdapter implements IncomingMessageDatabase {
   }
 
   @override
+  Future<bool> isContact(String publicKey) {
+    return _db.isContact(publicKey);
+  }
+
+  @override
   Future<String?> getContactEncryptionKey(String publicKey) {
     return _db.getContactEncryptionKey(publicKey);
   }

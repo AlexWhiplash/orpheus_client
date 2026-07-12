@@ -11,7 +11,6 @@ import 'package:orpheus_project/screens/help_screen.dart';
 import 'package:orpheus_project/screens/purchase_screen.dart';
 import 'package:orpheus_project/screens/security_settings_screen.dart';
 import 'package:orpheus_project/screens/support_chat_screen.dart';
-import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/device_settings_service.dart';
@@ -467,13 +466,13 @@ class _PrimaryActions extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: SizedBox(
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: onShare,
-              icon: const Icon(Icons.share, size: 18),
-              label: Text(l10n.share),
-            ),
+          child: ElevatedButton.icon(
+            onPressed: onShare,
+            icon: const Icon(Icons.share, size: 18),
+            label: Text(l10n.share),
+            // Высота 50 как МИНИМУМ, а не жёстко: при крупном системном шрифте
+            // (font_scale 1.3) фикс. высота обрезала низ букв («Поделиться»).
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 50)),
           ),
         ),
       ],

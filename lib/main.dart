@@ -902,29 +902,41 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         return const Locale('en');
       },
       
-      builder: (context, child) => Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => _registerUserActivity('pointer'),
-        onPointerMove: (_) => _registerUserActivity('pointer'),
-        onPointerSignal: (_) => _registerUserActivity('pointer'),
-        child: Stack(
-          children: [
-            child ?? const SizedBox.shrink(),
-            // LockScreen рисуется ПОВЕРХ Navigator'а (всех запушенных маршрутов —
-            // звонка, чата), а не как home. Иначе любой pushed-маршрут перекрывает
-            // LockScreen-как-home и PIN приложения обходится (security). _buildHome
-            // при этом отдаёт пустой чёрный экран, чтобы контент под локом не строился.
-            if (_isLocked && _keysExist)
-              Positioned.fill(
-                child: LockScreen(
-                  onUnlocked: _onUnlocked,
-                  onDuressMode: _onDuressMode,
-                  onWipe: _onWipe,
-                ),
-              ),
-          ],
-        ),
-      ),
+      builder: (context, child) {
+        // Страховочный клэмп системного шрифта: увеличение уважаем до 1.3×, выше —
+        // ограничиваем, чтобы очень крупный системный шрифт (font_scale 1.5–2.0) не
+        // ломал вёрстку целиком. Основа доступности — пофиксельная устойчивость
+        // (FittedBox и гибкие макеты); клэмп — только страховка от экстрима.
+        final mq = MediaQuery.of(context);
+        return MediaQuery(
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(maxScaleFactor: 1.3),
+          ),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _registerUserActivity('pointer'),
+            onPointerMove: (_) => _registerUserActivity('pointer'),
+            onPointerSignal: (_) => _registerUserActivity('pointer'),
+            child: Stack(
+              children: [
+                child ?? const SizedBox.shrink(),
+                // LockScreen рисуется ПОВЕРХ Navigator'а (всех запушенных маршрутов —
+                // звонка, чата), а не как home. Иначе любой pushed-маршрут перекрывает
+                // LockScreen-как-home и PIN приложения обходится (security). _buildHome
+                // при этом отдаёт пустой чёрный экран, чтобы контент под локом не строился.
+                if (_isLocked && _keysExist)
+                  Positioned.fill(
+                    child: LockScreen(
+                      onUnlocked: _onUnlocked,
+                      onDuressMode: _onDuressMode,
+                      onWipe: _onWipe,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
       home: _buildHome(),
     );
   }

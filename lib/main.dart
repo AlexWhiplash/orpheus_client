@@ -876,8 +876,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       
-      // Локализация
-      locale: LocaleService.instance.selectedLocale,
+      // Локализация. ВАЖНО: отдаём effectiveLocale (всегда конкретная локаль), а НЕ
+      // selectedLocale. На «Авто» selectedLocale == null, а переход MaterialApp.locale
+      // в null у Flutter не всегда пере-резолвится вживую — язык «залипал» на прежнем
+      // (напр. оставался EN вместо системного RU). effectiveLocale на «Авто» сам
+      // подставляет системный язык из supportedLocales, поэтому смена применяется сразу.
+      locale: LocaleService.instance.effectiveLocale,
       supportedLocales: LocaleService.supportedLocales,
       localizationsDelegates: const [
         L10n.delegate,

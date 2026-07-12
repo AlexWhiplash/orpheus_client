@@ -65,6 +65,13 @@ analyze — 0 ошибок.
 RU `ч/м/с`); (2) `enterName` укорочен («Enter name» / «Введите имя») — длинный hint обрезался в поле
 при 1.3×. analyze — 0 ошибок (pre-existing `_reconnectCount` не трогал — вне задачи).
 
+**Баг «Авто»-языка (по замечанию владельца).** При выборе «Системный/Auto» язык залипал на прежнем
+(остался EN, хотя телефон RU — проверено adb: `persist.sys.locale=ru-RU`, `system_locales=ru-RU`).
+Корень: `MaterialApp.locale = LocaleService.selectedLocale` (на Auto = `null`); переход локали в `null`
+у Flutter не пере-резолвится вживую (`_onLocaleChanged` делает setState, State и MaterialApp — один,
+резолв-колбэк корректный, но null-путь не срабатывал live). Фикс: `locale: effectiveLocale` —
+всегда конкретная локаль (Auto+system-ru → `ru`), переключение применяется сразу. analyze — 0 ошибок.
+
 ---
 
 ## 2026-07-10 — Строгий mutual-add для сообщений и звонков (продуктовое решение)

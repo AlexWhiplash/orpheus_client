@@ -60,6 +60,21 @@ class CryptoService {
 
   static String _b64urlNoPad(List<int> b) => base64Url.encode(b).replaceAll('=', '');
 
+  /// Проверка формата сетевого адреса: Ed25519 pub в base64url без padding
+  /// (32 байта = 43 символа алфавита A-Za-z0-9-_). Единый источник правды о
+  /// формате адреса — чтобы UI не создавал «битый» контакт со старым X25519-ключом
+  /// (стандартный base64 с '+/=' или padding) или мусором, которому нельзя
+  /// писать/звонить (роутинг и строгий mutual-add работают именно по адресу).
+  static bool isValidAddress(String address) {
+    final s = address.trim();
+    if (s.length != 43 || !RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(s)) return false;
+    try {
+      return base64Url.decode('$s=').length == 32;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // --- ИНИЦИАЛИЗАЦИЯ И УПРАВЛЕНИЕ КЛЮЧАМИ ---
 
   Future<void> _deriveFromSeed(List<int> rootBytes) async {

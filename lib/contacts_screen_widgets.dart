@@ -217,15 +217,11 @@ class _AddContactDialogState extends State<_AddContactDialog> {
   bool _isSaving = false;
   String? _error;
 
-  /// Публичный ключ — base64 от 32 байт (X25519). Отсекаем мусор/опечатки,
-  /// чтобы не создавать «битый» контакт, которому нельзя написать (аудит UI-7).
-  bool _isValidPublicKey(String key) {
-    try {
-      return base64.decode(base64.normalize(key)).length == 32;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// Сетевой адрес контакта — Ed25519 pub в base64url без padding (см.
+  /// CryptoService.isValidAddress). Отсекаем мусор/опечатки и СТАРЫЙ X25519-ключ
+  /// (стандартный base64), чтобы не создавать «битый» контакт, которому нельзя
+  /// писать/звонить: роутинг и строгий mutual-add работают именно по адресу (аудит UI-7).
+  bool _isValidPublicKey(String key) => CryptoService.isValidAddress(key);
 
   Future<void> _submit(L10n l10n) async {
     final name = widget.nameController.text.trim();

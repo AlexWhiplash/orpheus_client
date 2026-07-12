@@ -17,6 +17,7 @@ import 'package:orpheus_project/services/sound_service.dart';
 import 'package:orpheus_project/services/webrtc_service.dart';
 import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/identity_directory_service.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/widgets/call/background_painters.dart';
 import 'package:orpheus_project/widgets/call/control_panel.dart';
@@ -750,7 +751,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Future<void> _sendCallStatusMessageToContact(String messageText) async {
     try {
-      final payload = await cryptoService.encrypt(widget.contactPublicKey, messageText);
+      // Шифруем на X25519 enc-ключ контакта (contactPublicKey = адрес, им шифровать нельзя).
+      final encKey = await DatabaseService.instance.getContactEncryptionKey(widget.contactPublicKey) ??
+          await IdentityDirectoryService.instance.resolveEncKey(widget.contactPublicKey);
+      if (encKey == null || encKey.isEmpty) return;
+      final payload = await cryptoService.encrypt(encKey, messageText);
       websocketService.sendChatMessage(widget.contactPublicKey, payload);
     } catch (e) {
       DebugLogger.error('CALL', 'Error sending message to peer: $e',

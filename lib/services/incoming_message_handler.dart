@@ -95,6 +95,11 @@ class IncomingMessageHandler {
     'presence-update',
   };
 
+  // Teardown-сигналы завершения звонка — НЕ гейтим строгим mutual-add (см. handleDecoded):
+  // без payload, звонок не поднимают, только завершают; гарантируют, что активный
+  // звонок всегда можно закрыть быстро (иначе — zombie-call до ICE-таймаута).
+  static const _callTeardownTypes = <String>{'hang-up', 'call-rejected'};
+
   Future<void> handleRawMessage(String messageJson) async {
     final dynamic decoded = json.decode(messageJson);
     if (decoded is! Map<String, dynamic>) return;
@@ -117,8 +122,10 @@ class IncomingMessageHandler {
 
     // Строгий mutual-add: сообщения/звонки принимаем ТОЛЬКО от добавленных контактов.
     // Не-контакты дропаем целиком (без расшифровки, без показа, без авто-добавления).
-    // Комнаты/Оракул сюда не приходят (у них свои пути), support-reply обработан выше.
-    if (!await _db.isContact(senderKey)) {
+    // Исключение — teardown-сигналы завершения звонка (_callTeardownTypes): их пропускаем,
+    // чтобы активный звонок всегда можно было закрыть (реальное закрытие всё равно
+    // фильтруется по пиру в CallScreen). Комнаты/Оракул сюда не приходят (свои пути).
+    if (!_callTeardownTypes.contains(type) && !await _db.isContact(senderKey)) {
       DebugLogger.info('SECURITY', 'Дроп $type от не-контакта (строгий mutual-add)');
       return;
     }

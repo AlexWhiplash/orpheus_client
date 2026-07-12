@@ -166,6 +166,33 @@ void main() {
       expect(chatUpdates, ['FRIEND']);
     });
 
+    test('строгий mutual-add: teardown (hang-up/call-rejected) от не-контакта НЕ дропается', () async {
+      final buffer = IncomingCallBuffer.instance;
+      final db = _FakeDb()..contactsAllowAll = false; // в контактах никого нет
+      final notif = _FakeNotif();
+      final signaling = <Map<String, dynamic>>[];
+
+      final handler = IncomingMessageHandler(
+        crypto: _FakeCrypto((_, payload) async => payload),
+        database: db,
+        notifications: notif,
+        callBuffer: buffer,
+        openCallScreen: ({required contactPublicKey, required offer, callId}) {},
+        emitSignaling: signaling.add,
+        emitChatUpdate: (_) {},
+        isAppInForeground: () => true,
+      );
+
+      // Сигналы завершения звонка проходят даже от не-контакта: активный звонок
+      // всегда должен закрываться (фильтрация по пиру — уже в CallScreen).
+      await handler.handleDecoded(
+          {'type': 'hang-up', 'sender_pubkey': 'STRANGER', 'data': {'call_id': 'c1'}});
+      await handler.handleDecoded(
+          {'type': 'call-rejected', 'sender_pubkey': 'STRANGER', 'data': {'call_id': 'c2'}});
+
+      expect(signaling.map((s) => s['type']).toList(), ['hang-up', 'call-rejected']);
+    });
+
     test('chat: разные message_id в окне не теряются, одинаковый id — дубль отбрасывается (LOGIC-1)', () async {
       final buffer = IncomingCallBuffer.instance;
       final db = _FakeDb();

@@ -11,6 +11,7 @@ import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/qr_scan_screen.dart';
 import 'package:orpheus_project/screens/ai_assistant_chat_screen.dart';
 import 'package:orpheus_project/services/badge_service.dart';
+import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/update_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';

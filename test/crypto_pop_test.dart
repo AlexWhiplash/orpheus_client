@@ -34,6 +34,21 @@ void main() {
     expect(bundle['sig'], _bindSig);
   });
 
+  test('isValidAddress: адрес принимается, X25519-ключ и мусор отклоняются', () {
+    // Валидный Ed25519-адрес (base64url без padding, 32 байта).
+    expect(CryptoService.isValidAddress(_address), isTrue);
+    expect(CryptoService.isValidAddress('  $_address  '), isTrue); // trim
+
+    // Старый X25519 enc-ключ (стандартный base64 с '+/=') — это НЕ адрес.
+    expect(CryptoService.isValidAddress(_enc), isFalse);
+
+    // Мусор / неверная длина / недопустимый алфавит / лишний padding.
+    expect(CryptoService.isValidAddress(''), isFalse);
+    expect(CryptoService.isValidAddress('not-a-real-key'), isFalse);
+    expect(CryptoService.isValidAddress(_popSig), isFalse); // 64 байта — слишком длинно
+    expect(CryptoService.isValidAddress('$_address='), isFalse); // padding недопустим
+  });
+
   test('derivation is deterministic', () async {
     final c1 = CryptoService();
     final c2 = CryptoService();

@@ -767,7 +767,16 @@ class L10nRu extends L10n {
       'Добавьте первого собеседника, чтобы начать защищённое общение';
 
   @override
-  String get enterName => 'Введите имя контакта';
+  String get enterName => 'Введите имя';
+
+  @override
+  String get unitHourShort => 'ч';
+
+  @override
+  String get unitMinuteShort => 'м';
+
+  @override
+  String get unitSecondShort => 'с';
 
   @override
   String get publicKey => 'Публичный ключ';

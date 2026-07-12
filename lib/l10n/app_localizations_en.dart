@@ -759,7 +759,16 @@ class L10nEn extends L10n {
       'Add your first contact to start secure communication';
 
   @override
-  String get enterName => 'Enter contact name';
+  String get enterName => 'Enter name';
+
+  @override
+  String get unitHourShort => 'h';
+
+  @override
+  String get unitMinuteShort => 'm';
+
+  @override
+  String get unitSecondShort => 's';
 
   @override
   String get publicKey => 'Public key';

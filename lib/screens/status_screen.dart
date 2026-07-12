@@ -208,15 +208,15 @@ class _StatusScreenState extends State<StatusScreen>
     } catch (_) {}
   }
 
-  String _formatUptime() {
+  String _formatUptime(L10n l10n) {
     if (_sessionStart == null) return '--';
     final diff = DateTime.now().difference(_sessionStart!);
     if (diff.inHours > 0) {
-      return '${diff.inHours}ч ${diff.inMinutes % 60}м';
+      return '${diff.inHours}${l10n.unitHourShort} ${diff.inMinutes % 60}${l10n.unitMinuteShort}';
     } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}м';
+      return '${diff.inMinutes}${l10n.unitMinuteShort}';
     }
-    return '${diff.inSeconds}с';
+    return '${diff.inSeconds}${l10n.unitSecondShort}';
   }
 
   String _formatDate(DateTime? date) {
@@ -250,7 +250,7 @@ class _StatusScreenState extends State<StatusScreen>
           _ConnectionCard(
             pulse: _pulseController,
             pendingCount: _pendingCount,
-            uptime: _formatUptime(),
+            uptime: _formatUptime(l10n),
             l10n: l10n,
           ),
           const SizedBox(height: 12),

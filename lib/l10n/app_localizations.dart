@@ -1456,8 +1456,26 @@ abstract class L10n {
   /// Contact name hint
   ///
   /// In en, this message translates to:
-  /// **'Enter contact name'**
+  /// **'Enter name'**
   String get enterName;
+
+  /// Short hour unit for session uptime, e.g. 2h
+  ///
+  /// In en, this message translates to:
+  /// **'h'**
+  String get unitHourShort;
+
+  /// Short minute unit for session uptime, e.g. 5m
+  ///
+  /// In en, this message translates to:
+  /// **'m'**
+  String get unitMinuteShort;
+
+  /// Short second unit for session uptime, e.g. 20s
+  ///
+  /// In en, this message translates to:
+  /// **'s'**
+  String get unitSecondShort;
 
   /// Public key label
   ///

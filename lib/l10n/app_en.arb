@@ -726,7 +726,13 @@
   "addFirstContact": "Add your first contact to start secure communication",
   "@addFirstContact": {"description": "Empty contacts subtitle"},
   
-  "enterName": "Enter contact name",
+  "enterName": "Enter name",
+  "unitHourShort": "h",
+  "@unitHourShort": {"description": "Short hour unit for session uptime, e.g. 2h"},
+  "unitMinuteShort": "m",
+  "@unitMinuteShort": {"description": "Short minute unit for session uptime, e.g. 5m"},
+  "unitSecondShort": "s",
+  "@unitSecondShort": {"description": "Short second unit for session uptime, e.g. 20s"},
   "@enterName": {"description": "Contact name hint"},
   
   "publicKey": "Public key",

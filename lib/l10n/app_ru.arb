@@ -293,7 +293,7 @@
   "addFirstContact": "Добавьте первого собеседника, чтобы начать защищённое общение",
   "enterName": "Введите имя контакта",
   "publicKey": "Публичный ключ",
-  "pasteOrScanKey": "Вставьте или отсканируйте ключ",
+  "pasteOrScanKey": "Ключ или QR",
   "rename": "Переименовать",
   "enterNewName": "Введите новое имя",
   "deleteContactFull": "Удалить {name}?",

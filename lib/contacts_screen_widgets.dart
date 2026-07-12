@@ -648,15 +648,21 @@ class _OracleContactRowState extends State<_OracleContactRow>
                       children: [
                         Row(
                           children: [
-                            // Имя Оракула
+                            // Имя Оракула: FittedBox(scaleDown) — при крупном
+                            // системном шрифте «Оракул Орфея» ужимается, а не режется в «...».
                             Flexible(
-                              child: Text(
-                                l10n.aiAssistantName,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textPrimary,
-                                    ),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  l10n.aiAssistantName,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),

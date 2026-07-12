@@ -773,7 +773,7 @@ class L10nRu extends L10n {
   String get publicKey => 'Публичный ключ';
 
   @override
-  String get pasteOrScanKey => 'Вставьте или отсканируйте ключ';
+  String get pasteOrScanKey => 'Ключ или QR';
 
   @override
   String get rename => 'Переименовать';

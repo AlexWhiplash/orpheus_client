@@ -24,6 +24,19 @@ class ChatMessage {
     this.isRead = true, // Свои сообщения всегда прочитаны, чужие - зависит
   }) : timestamp = timestamp ?? DateTime.now();
 
+  /// Тексты-маркеры системных записей звонка в истории чата: они хранятся в
+  /// таблице `messages` как обычные сообщения (chat_screen рисует их call-иконкой),
+  /// но это НЕ переписка. Английские варианты — то, что реально пишет клиент
+  /// (`_saveCallStatusMessageLocally`); русские — легаси от старых сборок. Набор
+  /// нужен, чтобы не засчитывать звонки за сообщения в статистике профиля.
+  static const Set<String> callEventTexts = {
+    'Incoming call', 'Outgoing call', 'Missed call',
+    'Входящий звонок', 'Исходящий звонок', 'Пропущен звонок',
+  };
+
+  /// Является ли запись системным событием звонка (а не перепиской).
+  static bool isCallEvent(String text) => callEventTexts.contains(text);
+
   // Конвертация статуса в int для БД
   static int _statusToInt(MessageStatus status) => status.index;
 

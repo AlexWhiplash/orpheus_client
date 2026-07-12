@@ -985,11 +985,18 @@ class DatabaseService {
     }
     
     final db = await instance.database;
-    
+
+    // Записи звонков лежат в `messages`, но это НЕ переписка — исключаем их из
+    // счётчиков, иначе профиль показывает звонки как сообщения (см. ChatMessage.callEventTexts).
+    final callTexts = ChatMessage.callEventTexts.toList();
+    final ph = List.filled(callTexts.length, '?').join(',');
+
     final contactsResult = await db.rawQuery('SELECT COUNT(*) FROM contacts');
-    final messagesResult = await db.rawQuery('SELECT COUNT(*) FROM messages');
-    final sentResult = await db.rawQuery('SELECT COUNT(*) FROM messages WHERE isSentByMe = 1');
-    
+    final messagesResult = await db.rawQuery(
+        'SELECT COUNT(*) FROM messages WHERE text NOT IN ($ph)', callTexts);
+    final sentResult = await db.rawQuery(
+        'SELECT COUNT(*) FROM messages WHERE isSentByMe = 1 AND text NOT IN ($ph)', callTexts);
+
     return {
       'contacts': Sqflite.firstIntValue(contactsResult) ?? 0,
       'messages': Sqflite.firstIntValue(messagesResult) ?? 0,

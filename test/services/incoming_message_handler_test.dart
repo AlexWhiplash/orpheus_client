@@ -85,8 +85,8 @@ class _FakeNotif implements IncomingMessageNotifications {
   }
 
   @override
-  Future<void> showMessageNotification({required String senderName}) async {
-    calls.add('showMsg:$senderName');
+  Future<void> showMessageNotification() async {
+    calls.add('showMsg');
   }
 }
 
@@ -444,8 +444,8 @@ void main() {
       expect(db.saved.first.$1.status, equals(MessageStatus.delivered));
 
       expect(chatUpdates, equals(['SENDER_KEY']));
-      // Приватность: уведомление без содержания — только имя отправителя.
-      expect(notif.calls, equals(['showMsg:Bob']));
+      // Приватность: уведомление полностью обезличено — ни содержания, ни отправителя.
+      expect(notif.calls, equals(['showMsg']));
     });
 
     test('chat: системные call-status сообщения не должны поднимать уведомление', () async {

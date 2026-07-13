@@ -31,7 +31,7 @@ abstract interface class IncomingMessageDatabase {
 abstract interface class IncomingMessageNotifications {
   Future<void> showCallNotification({required String callerName, String? payload});
   Future<void> hideCallNotification();
-  Future<void> showMessageNotification({required String senderName});
+  Future<void> showMessageNotification();
 }
 
 typedef OpenCallScreen = void Function({
@@ -112,7 +112,7 @@ class IncomingMessageHandler {
 
     if (type == 'support-reply') {
       if (!_isAppInForeground()) {
-        await _notif.showMessageNotification(senderName: _supportSenderLabel);
+        await _notif.showMessageNotification();
       }
       return;
     }
@@ -367,11 +367,8 @@ class IncomingMessageHandler {
 
       final isCallStatusMessage = _isCallStatusMessage(decryptedMessage);
       if (!_isAppInForeground() && !isCallStatusMessage) {
-        final contactName = (await _db.getContactName(senderKey))?.trim();
-        final displayName = (contactName != null && contactName.isNotEmpty)
-            ? contactName
-            : senderKey.substring(0, 8);
-        await _notif.showMessageNotification(senderName: displayName);
+        // Обезличенное уведомление — без отправителя (приватность на локскрине).
+        await _notif.showMessageNotification();
       }
     }
   }

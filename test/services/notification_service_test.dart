@@ -128,13 +128,13 @@ void main() {
       // не падает
     });
 
-    test('showMessageNotification: приватность — body=Новое сообщение (без текста)', () async {
-      await NotificationService.showMessageNotification(senderName: 'Bob');
+    test('showMessageNotification: обезличено — title=Orpheus, без отправителя, body=Новое сообщение', () async {
+      await NotificationService.showMessageNotification();
 
       expect(backend.shown, hasLength(1));
       final s = backend.shown.single;
       expect(s.channelId, equals('orpheus_messages'));
-      expect(s.title, equals('Bob'));
+      expect(s.title, equals('Orpheus')); // не отправитель
       expect(s.body, equals('Новое сообщение'));
       expect(s.category, equals(AndroidNotificationCategory.message));
       expect(s.androidSmallIcon, equals('ic_stat_orpheus'));
@@ -218,7 +218,7 @@ void main() {
 
     test('ошибки backend.show не должны пробрасываться наружу (best-effort)', () async {
       backend.throwOnShow = StateError('boom');
-      await NotificationService.showMessageNotification(senderName: 'Eve');
+      await NotificationService.showMessageNotification();
       await NotificationService.showCallNotification(callerName: 'Mallory');
     });
   });

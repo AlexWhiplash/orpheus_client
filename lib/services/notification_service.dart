@@ -478,12 +478,6 @@ class NotificationService {
     // Оставляем совместимость со старыми call/message.
     final l10n = await notificationL10n();
     final callerName = (data['caller_name'] ?? data['sender_name'] ?? l10n.unknownCaller).toString();
-    final senderName = (data['sender_name'] ??
-            data['caller_name'] ??
-            data['sender'] ??
-            data['from'] ??
-            'Developer')
-        .toString();
 
     if (type == 'incoming_call' || type == 'call') {
       await showCallNotification(
@@ -491,7 +485,8 @@ class NotificationService {
         payload: json.encode(data),
       );
     } else if (type == 'new_message' || type == 'message' || type == 'support-reply') {
-      await showMessageNotification(senderName: senderName);
+      // Обезличенное уведомление — без отправителя (см. showMessageNotification).
+      await showMessageNotification();
     } else if (type == 'room-message' || type == 'room_message') {
       final roomId = data['room_id']?.toString();
       final roomName = (data['room_name'] ?? 'Chat').toString();
@@ -617,21 +612,23 @@ class NotificationService {
     }
   }
 
-  /// Показать уведомление о новом сообщении
-  /// Содержимое сообщения НЕ показывается для приватности
-  static Future<void> showMessageNotification({
-    required String senderName,
-  }) async {
+  /// Показать ПОЛНОСТЬЮ ОБЕЗЛИЧЕННОЕ уведомление о новом сообщении.
+  /// Ни содержимое, ни отправитель не раскрываются (приватность на локскрине).
+  /// [senderName] намеренно игнорируется — это единая точка показа для всех путей
+  /// (main-изолят и push-изолят), поэтому обезличиваем здесь, чтобы ни один путь
+  /// (в т.ч. будущий) не мог пропалить отправителя. Фиксированный id -> все новые
+  /// сообщения сливаются в одно уведомление и не выдают число собеседников.
+  static Future<void> showMessageNotification() async {
     try {
       await _ensureLocalNotificationsInitialized();
       final l10n = await notificationL10n();
 
       await _localBackend!.show(
-        id: _messageNotificationId + senderName.hashCode % 1000, // Уникальный ID для разных отправителей
+        id: _messageNotificationId,
         channelId: _messageChannelId,
         channelName: _messageChannelName,
-        title: senderName,
-        body: l10n.newMessage, // Don't show content for privacy
+        title: 'Orpheus',
+        body: l10n.newMessage, // ни содержимого, ни отправителя
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
         groupKey: 'orpheus_messages_group',
@@ -639,8 +636,7 @@ class NotificationService {
         fullScreenIntent: false,
       );
 
-      print("🔔 Message notification shown: $senderName");
-      DebugLogger.success('NOTIF', '📩 Показано уведомление: $senderName');
+      DebugLogger.success('NOTIF', 'Показано обезличенное уведомление о сообщении');
     } catch (e) {
       print("🔔 showMessageNotification error: $e");
       DebugLogger.error('NOTIF', 'showMessageNotification ошибка: $e');

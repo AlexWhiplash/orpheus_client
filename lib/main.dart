@@ -547,8 +547,8 @@ class _IncomingNotificationsAdapter implements IncomingMessageNotifications {
   }
 
   @override
-  Future<void> showMessageNotification({required String senderName}) {
-    return NotificationService.showMessageNotification(senderName: senderName);
+  Future<void> showMessageNotification() {
+    return NotificationService.showMessageNotification();
   }
 }
 

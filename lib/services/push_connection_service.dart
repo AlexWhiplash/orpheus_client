@@ -575,17 +575,11 @@ class _ServicePushRunner {
         if (type == 'chat' || type == 'new_message') {
           await PendingInboxStorage.instance.append(decoded);
         }
-        // Сервисный isolate не может расшифровать текст и достать имя из
-        // зашифрованной БД — показываем обезличенное уведомление (это и есть
-        // приватное поведение). Имя — префикс ключа.
-        final display = senderKey.length >= 8
-            ? senderKey.substring(0, 8)
-            : senderKey;
+        // Показываем ПОЛНОСТЬЮ обезличенное уведомление: ни текста (расшифровать в
+        // изоляте нечем), ни отправителя. Ключ отправителя сюда не передаём вообще.
         await handleBackgroundPush({
           // 'chat' у _handleBackgroundMessage нет — маппим на 'new_message'.
           'type': type == 'chat' ? 'new_message' : type,
-          'sender_name': display,
-          'caller_name': display,
           if (type == 'room-message' || type == 'room_message') ...{
             'room_id': decoded['room_id'],
             'room_name': decoded['room_name'],

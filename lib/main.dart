@@ -26,6 +26,7 @@ import 'package:orpheus_project/services/incoming_message_handler.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:orpheus_project/services/pending_call_storage.dart';
+import 'package:orpheus_project/services/pending_inbox_storage.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
 import 'package:orpheus_project/services/notification_service.dart';
 import 'package:orpheus_project/services/panic_wipe_service.dart';
@@ -51,6 +52,11 @@ final notificationService = NotificationService();
 final authService = AuthService.instance;
 final panicWipeService = PanicWipeService.instance;
 final messageCleanupService = MessageCleanupService.instance;
+
+// Обработчик входящих (создаётся в _listenForMessages). Вынесен в глобал, чтобы
+// _drainPendingInbox мог прогнать через ту же логику конверты, сохранённые
+// push-изолятом при убитом приложении.
+IncomingMessageHandler? incomingMessageHandler;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -278,7 +284,11 @@ Future<void> _initializeApp() async {
 
   // 9. Слушаем сообщения
   _listenForMessages();
-  
+
+  // 9a. Сливаем сообщения, доставленные push-изолятом при убитом приложении
+  // (сервер не кладёт их в оффлайн-очередь, т.к. считал нас «онлайн» по push-сокету).
+  _drainPendingInbox();
+
   // 10. Инициализация CallKit для нативного UI звонков
   DebugLogger.info('APP', 'Инициализация CallKit...');
   _initCallKit();
@@ -404,6 +414,7 @@ void _listenForMessages() {
     // КРИТИЧНО: передаём проверку активного звонка И обработки CallKit
     isCallActive: () => CallStateService.instance.isCallActive.value || _isProcessingCallKitAnswer,
   );
+  incomingMessageHandler = handler;
 
   websocketService.stream.listen((messageJson) async {
     try {
@@ -414,6 +425,49 @@ void _listenForMessages() {
       Sentry.captureException(e, stackTrace: stackTrace);
     }
   });
+}
+
+/// Слить конверты, сохранённые push-изолятом при убитом/фоновом приложении, через
+/// тот же обработчик входящих (расшифровка + строгий mutual-add + запись в БД +
+/// дедуп по message_id). Идемпотентно: повторный прогон уже сохранённого сообщения
+/// отсеивается дедупом. Не блокирует старт — гоняется в фоне.
+///
+/// Гейт по локу/duress: под PIN-локом не сливаем (иначе handleDecoded пишет и шлёт
+/// уведомления с именем контакта ещё до ввода PIN); под duress не сливаем (иначе
+/// реальные сообщения, которые duress должен ПРЯТАТЬ, были бы записаны/уничтожены).
+/// Очередь при этом не трогаем — сольём после настоящей разблокировки ([_onUnlocked])
+/// или на следующем resume/старте. Удаляем ТОЛЬКО реально обработанные конверты.
+bool _inboxDraining = false;
+
+Future<void> _drainPendingInbox() async {
+  final handler = incomingMessageHandler;
+  if (handler == null) return;
+  if (authService.requiresUnlock || authService.isDuressMode) return;
+  if (_inboxDraining) return; // не допускаем параллельные сливы (старт+resume)
+  _inboxDraining = true;
+  try {
+    final pending = await PendingInboxStorage.instance.peekAll();
+    if (pending.isEmpty) return;
+    DebugLogger.info('PENDING_INBOX', 'Обработка ${pending.length} отложенных сообщений...');
+    final processed = <String>{};
+    for (final item in pending) {
+      // duress мог включиться посреди слива (ввели duress-PIN) — останавливаемся,
+      // необработанное остаётся в очереди для нормального режима.
+      if (authService.isDuressMode) break;
+      try {
+        await handler.handleDecoded(item.envelope);
+        processed.add(item.raw); // помечаем обработанным только при успехе
+      } catch (e) {
+        DebugLogger.error('PENDING_INBOX', 'Ошибка обработки конверта: $e');
+      }
+    }
+    await PendingInboxStorage.instance.removeProcessed(processed);
+  } catch (e, stackTrace) {
+    DebugLogger.error('PENDING_INBOX', 'drain error: $e');
+    Sentry.captureException(e, stackTrace: stackTrace);
+  } finally {
+    _inboxDraining = false;
+  }
 }
 
 class _IncomingCryptoAdapter implements IncomingMessageCrypto {
@@ -700,6 +754,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       websocketService.forceReconnectIfStale(cryptoService.addressBase64!);
     }
 
+    // Разблокировка настоящим PIN (не duress) — самое раннее место, где можно
+    // безопасно слить очередь push-изолята (под локом слив пропускался).
+    _drainPendingInbox();
+
     // Обработать отложенный звонок если есть
     // Используем небольшую задержку чтобы UI успел перестроиться
     Future.delayed(const Duration(milliseconds: 300), () {
@@ -810,6 +868,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       NotificationService.hideMessageNotifications();
       // Check message auto-cleanup on return to foreground
       messageCleanupService.onAppResumed();
+      // Слить сообщения, что push-изолят принял в узком окне «main стартует, но push
+      // ещё не закрыл сокет» — иначе они ждали бы следующего рестарта (гейт внутри
+      // пропустит слив, если под локом/duress).
+      _drainPendingInbox();
       
       // КРИТИЧНО: Обработка отложенного звонка при возврате из background
       // Если пользователь принял звонок через CallKit, но Navigator был ещё не готов,

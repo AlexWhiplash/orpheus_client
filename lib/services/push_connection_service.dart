@@ -33,6 +33,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/notification_service.dart';
+import 'package:orpheus_project/services/pending_inbox_storage.dart';
 
 /// Публичный ключ пользователя (НЕ секрет — распространяется через QR), чтобы
 /// сервисный isolate мог собрать WS-URL без доступа к main-изоляту/секрет-хранилищу.
@@ -566,6 +567,14 @@ class _ServicePushRunner {
           type == 'new_message' ||
           type == 'room-message' ||
           type == 'room_message') {
+        // Личные chat доставлены нам вживую (для сервера мы «онлайн» из-за этого
+        // сокета), поэтому в оффлайн-очередь сервер их НЕ кладёт. Расшифровать и
+        // записать в зашифрованную БД из изолята нельзя — сохраняем СЫРОЙ конверт,
+        // main-изолят сольёт его при старте (иначе сообщение теряется: уведомление
+        // есть, а текста нет). Комнаты идут другим путём доставки — не трогаем.
+        if (type == 'chat' || type == 'new_message') {
+          await PendingInboxStorage.instance.append(decoded);
+        }
         // Сервисный isolate не может расшифровать текст и достать имя из
         // зашифрованной БД — показываем обезличенное уведомление (это и есть
         // приватное поведение). Имя — префикс ключа.

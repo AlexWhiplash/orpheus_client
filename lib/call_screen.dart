@@ -622,21 +622,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     // Небольшая задержка чтобы WebSocket успел отправить сообщение
     await Future.delayed(const Duration(milliseconds: 100));
 
-    // System messages to chat (English for consistent DB storage).
-    // Решение по ЛИПКОМУ _everConnected, а не мгновенному состоянию: звонок,
-    // который был соединён, но сейчас в Reconnecting, всё равно логируется.
-    if (_everConnected) {
-      _saveCallStatusMessageLocally("Outgoing call", true);
-      _sendCallStatusMessageToContact("Incoming call");
-    } else if (currentState == CallState.Incoming) {
-      _saveCallStatusMessageLocally("Missed call", false);
-    } else if (currentState == CallState.Dialing) {
-      // Не дозвонились: у инициатора это «Пропущенный / Исходящий» (isSentByMe=true
-      // рендерит красный call_made), а не обычный «Исходящий» — иначе недозвон и
-      // состоявшийся звонок выглядели одинаково (непонятно, взяли трубку или нет).
-      _saveCallStatusMessageLocally("Missed call", true);
-      _sendCallStatusMessageToContact("Missed call");
-    }
+    // Запись в историю — по роли (см. _writeCallLog). Направление больше не зависит
+    // от того, кто нажал отбой.
+    _writeCallLog();
 
     _safePop();
   }
@@ -647,15 +635,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     SoundService.instance.stopAllSounds();
     SoundService.instance.playDisconnectedSound();
 
-    final wasConnected = _everConnected; // липкий: переживает Reconnecting при отбое
     _controller.onRemoteHangup();
 
-    if (wasConnected) {
-      _saveCallStatusMessageLocally("Incoming call", false);
-      _sendCallStatusMessageToContact("Outgoing call");
-    }
-    // Non-connected calls: remote hung up / rejected — no local message needed,
-    // the remote side already saved and sent their status message to us.
+    // Пишем СВОЮ запись по роли независимо от того, что трубку положил собеседник —
+    // иначе инициатор, которому ответили и затем повесили с той стороны, получал
+    // «Входящий» вместо «Исходящего». Дедуп по call_id снимает возможные дубли.
+    _writeCallLog();
 
     Future.delayed(const Duration(seconds: 1), _safePop);
   }
@@ -770,6 +755,31 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     } catch (e) {
       DebugLogger.error('CALL', 'Error saving local message: $e',
           context: _callContext());
+    }
+  }
+
+  /// Роль в звонке: инициатор (набрал) — без входящего offer И без автоответа.
+  /// autoAnswer учитывается для холодного старта с локскрина, где offer мог
+  /// потеряться (offer==null), но это ОТВЕЧАющий — иначе пропущенный входящий
+  /// мог бы пометиться исходящим.
+  bool get _isOutgoing => widget.offer == null && !widget.autoAnswer;
+
+  /// Единая запись звонка в историю. Направление берётся по РОЛИ (кто инициировал),
+  /// а НЕ по тому, кто повесил трубку: раньше _onRemoteHangup всегда писал «Входящий»,
+  /// и при ответе с локскрина инициатор получал «Входящий» вместо «Исходящий»
+  /// (device-тест 13.07.2026). Дедуп по call_id гарантирует одну запись на звонок.
+  void _writeCallLog() {
+    if (_everConnected) {
+      _saveCallStatusMessageLocally(
+          _isOutgoing ? "Outgoing call" : "Incoming call", _isOutgoing);
+    } else {
+      // Не соединились: «Пропущенный» с направлением по роли (исходящий/входящий).
+      _saveCallStatusMessageLocally("Missed call", _isOutgoing);
+    }
+    // Инициатор шлёт копию отвечающему (на случай, что тот не открыл экран, напр.
+    // убитое приложение) — с направлением ДЛЯ отвечающего; у него дедупится по call_id.
+    if (_isOutgoing) {
+      _sendCallStatusMessageToContact(_everConnected ? "Incoming call" : "Missed call");
     }
   }
 
@@ -1130,29 +1140,21 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       final finalState = _callState;
       print("📞 Dispose: отправка hang-up (state=$finalState, everConnected=$_everConnected)");
 
+      // Сигнал завершения — по состоянию; запись в историю — по роли (_writeCallLog).
       if (_everConnected || finalState == CallState.Dialing) {
         websocketService.sendSignalingMessage(
           widget.contactPublicKey,
           'hang-up',
           _attachCallId({}),
         );
-
-        if (_everConnected) {
-          _saveCallStatusMessageLocally("Outgoing call", true);
-          _sendCallStatusMessageToContact("Incoming call");
-        } else {
-          // Dialing, так и не соединились — «Пропущенный / Исходящий» у инициатора
-          // и «Пропущенный» у собеседника (см. _endCallButton).
-          _saveCallStatusMessageLocally("Missed call", true);
-          _sendCallStatusMessageToContact("Missed call");
-        }
+        _writeCallLog();
       } else if (finalState == CallState.Incoming) {
         websocketService.sendSignalingMessage(
           widget.contactPublicKey,
           'call-rejected',
           _attachCallId({}),
         );
-        _saveCallStatusMessageLocally("Missed call", false);
+        _writeCallLog();
       }
     }
 
@@ -1212,7 +1214,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
 
                 // Скрытая кнопка логов — только в debug (аудит UI-9)
                 GestureDetector(
@@ -1270,7 +1272,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                   onAcceptCall: _acceptCall,
                 ),
 
-                const SizedBox(height: 60),
+                // Было 60 — на невысоких экранах / крупном шрифте подпись «Завершить»
+                // под кнопкой обрезалась снизу (device-тест). SafeArea уже даёт нижний
+                // отступ от системной навигации.
+                const SizedBox(height: 16),
               ],
             ),
           ),

@@ -56,7 +56,7 @@ class CallControlPanel extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 40),
+        const SizedBox(height: 24),
         _buildActionBtn(Icons.call_end, Colors.redAccent, l10n.endCall.toUpperCase(), onEndCall),
       ],
     );

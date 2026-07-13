@@ -202,6 +202,8 @@
   "connectionStatus": "Статус подключения",
   "connected": "Подключено",
   "disconnected": "Отключено",
+  "authFailedStatus": "Авторизация отклонена",
+  "authFailedBanner": "Сервер отклонил авторизацию устройства. Проверьте обновления.",
   "reconnecting": "Переподключение...",
   
   "securityMode": "Режим безопасности",

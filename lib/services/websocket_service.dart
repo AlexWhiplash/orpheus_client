@@ -14,7 +14,9 @@ import 'package:rxdart/rxdart.dart';
 
 // Authenticating: сокет открыт, идёт обязательный PoP-хендшейк (challenge->proof->ok);
 // до pop-ok сессия НЕ считается живой (не шлём pending, не считаем Connected).
-enum ConnectionStatus { Disconnected, Connecting, Authenticating, Connected }
+// AuthFailed: сервер стабильно отвергает PoP (серия провалов подряд) — это НЕ сеть:
+// ретраи продолжаются на максимальном backoff, UI предлагает проверить обновления.
+enum ConnectionStatus { Disconnected, Connecting, Authenticating, Connected, AuthFailed }
 
 class WebSocketService {
   WebSocketService({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
@@ -58,6 +60,30 @@ class WebSocketService {
   static const int _minReconnectDelay = 1; // секунды
   static const int _maxReconnectDelay = 30; // секунды
 
+  // PoP: серия подряд проваленных хендшейков (proof отправлен или pop-error получен,
+  // pop-ok не пришёл). После порога это трактуется как отказ авторизации, а не сеть:
+  // статус AuthFailed, backoff сразу максимальный, смена сети/resume его не сбрасывает.
+  // Инцидент 13.07.2026: до-PoP клиенты после серверного деплоя молча долбили
+  // реконнект ~1/сек без какого-либо сигнала пользователю.
+  int _authFailStreak = 0;
+  static const int _authFailThreshold = 3;
+  // Код причины из последнего pop-error сервера (для UI/диагностики).
+  String? lastPopErrorCode;
+  bool get isAuthFailed => _authFailStreak >= _authFailThreshold;
+
+  // Единая точка учёта провала авторизации (pop-error или закрытие после proof без pop-ok).
+  void _recordAuthFailure(String reason) {
+    _authFailStreak++;
+    DebugLogger.error('WS', 'PoP-провал: $reason (серия $_authFailStreak/$_authFailThreshold)');
+  }
+
+  @visibleForTesting
+  void debugSimulateAuthFailure({String? popErrorCode}) {
+    if (popErrorCode != null) lastPopErrorCode = popErrorCode;
+    _recordAuthFailure('debug');
+    _handleDisconnect();
+  }
+
   int _getReconnectDelay() {
     // Экспоненциальный backoff: 1, 2, 4, 8, 16, 30, 30, 30...
     final delay = _minReconnectDelay * (1 << _reconnectAttempt);
@@ -93,9 +119,12 @@ class WebSocketService {
     
     // Отменяем текущий таймер реконнекта
     _reconnectTimer?.cancel();
-    
-    // Сбрасываем backoff для быстрого переподключения
-    _reconnectAttempt = 0;
+
+    // Сбрасываем backoff для быстрого переподключения — но НЕ при серии PoP-отказов:
+    // смена сети/resume не лечит отвергнутый proof, быстрые ретраи только долбят сервер.
+    if (!isAuthFailed) {
+      _reconnectAttempt = 0;
+    }
     
     // Закрываем текущее соединение
     _stopPingPong();
@@ -114,6 +143,7 @@ class WebSocketService {
     _isDisconnectingIntentional = false;
     _hostIndex = 0; // всегда начинаем с нового домена
     _reconnectAttempt = 0; // сброс backoff при новом подключении
+    _authFailStreak = 0; // явный connect — даём авторизации чистый шанс
 
     // Инициализируем мониторинг сети
     _initNetworkMonitoring();
@@ -189,6 +219,11 @@ class WebSocketService {
         _statusController.add(ConnectionStatus.Authenticating);
         DebugLogger.info('WS', 'Сокет открыт, ожидаем PoP-challenge...');
         bool authed = false;
+        // proofSent + failCounted: закрытие сокета ПОСЛЕ отправки proof без pop-ok —
+        // это отказ авторизации (считаем в _authFailStreak), но ровно один раз за цикл
+        // (pop-error и последующий onDone не должны дать двойной счёт).
+        bool proofSent = false;
+        bool failCounted = false;
 
         _authTimeout?.cancel();
         _authTimeout = Timer(const Duration(seconds: 12), () {
@@ -214,11 +249,14 @@ class WebSocketService {
                     'address': _currentPublicKey,
                     'sig': sig,
                   }));
+                  proofSent = true;
                   return;
                 } else if (type == 'pop-ok') {
                   authed = true;
                   _authTimeout?.cancel();
                   if (gen != _connectionGeneration) return;
+                  _authFailStreak = 0;
+                  lastPopErrorCode = null;
                   _statusController.add(ConnectionStatus.Connected);
                   _reconnectAttempt = 0; // Сброс backoff при успешном подключении
                   print("WS: PoP ok — соединение установлено!");
@@ -226,6 +264,19 @@ class WebSocketService {
                   _startPingPong();
                   // Отправляем pending сообщения после аутентификации
                   _sendPendingMessages();
+                  return;
+                } else if (type == 'pop-error') {
+                  // Явный отказ сервера с причиной (bad_signature/address_mismatch/...).
+                  // Сервер после pop-error додерживает сокет (tarpit для старых клиентов) —
+                  // не ждём его close, закрываем сами и уходим в backoff.
+                  if (gen != _connectionGeneration) return;
+                  lastPopErrorCode = (data['code'] ?? 'unknown').toString();
+                  _recordAuthFailure('pop-error: $lastPopErrorCode');
+                  failCounted = true;
+                  try {
+                    _channel?.sink.close();
+                  } catch (_) {}
+                  _handleDisconnect();
                   return;
                 } else {
                   DebugLogger.error('WS', 'Неожиданный фрейм до PoP: $type');
@@ -257,7 +308,14 @@ class WebSocketService {
             // соединении (регресс, найденный при верификации LOGIC-9).
             if (gen != _connectionGeneration) return;
             print("WS: Соединение закрыто (onDone).");
-            DebugLogger.warn('WS', 'Соединение закрыто (onDone)');
+            DebugLogger.warn('WS',
+                'Соединение закрыто (onDone) code=${ws.closeCode} reason=${ws.closeReason}');
+            // Proof отправлен, pop-ok не пришёл, сокет закрыт — сервер отверг
+            // авторизацию молча (до-pop-error серверы закрывали 1008 без фрейма).
+            if (!authed && proofSent && !failCounted) {
+              _recordAuthFailure('закрытие без pop-ok после proof');
+              failCounted = true;
+            }
             _handleDisconnect();
           },
           onError: (error) {
@@ -292,15 +350,18 @@ class WebSocketService {
   }
 
   void _handleDisconnect() {
-    if (_statusController.value != ConnectionStatus.Disconnected) {
-      _statusController.add(ConnectionStatus.Disconnected);
-      DebugLogger.warn('WS', 'Статус изменён на Disconnected');
+    // Серия PoP-отказов = проблема авторизации, а не сети: показываем AuthFailed
+    // (UI предложит проверить обновления) и ретраим сразу на максимальном backoff.
+    final target = isAuthFailed ? ConnectionStatus.AuthFailed : ConnectionStatus.Disconnected;
+    if (_statusController.value != target) {
+      _statusController.add(target);
+      DebugLogger.warn('WS', 'Статус изменён на ${target.name}');
     }
 
     _stopPingPong();
 
     if (!_isDisconnectingIntentional) {
-      final delay = _getReconnectDelay();
+      final delay = isAuthFailed ? _maxReconnectDelay : _getReconnectDelay();
       _reconnectAttempt++;
       print("WS: Планирование переподключения через $delay сек (попытка $_reconnectAttempt)...");
       DebugLogger.info('WS', 'Планирование переподключения через $delay сек (попытка $_reconnectAttempt)...');

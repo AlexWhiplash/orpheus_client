@@ -528,6 +528,13 @@ class L10nRu extends L10n {
   String get disconnected => 'Отключено';
 
   @override
+  String get authFailedStatus => 'Авторизация отклонена';
+
+  @override
+  String get authFailedBanner =>
+      'Сервер отклонил авторизацию устройства. Проверьте обновления.';
+
+  @override
   String get reconnecting => 'Переподключение...';
 
   @override

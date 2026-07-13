@@ -13,6 +13,7 @@ import 'package:orpheus_project/services/badge_service.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/update_service.dart';
+import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:orpheus_project/widgets/app_scaffold.dart';
@@ -38,6 +39,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
   late Future<({List<Contact> contacts, Map<String, int> unreadCounts})>
       _modelFuture;
   StreamSubscription? _updateSubscription;
+  StreamSubscription? _wsStatusSubscription;
+  bool _authFailedNotified = false;
   Timer? _updateCheckTimer;
   Timer? _refreshDebounce;
 
@@ -63,7 +66,35 @@ class _ContactsScreenState extends State<ContactsScreen> {
         if (!mounted) return;
         UpdateService.checkForUpdate(context);
       });
+
+      // AuthFailed = сервер стабильно отвергает PoP. Самая вероятная причина —
+      // устаревшая версия приложения: показываем баннер и проверяем обновления.
+      _wsStatusSubscription = websocketService.status.listen((status) {
+        if (!mounted) return;
+        if (status == ConnectionStatus.AuthFailed && !_authFailedNotified) {
+          _authFailedNotified = true;
+          _showAuthFailedBanner();
+        } else if (status == ConnectionStatus.Connected) {
+          _authFailedNotified = false; // вылечилось — при рецидиве покажем снова
+        }
+      });
     }
+  }
+
+  void _showAuthFailedBanner() {
+    final l10n = L10n.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(l10n.authFailedBanner),
+      duration: const Duration(seconds: 10),
+      action: SnackBarAction(
+        label: l10n.checkUpdates,
+        onPressed: () {
+          if (!mounted) return;
+          UpdateService.checkForUpdate(context, showNoUpdateFeedback: true);
+        },
+      ),
+    ));
+    UpdateService.checkForUpdate(context);
   }
 
   @override
@@ -71,6 +102,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     _updateCheckTimer?.cancel();
     _refreshDebounce?.cancel();
     _updateSubscription?.cancel();
+    _wsStatusSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }

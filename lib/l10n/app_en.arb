@@ -503,7 +503,13 @@
   
   "disconnected": "Disconnected",
   "@disconnected": {"description": "Disconnected status"},
-  
+
+  "authFailedStatus": "Authorization rejected",
+  "@authFailedStatus": {"description": "Connection status when the server keeps rejecting the PoP handshake"},
+
+  "authFailedBanner": "Server rejected this device's authorization. Check for updates.",
+  "@authFailedBanner": {"description": "Banner shown when the server keeps rejecting the PoP handshake"},
+
   "reconnecting": "Reconnecting...",
   "@reconnecting": {"description": "Reconnecting status"},
   

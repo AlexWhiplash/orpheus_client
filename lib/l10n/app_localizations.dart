@@ -1021,6 +1021,18 @@ abstract class L10n {
   /// **'Disconnected'**
   String get disconnected;
 
+  /// Connection status when the server keeps rejecting the PoP handshake
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization rejected'**
+  String get authFailedStatus;
+
+  /// Banner shown when the server keeps rejecting the PoP handshake
+  ///
+  /// In en, this message translates to:
+  /// **'Server rejected this device\'s authorization. Check for updates.'**
+  String get authFailedBanner;
+
   /// Reconnecting status
   ///
   /// In en, this message translates to:

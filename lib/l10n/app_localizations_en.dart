@@ -521,6 +521,13 @@ class L10nEn extends L10n {
   String get disconnected => 'Disconnected';
 
   @override
+  String get authFailedStatus => 'Authorization rejected';
+
+  @override
+  String get authFailedBanner =>
+      'Server rejected this device\'s authorization. Check for updates.';
+
+  @override
   String get reconnecting => 'Reconnecting...';
 
   @override

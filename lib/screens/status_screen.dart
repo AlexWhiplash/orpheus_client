@@ -391,6 +391,11 @@ class _ConnectionCard extends StatelessWidget {
               AppColors.danger,
               Icons.cloud_off_rounded
             ),
+          ConnectionStatus.AuthFailed => (
+              l10n.authFailedStatus,
+              AppColors.danger,
+              Icons.gpp_bad_rounded
+            ),
         };
 
         return AppCard(

@@ -295,6 +295,19 @@ class _ServicePushRunner {
   final CryptoService _crypto = CryptoService();
   bool _authed = false;
   String? _connectedAddress;
+  // Backoff при серии PoP-отказов: тик редиала фиксированный (4с), поэтому без
+  // гейта стабильно отвергаемый изолят долбил бы сервер каждые 4с бесконечно.
+  bool _proofSent = false;
+  int _authFailStreak = 0;
+  DateTime? _nextAttemptAt;
+
+  void _schedulePopBackoff() {
+    // 8с, 16с, 32с ... с потолком 5 минут.
+    final delaySec = (4 << _authFailStreak).clamp(8, 300);
+    _nextAttemptAt = DateTime.now().add(Duration(seconds: delaySec));
+    // ignore: avoid_print
+    print('PushConnectionService PoP fail #$_authFailStreak, next attempt in ${delaySec}s');
+  }
 
   static List<int> _b64urlDecode(String s) {
     final pad = (4 - s.length % 4) % 4;
@@ -369,6 +382,8 @@ class _ServicePushRunner {
 
   Future<void> _ensureConnected(String pubkey) async {
     if (_channel != null || _connecting || _stopped) return;
+    // Серия PoP-отказов: ждём окончания backoff-окна, не редиалим каждый тик.
+    if (_nextAttemptAt != null && DateTime.now().isBefore(_nextAttemptAt!)) return;
     _connecting = true;
     try {
       final host = AppConfig.apiHosts[_hostIndex % AppConfig.apiHosts.length];
@@ -386,6 +401,7 @@ class _ServicePushRunner {
       _connectedHost = host;
       _connectedAddress = pubkey;
       _authed = false; // сначала обязательный PoP-хендшейк
+      _proofSent = false;
       _sub = _channel!.stream.listen(
         (message) async {
           if (!_authed) {
@@ -420,6 +436,12 @@ class _ServicePushRunner {
 
   Future<void> _onSocketClosed() async {
     _ping?.cancel();
+    // Закрытие после отправленного proof без pop-ok = сервер отверг авторизацию
+    // (молчаливый 1008 без pop-error) — включаем backoff, а не редиал через 4с.
+    if (!_authed && _proofSent) {
+      _authFailStreak++;
+      _schedulePopBackoff();
+    }
     await _closeSocket();
     // Повторную попытку сделает следующий _evaluate по таймеру (если всё ещё
     // нужно — т.е. приложение по-прежнему убито).
@@ -435,6 +457,7 @@ class _ServicePushRunner {
     _channel = null;
     _connectedHost = null;
     _authed = false;
+    _proofSent = false;
   }
 
   /// Обязательный PoP-хендшейк в изоляте: на challenge подписываем и шлём proof;
@@ -461,8 +484,21 @@ class _ServicePushRunner {
           'address': _connectedAddress,
           'sig': sig,
         }));
+        _proofSent = true;
       } else if (type == 'pop-ok') {
         _authed = true;
+        _authFailStreak = 0;
+        _nextAttemptAt = null;
+      } else if (type == 'pop-error') {
+        // Явный отказ с причиной. Сервер после pop-error додерживает сокет (tarpit) —
+        // закрываем сами и уходим в backoff. _proofSent сбрасываем, чтобы отказ не
+        // посчитался второй раз, если onDone всё же долетит.
+        // ignore: avoid_print
+        print('PushConnectionService PoP rejected: ${data['code']}');
+        _proofSent = false;
+        _authFailStreak++;
+        _schedulePopBackoff();
+        await _closeSocket();
       } else {
         await _closeSocket();
       }

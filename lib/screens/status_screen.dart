@@ -48,7 +48,6 @@ class _StatusScreenState extends State<StatusScreen>
   int _reconnectCount = 0;
 
   // Регион
-  String _country = '...';
   String _countryCode = '--';
   bool _isTrafficControlRegion = false;
 
@@ -126,13 +125,11 @@ class _StatusScreenState extends State<StatusScreen>
       if (!mounted) return;
       setState(() {
         _countryCode = code;
-        _country = code == '--' ? 'Unknown' : code;
         _isTrafficControlRegion = _trafficControlCountries.contains(code);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _country = 'Unknown';
         _countryCode = '--';
       });
     }
@@ -265,8 +262,7 @@ class _StatusScreenState extends State<StatusScreen>
                   title: l10n.region,
                   icon: Icons.public_rounded,
                   value: _countryCode,
-                  subtitle: _country,
-                  secondaryValue: l10n.regionLocalOnly,
+                  subtitle: l10n.regionLocalOnly,
                   valueColor: _isTrafficControlRegion
                       ? AppColors.warning
                       : AppColors.textPrimary,

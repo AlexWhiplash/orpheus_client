@@ -631,7 +631,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     } else if (currentState == CallState.Incoming) {
       _saveCallStatusMessageLocally("Missed call", false);
     } else if (currentState == CallState.Dialing) {
-      _saveCallStatusMessageLocally("Outgoing call", true);
+      // Не дозвонились: у инициатора это «Пропущенный / Исходящий» (isSentByMe=true
+      // рендерит красный call_made), а не обычный «Исходящий» — иначе недозвон и
+      // состоявшийся звонок выглядели одинаково (непонятно, взяли трубку или нет).
+      _saveCallStatusMessageLocally("Missed call", true);
       _sendCallStatusMessageToContact("Missed call");
     }
 
@@ -745,11 +748,22 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Future<void> _saveCallStatusMessageLocally(String messageText, bool isSentByMe) async {
     try {
+      // Дедуп по call_id: у одного звонка ОДНА запись в чате. И локальная запись,
+      // и копия от собеседника используют call_id как message_id, поэтому вторая
+      // (та, что придёт позже) отсекается. Раньше обе сохранялись -> задвоение
+      // записи о звонке (device-тест 13.07.2026; копия стала доходить после фиксов
+      // доставки, и дубль вылез).
+      if (_callId.isNotEmpty &&
+          await DatabaseService.instance
+              .messageExistsByMessageId(widget.contactPublicKey, _callId)) {
+        return;
+      }
       final callMessage = ChatMessage(
         text: messageText,
         isSentByMe: isSentByMe,
         status: MessageStatus.sent,
         isRead: true,
+        messageId: _callId.isNotEmpty ? _callId : null,
       );
       await DatabaseService.instance.addMessage(callMessage, widget.contactPublicKey);
       messageUpdateController.add(widget.contactPublicKey);
@@ -766,7 +780,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           await IdentityDirectoryService.instance.resolveEncKey(widget.contactPublicKey);
       if (encKey == null || encKey.isEmpty) return;
       final payload = await cryptoService.encrypt(encKey, messageText);
-      websocketService.sendChatMessage(widget.contactPublicKey, payload);
+      // message_id = call_id: у получателя эта копия дедупится против его локальной
+      // записи того же звонка (см. _saveCallStatusMessageLocally).
+      websocketService.sendChatMessage(widget.contactPublicKey, payload,
+          messageId: _callId.isNotEmpty ? _callId : null);
     } catch (e) {
       DebugLogger.error('CALL', 'Error sending message to peer: $e',
           context: _callContext());
@@ -1124,8 +1141,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           _saveCallStatusMessageLocally("Outgoing call", true);
           _sendCallStatusMessageToContact("Incoming call");
         } else {
-          // Dialing, так и не соединились — пропущенный у собеседника.
-          _saveCallStatusMessageLocally("Outgoing call", true);
+          // Dialing, так и не соединились — «Пропущенный / Исходящий» у инициатора
+          // и «Пропущенный» у собеседника (см. _endCallButton).
+          _saveCallStatusMessageLocally("Missed call", true);
           _sendCallStatusMessageToContact("Missed call");
         }
       } else if (finalState == CallState.Incoming) {

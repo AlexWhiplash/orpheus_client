@@ -10,7 +10,9 @@ import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
 import 'package:orpheus_project/services/pending_actions_service.dart';
+import 'package:orpheus_project/services/push_connection_service.dart' show kPrefSignalPopToken;
 import 'package:rxdart/rxdart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Authenticating: сокет открыт, идёт обязательный PoP-хендшейк (challenge->proof->ok);
 // до pop-ok сессия НЕ считается живой (не шлём pending, не считаем Connected).
@@ -70,6 +72,31 @@ class WebSocketService {
   // Код причины из последнего pop-error сервера (для UI/диагностики).
   String? lastPopErrorCode;
   bool get isAuthFailed => _authFailStreak >= _authFailThreshold;
+
+  // PoP-токен для HTTP-фолбэка /api/signal: приходит в pop-ok, дублируется в prefs
+  // (kPrefSignalPopToken), чтобы холодный старт имел токен до первого pop-ok.
+  String? _signalToken;
+
+  Future<String> _loadSignalToken() async {
+    if (_signalToken != null) return _signalToken!;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _signalToken = prefs.getString(kPrefSignalPopToken);
+    } catch (_) {}
+    return _signalToken ?? '';
+  }
+
+  void _storeSignalToken(dynamic token) {
+    if (token is! String || token.isEmpty) return;
+    _signalToken = token;
+    // fire-and-forget: prefs нужен только как кэш для холодного старта
+    () async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(kPrefSignalPopToken, token);
+      } catch (_) {}
+    }();
+  }
 
   // Единая точка учёта провала авторизации (pop-error или закрытие после proof без pop-ok).
   void _recordAuthFailure(String reason) {
@@ -257,6 +284,7 @@ class WebSocketService {
                   if (gen != _connectionGeneration) return;
                   _authFailStreak = 0;
                   lastPopErrorCode = null;
+                  _storeSignalToken(data['signal_token']);
                   _statusController.add(ConnectionStatus.Connected);
                   _reconnectAttempt = 0; // Сброс backoff при успешном подключении
                   print("WS: PoP ok — соединение установлено!");
@@ -575,12 +603,14 @@ class WebSocketService {
       'signal_type': signalType,
     };
     DebugLogger.info('HTTP', 'Отправка $signalType через HTTP fallback на все хосты...', context: signalContext);
-    
+
     final body = json.encode({
       'sender_pubkey': _currentPublicKey,
       'recipient_pubkey': recipientPublicKey,
       'signal_type': signalType,
       'data': data,
+      // PoP-подтверждение отправителя; пустой токен сервер (фаза 1) пропускает с warning.
+      'signal_token': await _loadSignalToken(),
     });
 
     // Отправляем на ВСЕ хосты параллельно

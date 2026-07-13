@@ -44,6 +44,21 @@ rate-limit, HTTP-PoP для `/api/signal`, session takeover, кто долбит
 `flutter build apk --release`, уходит в `Колобанов/02-Тестировщику` и в админку (загрузка/регистрация —
 владелец, позже). `debugFileLogging` оставлен `true` — это тест-линия 1.1.7, реальный релиз = 1.1.8.
 
+**Хвосты S2/S5/S7/S8/S9 (позже в этот же день).** ВАЖНО: PR #16 закрыт vadimkolobanov БЕЗ мержа и
+без комментов (08:34 UTC) — прод так и живёт с немым PoP-киком; новые PR не открываю, ветки запушены,
+владелец разбирается с Вадимом. Сервер (ветка `feat/ws-hardening` поверх `feat/pop-fail-observability`,
+коммит 7203cf9, pytest 179 passed): S2 lockout-детектор (>=60 PoP-отказов за 5 мин -> одна error-запись,
+cooldown 30 мин), S5 rate-limit WS-хендшейков до accept (per-key 30/мин, per-IP 120/мин через
+X-Forwarded-For, поверх tarpit), S8 session takeover (promote снимает siblings без активности >45с —
+чинит залипший presence после kill: мёртвый сокет прятал is_first), S7 сервер: pop-ok несёт 12ч HS256
+bearer, /api/signal проверяет; фаза 1 МЯГКАЯ (без токена — warning-лог), enforcement за SIGNAL_REQUIRE_POP.
+Клиент (этот коммит, S7): оба изолята сохраняют signal_token из pop-ok в prefs (kPrefSignalPopToken),
+HTTP-фолбэк /api/signal шлёт его в body; пойдёт в сборку +22. S9 расследован: 401-поллер
+/api/support/stats = брошенная разлогиненная вкладка админки на orpheus.click (бейдж в AdminLayout
+поллит раз в 30с без проверки токена, Chrome-throttling даёт ровно 1/мин); фикс на стороне САЙТА
+(одна строка: не поллить без токена); бонус-находка: в прод-бандле AdminGuard остался debug-маячок
+fetch на 127.0.0.1:7242 — убрать при пересборке сайта. Бэкенд по S9 исправен.
+
 ---
 
 ## 2026-07-13 — TURN оживлён, кросс-сетевой звонок работает; РФ «белые списки» на мобильном

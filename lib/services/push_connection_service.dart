@@ -41,6 +41,13 @@ const String kPrefUserPubkey = 'push_user_pubkey';
 /// Heartbeat main-изолята: миллисекунды последней «отметки жизни».
 const String kPrefMainAliveTs = 'push_main_alive_ts';
 
+/// PoP-токен для HTTP-фолбэка сигналинга (/api/signal). Выдаётся сервером на pop-ok,
+/// свежую копию пишет тот изолят, который последним прошёл хендшейк (main или push):
+/// так холодный старт main-изолята (ответ на звонок с локскрина) имеет токен ещё
+/// ДО своего первого pop-ok. Не секрет уровня PIN/ключей: короткоживущий (12ч),
+/// авторизует только роутинг сигналов от своего адреса.
+const String kPrefSignalPopToken = 'signal_pop_token';
+
 /// Порог свежести heartbeat. Если main отметился позже (now - threshold) —
 /// UI живо и сервис молчит; иначе приложение считается убитым.
 const int _mainAliveThresholdMs = 12 * 1000;
@@ -489,6 +496,13 @@ class _ServicePushRunner {
         _authed = true;
         _authFailStreak = 0;
         _nextAttemptAt = null;
+        final token = data['signal_token'];
+        if (token is String && token.isNotEmpty) {
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(kPrefSignalPopToken, token);
+          } catch (_) {}
+        }
       } else if (type == 'pop-error') {
         // Явный отказ с причиной. Сервер после pop-error додерживает сокет (tarpit) —
         // закрываем сами и уходим в backoff. _proofSent сбрасываем, чтобы отказ не

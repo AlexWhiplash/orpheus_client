@@ -268,7 +268,7 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
       }
     }
 
-    print("📞 CALLKIT: Показываю входящий звонок от $callerName (id=$callId), hasOffer=${offerDataJson != null}");
+    print("📞 CALLKIT: Показываю входящий звонок (id=$callId), hasOffer=${offerDataJson != null}");
     
     final l10n = await NotificationService.notificationL10n();
 
@@ -336,8 +336,8 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
 
 Future<void> _showFallbackLocalCallNotification(Map<String, dynamic> data) async {
   try {
-    final callerKey = data['caller_key'] ?? data['sender_pubkey'] ?? '';
-    final callerName = data['caller_name'] ?? data['sender_name'] ?? callerKey.toString().substring(0, 8);
+    // Обезличенный баннер: ни имени, ни ключа звонящего (приватность на локскрине).
+    // caller_key едет только в payload для приёма/отклонения, не на экран.
     final l10n = await NotificationService.notificationL10n();
     final plugin = FlutterLocalNotificationsPlugin();
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -359,7 +359,7 @@ Future<void> _showFallbackLocalCallNotification(Map<String, dynamic> data) async
     await plugin.show(
       id: 9901,
       title: l10n.incomingCall,
-      body: l10n.fromCaller(callerName.toString()),
+      body: l10n.incomingEncryptedCall,
       notificationDetails: details,
       payload: json.encode(data),
     );
@@ -582,7 +582,7 @@ class NotificationService {
         channelId: _incomingCallChannelId,
         channelName: _callChannelName,
         title: l10n.incomingCall,
-        body: callerName,
+        body: l10n.incomingEncryptedCall, // обезличено: без имени/ключа звонящего
         category: AndroidNotificationCategory.call,
         androidSmallIcon: _androidSmallIcon,
         fullScreenIntent: true,
@@ -590,8 +590,7 @@ class NotificationService {
         payload: payload,
       );
 
-      print("🔔 Call notification shown: $callerName");
-      DebugLogger.success('NOTIF', '🔔 Call notification shown: $callerName');
+      DebugLogger.success('NOTIF', 'Показано обезличенное уведомление о звонке');
     } catch (e) {
       print("🔔 showCallNotification error: $e");
       DebugLogger.error('NOTIF', 'showCallNotification error: $e');
@@ -643,19 +642,22 @@ class NotificationService {
     }
   }
 
-  /// Показать уведомление о новом сообщении в чате.
+  /// Показать ОБЕЗЛИЧЕННОЕ уведомление о новом сообщении в комнате.
+  /// [roomName] намеренно игнорируется — на локскрине не светим, в какой группе
+  /// сообщение (паритет с обезличенными личными сообщениями). Фиксированный id ->
+  /// не выдаём число активных комнат отдельными уведомлениями.
   static Future<void> showRoomMessageNotification({
-    required String roomName,
+    String roomName = '',
   }) async {
     try {
       await _ensureLocalNotificationsInitialized();
       final l10n = await notificationL10n();
 
       await _localBackend!.show(
-        id: _messageNotificationId + roomName.hashCode % 1000,
+        id: _messageNotificationId,
         channelId: _messageChannelId,
         channelName: _messageChannelName,
-        title: roomName,
+        title: 'Orpheus',
         body: l10n.newMessageInChat,
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
@@ -664,7 +666,7 @@ class NotificationService {
         fullScreenIntent: false,
       );
 
-      DebugLogger.success('NOTIF', '💬 Чат-уведомление: $roomName');
+      DebugLogger.success('NOTIF', 'Показано обезличенное уведомление о сообщении в комнате');
     } catch (e) {
       DebugLogger.error('NOTIF', 'showRoomMessageNotification ошибка: $e');
     }

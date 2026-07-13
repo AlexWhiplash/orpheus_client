@@ -47,6 +47,23 @@ push allow-list уведомлений и так нет, отдельная те
 scope, не трогали. flutter test 373 passed, analyze 0 ошибок. Смежное (НЕ трогали, вне запроса):
 call-путь пишет полный peer_pubkey в debug-файл через context — отдельная тема, если понадобится.
 
+**Device-тест b23 (звонки), два фикса (сборка +24):**
+(2/3) **Обезличивание звонков+комнат.** Владелец: звонок на заблокированном Pixel показал имя контакта =
+«дыра». Анализ: обезличивание звонящего было, но за флагом `app_in_foreground`, который на hard-kill
+протухает в true -> имя утекает; fallback-уведомление звонка вообще без гейта; handle светил префикс ключа;
+комнаты — roomName в title. Владелец выбрал «всегда скрыто». Фикс: `hideCallerIdentityOnIncoming` ->
+`!showCallerNameWhenLocked` (убрал foreground-зависимость, надёжно скрыто по умолчанию; opt-in тумблер
+сохранён -> имя на экране звонка после принятия); fallback + showCallNotification body -> `incomingEncryptedCall`;
+handle='' (через гейт); комнаты -> title 'Orpheus' + фикс id; убрал callerName из logcat-принта. Приём/отклонение
+не задеты (по call_id/callerKey в extra, не по имени) — проверено ревью.
+(4) **Запись звонка не появлялась в диалоге.** Call-log писался по МГНОВЕННОМУ `_callState==Connected`;
+ответ с лока на cold-start соединяется поздно через ICE-restart, отбой в момент Reconnecting -> запись
+пропадала. Фикс: липкий `_everConnected` (ставится в `_onConnected`, переживает Reconnecting), заменил
+мгновенную проверку в трёх точках teardown (_endCallButton/_onRemoteHangup/dispose). Ревью: дублей не
+добавляет (латч `_messagesSent`), Missed-ветка цела, `_onConnected` только от реального WebRTC-Connected.
+Известное pre-existing (вне scope): двойная запись call-log (локально + копия пиру) и семантика
+Outgoing/Incoming по «кто повесил трубку». flutter test 373 passed, analyze 0 ошибок. APK +24 -> оба устройства.
+
 ---
 
 ## 2026-07-13 (2) — Инцидент «PoP-lockout» разобран; клиент: статус AuthFailed; сервер: PR #16

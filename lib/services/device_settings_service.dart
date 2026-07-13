@@ -91,18 +91,19 @@ class DeviceSettingsService {
     await prefs.setBool(_appInForegroundKey, value);
   }
 
-  /// Прятать ли имя звонящего на входящем (приватность). Прячем, когда Orpheus НЕ
-  /// на переднем плане (заблокировано / свёрнуто / убито) И флаг «показывать имя
-  /// на локскрине» выключен. Имя видно только когда ты реально в приложении.
+  /// Прятать ли имя звонящего на баннере входящего (CallKit). По умолчанию ВСЕГДА
+  /// прячем — баннер CallKit рисуется поверх локскрина, а кто звонит видно только
+  /// после принятия (на экране звонка внутри приложения); паритет с обезличенными
+  /// уведомлениями о сообщениях. Opt-in тоггл `showCallerNameWhenLocked` возвращает
+  /// имя тем, кто явно этого хочет. Раньше зависело от флага app_in_foreground,
+  /// который при жёстком убийстве приложения протухал в true -> имя утекало на
+  /// локскрин (дыра, device-тест 13.07.2026).
   static Future<bool> hideCallerIdentityOnIncoming() async {
     final prefs = await SharedPreferences.getInstance();
-    // reload: флаг foreground пишет main-изолят, а читаем часто из push-изолята —
-    // SharedPreferences кешируются per-isolate, без reload увидим устаревшее.
     try {
       await prefs.reload();
     } catch (_) {}
-    if (prefs.getBool(_showCallerNameWhenLockedKey) ?? false) return false;
-    return !(prefs.getBool(_appInForegroundKey) ?? false);
+    return !(prefs.getBool(_showCallerNameWhenLockedKey) ?? false);
   }
 
   /// Получить производителя устройства

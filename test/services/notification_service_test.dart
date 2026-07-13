@@ -100,7 +100,7 @@ void main() {
       NotificationService.debugSetLocalBackendForTesting(null);
     });
 
-    test('showCallNotification: title=Входящий звонок, body=callerName, ongoing+fullScreenIntent', () async {
+    test('showCallNotification: обезличено — title=Входящий звонок, body=Закрытая связь (без имени)', () async {
       await NotificationService.showCallNotification(callerName: 'Alice');
 
       // каналы должны быть созданы при первой инициализации
@@ -115,7 +115,7 @@ void main() {
       expect(s.id, equals(1001));
       expect(s.channelId, equals('orpheus_incoming_call'));
       expect(s.title, equals('Входящий звонок'));
-      expect(s.body, equals('Alice'));
+      expect(s.body, equals('Закрытая связь')); // не имя звонящего
       expect(s.category, equals(AndroidNotificationCategory.call));
       expect(s.androidSmallIcon, equals('ic_stat_orpheus'));
       expect(s.ongoing, isTrue);
@@ -158,7 +158,11 @@ void main() {
 
       expect(backend.shown.where((s) => s.channelId == 'orpheus_incoming_call').length, equals(3));
       expect(backend.shown.where((s) => s.channelId == 'orpheus_messages').length, equals(2));
-      expect(backend.shown.any((s) => s.body == 'Неизвестный'), isTrue);
+      // Обезличено: звонки — «Закрытая связь» (без имени), сообщения — «Новое сообщение».
+      expect(backend.shown.where((s) => s.channelId == 'orpheus_incoming_call')
+          .every((s) => s.body == 'Закрытая связь'), isTrue);
+      expect(backend.shown.where((s) => s.channelId == 'orpheus_messages')
+          .every((s) => s.body == 'Новое сообщение'), isTrue);
     });
 
     test('background handler policy: если есть notification payload — локальное уведомление не показываем', () {

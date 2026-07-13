@@ -96,6 +96,13 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   // Флаги жизненного цикла
   bool _isDisposed = false;
   bool _messagesSent = false;
+  // Липкий признак «звонок был соединён хоть раз». Решение о записи в историю
+  // (Outgoing/Incoming/Missed) раньше бралось по МГНОВЕННОМУ состоянию, но ответ
+  // с локскрина на cold-start соединяется поздно через ICE-restart: если отбой
+  // приходит в момент секундной переподготовки (Reconnecting), мгновенное
+  // Connected == false и запись пропадала (device-тест 13.07.2026). Липкий флаг
+  // переживает переподготовку.
+  bool _everConnected = false;
 
   // Логирование
   bool _showDebugLogs = false;
@@ -615,8 +622,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     // Небольшая задержка чтобы WebSocket успел отправить сообщение
     await Future.delayed(const Duration(milliseconds: 100));
 
-    // System messages to chat (English for consistent DB storage)
-    if (currentState == CallState.Connected) {
+    // System messages to chat (English for consistent DB storage).
+    // Решение по ЛИПКОМУ _everConnected, а не мгновенному состоянию: звонок,
+    // который был соединён, но сейчас в Reconnecting, всё равно логируется.
+    if (_everConnected) {
       _saveCallStatusMessageLocally("Outgoing call", true);
       _sendCallStatusMessageToContact("Incoming call");
     } else if (currentState == CallState.Incoming) {
@@ -635,7 +644,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     SoundService.instance.stopAllSounds();
     SoundService.instance.playDisconnectedSound();
 
-    final wasConnected = _callState == CallState.Connected;
+    final wasConnected = _everConnected; // липкий: переживает Reconnecting при отбое
     _controller.onRemoteHangup();
 
     if (wasConnected) {
@@ -649,6 +658,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   }
 
   void _onConnected() {
+    _everConnected = true; // звонок состоялся — не сбрасывается при Reconnecting
     _answerConnectWatchdog?.cancel();
     _outgoingRingWatchdog?.cancel();
     SoundService.instance.stopAllSounds();
@@ -1101,19 +1111,20 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     // 3. Отправляем HangUp если закрыли свайпом (не через кнопку)
     if (!_messagesSent) {
       final finalState = _callState;
-      print("📞 Dispose: отправка hang-up (state=$finalState)");
-      
-      if (finalState == CallState.Connected || finalState == CallState.Dialing) {
+      print("📞 Dispose: отправка hang-up (state=$finalState, everConnected=$_everConnected)");
+
+      if (_everConnected || finalState == CallState.Dialing) {
         websocketService.sendSignalingMessage(
           widget.contactPublicKey,
           'hang-up',
           _attachCallId({}),
         );
 
-        if (finalState == CallState.Connected) {
+        if (_everConnected) {
           _saveCallStatusMessageLocally("Outgoing call", true);
           _sendCallStatusMessageToContact("Incoming call");
-        } else if (finalState == CallState.Dialing) {
+        } else {
+          // Dialing, так и не соединились — пропущенный у собеседника.
           _saveCallStatusMessageLocally("Outgoing call", true);
           _sendCallStatusMessageToContact("Missed call");
         }

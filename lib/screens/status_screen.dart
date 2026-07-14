@@ -12,6 +12,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/geo_service.dart';
 import 'package:orpheus_project/services/pending_actions_service.dart';
 import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
@@ -22,12 +23,14 @@ class StatusScreen extends StatefulWidget {
   const StatusScreen({
     super.key,
     this.databaseService,
+    this.geoService,
     this.messageUpdates,
     this.debugPublicKeyBase64,
     this.disableTimersForTesting = false,
   });
 
   final DatabaseService? databaseService;
+  final GeoService? geoService;
   final Stream<void>? messageUpdates;
   final String? debugPublicKeyBase64;
   final bool disableTimersForTesting;
@@ -50,6 +53,7 @@ class _StatusScreenState extends State<StatusScreen>
   // Регион
   String _countryCode = '--';
   bool _isTrafficControlRegion = false;
+  bool _regionFromIp = false;
 
   // Безопасность
   String _fingerprint = '...';
@@ -66,6 +70,8 @@ class _StatusScreenState extends State<StatusScreen>
 
   DatabaseService get _db =>
       widget.databaseService ?? DatabaseService.instance;
+
+  GeoService get _geo => widget.geoService ?? GeoService.instance;
 
   @override
   void initState() {
@@ -112,27 +118,38 @@ class _StatusScreenState extends State<StatusScreen>
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadRegion() async {
-    // Приватность: регион определяется по настройкам устройства (локаль), БЕЗ
-    // сетевых запросов. Раньше здесь был plaintext-запрос к стороннему ip-api.com,
-    // который при каждом открытии экрана отдавал IP пользователя третьей стороне
-    // по незашифрованному HTTP (AUDIT_REPORT ARCH-6). Никакой Google/сторонний
-    // сервис больше не задействован.
+  Future<void> _loadRegion({bool forceRefresh = false}) async {
+    // Сначала мгновенно показываем регион из локали устройства, затем уточняем
+    // по IP через GeoService (цепочка сторонних HTTPS-сервисов, кэш 12ч,
+    // запрос только при открытии этого экрана — см. help). Старый plaintext
+    // ip-api.com (AUDIT_REPORT ARCH-6) сюда не возвращался: цепочка строго
+    // HTTPS и живёт в слое сервисов.
+    String localeCode = '--';
     try {
-      final code = (WidgetsBinding.instance.platformDispatcher.locale.countryCode ??
+      localeCode = (WidgetsBinding.instance.platformDispatcher.locale.countryCode ??
               '--')
           .toUpperCase();
-      if (!mounted) return;
+    } catch (_) {}
+    if (!mounted) return;
+    // Уже показанный IP-результат не сбрасываем на время refresh: иначе тап
+    // по карточке на ~секунды мигал бы локалью и временно понижал «Усиленный».
+    if (!_regionFromIp) {
       setState(() {
-        _countryCode = code;
-        _isTrafficControlRegion = _trafficControlCountries.contains(code);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _countryCode = '--';
+        _countryCode = localeCode;
+        _isTrafficControlRegion = _trafficControlCountries.contains(localeCode);
       });
     }
+
+    final ipCode = await _geo.getIpCountry(forceRefresh: forceRefresh);
+    if (!mounted || ipCode == null) return;
+    setState(() {
+      _countryCode = ipCode;
+      _regionFromIp = true;
+      // Union: VPN-выход не понижает «усиленный» режим у RU-локали, а IP=RU
+      // поднимает его при иностранной локали.
+      _isTrafficControlRegion = _trafficControlCountries.contains(localeCode) ||
+          _trafficControlCountries.contains(ipCode);
+    });
   }
 
   Future<void> _loadPending() async {
@@ -258,14 +275,19 @@ class _StatusScreenState extends State<StatusScreen>
           Row(
             children: [
               Expanded(
-                child: _InfoCard(
-                  title: l10n.region,
-                  icon: Icons.public_rounded,
-                  value: _countryCode,
-                  subtitle: l10n.regionLocalOnly,
-                  valueColor: _isTrafficControlRegion
-                      ? AppColors.warning
-                      : AppColors.textPrimary,
+                child: GestureDetector(
+                  onTap: () => _loadRegion(forceRefresh: true),
+                  child: _InfoCard(
+                    title: l10n.region,
+                    icon: Icons.public_rounded,
+                    value: _countryCode,
+                    subtitle: _regionFromIp
+                        ? l10n.regionSourceIp
+                        : l10n.regionSourceLocale,
+                    valueColor: _isTrafficControlRegion
+                        ? AppColors.warning
+                        : AppColors.textPrimary,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),

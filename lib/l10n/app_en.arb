@@ -693,7 +693,7 @@
   "helpRegionsTitle": "Regions and Traffic Control",
   "@helpRegionsTitle": {"description": "Help section: Regions"},
   
-  "helpRegionsBullet1": "Your region is determined locally on your device and is never sent to Orpheus servers or any third party.",
+  "helpRegionsBullet1": "Your region is detected by a brief encrypted request to one of several independent geolocation services, which sees your IP address (as any website you visit does). Orpheus servers are not involved. If the check is unavailable, the region from your device settings is used.",
   "@helpRegionsBullet1": {"description": "Regions bullet 1"},
 
   "helpRegionsBullet2": "If a traffic-controlled region is detected, the app automatically enables \"Enhanced Protection\" mode.",
@@ -776,8 +776,11 @@
   "region": "Region",
   "@region": {"description": "Region label"},
 
-  "regionLocalOnly": "Local only \u2022 never sent",
-  "@regionLocalOnly": {"description": "Region privacy note"},
+  "regionSourceIp": "IP check \u2022 encrypted",
+  "@regionSourceIp": {"description": "Region subtitle when country was resolved by IP geolocation"},
+
+  "regionSourceLocale": "From device settings",
+  "@regionSourceLocale": {"description": "Region subtitle when country came from the device locale"},
 
   "mode": "Mode",
   "@mode": {"description": "Mode label"},

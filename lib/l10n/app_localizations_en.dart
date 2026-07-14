@@ -724,7 +724,7 @@ class L10nEn extends L10n {
 
   @override
   String get helpRegionsBullet1 =>
-      'Your region is determined locally on your device and is never sent to Orpheus servers or any third party.';
+      'Your region is detected by a brief encrypted request to one of several independent geolocation services, which sees your IP address (as any website you visit does). Orpheus servers are not involved. If the check is unavailable, the region from your device settings is used.';
 
   @override
   String get helpRegionsBullet2 =>
@@ -811,7 +811,10 @@ class L10nEn extends L10n {
   String get region => 'Region';
 
   @override
-  String get regionLocalOnly => 'Local only • never sent';
+  String get regionSourceIp => 'IP check • encrypted';
+
+  @override
+  String get regionSourceLocale => 'From device settings';
 
   @override
   String get mode => 'Mode';

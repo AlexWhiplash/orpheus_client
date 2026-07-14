@@ -732,7 +732,7 @@ class L10nRu extends L10n {
 
   @override
   String get helpRegionsBullet1 =>
-      'Ваш регион определяется локально на устройстве и никогда не отправляется на серверы Orpheus или третьим лицам.';
+      'Регион определяется коротким зашифрованным запросом к одному из нескольких независимых геолокационных сервисов, который видит ваш IP-адрес (как и любой открываемый вами сайт). Серверы Orpheus в этом не участвуют. Если проверка недоступна, используется регион из настроек устройства.';
 
   @override
   String get helpRegionsBullet2 =>
@@ -819,7 +819,10 @@ class L10nRu extends L10n {
   String get region => 'Регион';
 
   @override
-  String get regionLocalOnly => 'Только локально • не передаётся';
+  String get regionSourceIp => 'По IP • зашифровано';
+
+  @override
+  String get regionSourceLocale => 'Из настроек устройства';
 
   @override
   String get mode => 'Режим';

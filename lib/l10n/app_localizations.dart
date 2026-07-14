@@ -1390,7 +1390,7 @@ abstract class L10n {
   /// Regions bullet 1
   ///
   /// In en, this message translates to:
-  /// **'Your region is determined locally on your device and is never sent to Orpheus servers or any third party.'**
+  /// **'Your region is detected by a brief encrypted request to one of several independent geolocation services, which sees your IP address (as any website you visit does). Orpheus servers are not involved. If the check is unavailable, the region from your device settings is used.'**
   String get helpRegionsBullet1;
 
   /// Regions bullet 2
@@ -1549,11 +1549,17 @@ abstract class L10n {
   /// **'Region'**
   String get region;
 
-  /// Region privacy note
+  /// Region subtitle when country was resolved by IP geolocation
   ///
   /// In en, this message translates to:
-  /// **'Local only • never sent'**
-  String get regionLocalOnly;
+  /// **'IP check • encrypted'**
+  String get regionSourceIp;
+
+  /// Region subtitle when country came from the device locale
+  ///
+  /// In en, this message translates to:
+  /// **'From device settings'**
+  String get regionSourceLocale;
 
   /// Mode label
   ///

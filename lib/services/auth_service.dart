@@ -1,6 +1,7 @@
 // lib/services/auth_service.dart
 // Сервис авторизации: PIN-код, duress code, блокировка
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
@@ -170,7 +171,9 @@ class AuthService {
 
   Future<bool> _pinWasEnabled() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
+      // init() ждётся до runApp: подвисший prefs не должен блокировать старт.
+      final prefs = await SharedPreferences.getInstance()
+          .timeout(const Duration(seconds: 3));
       return prefs.getBool(_pinMarkerKey) ?? false;
     } catch (_) {
       // Нет prefs (unit-тесты / ранний старт) — ведём себя как раньше.
@@ -183,6 +186,12 @@ class AuthService {
     final configJson = json.encode(_config.toMap());
     await _secureStorage.write(key: _configKey, value: configJson);
     // Маркер держим в синхроне с конфигом (best effort, не секрет).
+    // Без await: недоступный/подвисший prefs не должен блокировать PIN-флоу
+    // (и виджет-тесты под fake-async).
+    unawaited(_syncPinMarker());
+  }
+
+  Future<void> _syncPinMarker() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_pinMarkerKey, _config.isPinEnabled);

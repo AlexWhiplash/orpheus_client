@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/screens/lock_screen.dart';
 import 'package:orpheus_project/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MemSecureStorage implements AuthSecureStorage {
   final Map<String, String> _m = {};
@@ -43,6 +44,9 @@ void main() {
       final binding = TestWidgetsFlutterBinding.ensureInitialized();
       binding.window.physicalSizeTestValue = const Size(1080, 1920);
       binding.window.devicePixelRatioTestValue = 1.0;
+      // AuthService держит best-effort маркер PIN в SharedPreferences; без
+      // мока getInstance() виснет под fake-async виджет-тестов.
+      SharedPreferences.setMockInitialValues({});
 
       auth = AuthService.createForTesting(
           secureStorage: _MemSecureStorage(),

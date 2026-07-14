@@ -43,6 +43,12 @@ flutter_local_notifications 17->22) — groupKey убран (id фиксиров
 PIN сразу (соответствует строгому локу, владельцу озвучено). Инварианты (answer-over-lock, cold-start
 звонок, duress, wipe, missed-call) — проверены, целы. Device-тест b30 на обоих телефонах: ok.
 
+**Follow-up (полный suite):** PIN-маркер через awaited SharedPreferences вешал 8 виджет-тестов
+(lock_screen/pin_setup/security_settings) под fake-async — немокнутый getInstance() не завершается,
+таймаут 10 мин (suite шёл 40 мин). Фикс: `_syncPinMarker` через unawaited (подвисший prefs не блокирует
+PIN-флоу и в проде), `_pinWasEnabled` с timeout 3с (init ждётся до runApp), в трёх тест-файлах
+`SharedPreferences.setMockInitialValues({})`. Итог: 365 + 32/32 по затронутым файлам, зелено.
+
 **Симптом (device-тест на b21, Samsung->Pixel):** первое «привет» на убитый/свёрнутый Pixel — уведомление
 пришло, а в чате сообщения нет; следующие сообщения ходят нормально. **Корень (разобран по коду, логи
 через adb недоступны — release не debuggable): регресс FCM -> постоянный foreground push-сервис.** При

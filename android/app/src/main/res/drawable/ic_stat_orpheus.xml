@@ -1,21 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Android small notification / status-bar icon.
+  Android small notification / status-bar icon — фирменный щит Орфея
+  (контур щита + аудио-эквалайзер), монохром белым на прозрачном.
+  Форма взята из логотипа assets/images/logo.svg. Без адаптивного слоя
+  (не ic_launcher), иначе в шторке "белый квадрат".
 
-  Важно:
-  - монохромная (белая) фигура на прозрачном фоне
-  - без адаптивного слоя (не ic_launcher), иначе в шторке часто выглядит как "белый квадрат"
-
-  Щит — тематика безопасности/приватности (заменил прежнюю "O"; лист-лончер в
-  постоянном сервисе тоже заменён на щит через ic_bg_service_small).
+  Постоянный сервис берёт ic_bg_service_small (плагин перебивает vector
+  своими density-PNG, поэтому там тот же щит лежит PNG-ами в density-папках).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportWidth="512"
+    android:viewportHeight="512">
 
+    <!-- Контур щита -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12,2 L20,5 L20,11 C20,16.5 16.5,20.8 12,22 C7.5,20.8 4,16.5 4,11 L4,5 Z" />
+        android:pathData="M256,480 C256,480 448,384 448,128 L256,64 L64,128 C64,384 256,480 256,480 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="34"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Аудио-эквалайзер (waveform) -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M244,140 H268 V340 H244 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M190,170 H210 V310 H190 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M140,200 H156 V280 H140 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M302,170 H322 V310 H302 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M356,200 H372 V280 H356 Z" />
 </vector>

@@ -1,26 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Иконка постоянного foreground-сервиса (flutter_background_service ищет
-  drawable с именно этим именем; без него плагин берёт лончер-иконку — лист,
-  который светился в статусбаре, device-тест 13.07.2026).
-
-  Тот же монохромный щит, что и ic_stat_orpheus — единый стиль во всех
-  статусбар-иконках (сервис, уведомления, звонки).
+  drawable с именно этим именем). Фирменный щит Орфея (контур + эквалайзер),
+  монохром — тот же, что и ic_stat_orpheus.
 
   ВАЖНО: плагин flutter_background_service_android поставляет СВОЙ
-  ic_bg_service_small.png в density-папках (drawable-hdpi/mdpi/xhdpi/xxhdpi).
-  Этот generic vector density-specific PNG плагина НЕ перебивает (Android для
-  конкретной плотности предпочитает density-match). Поэтому наш щит лежит ещё и
-  как PNG в drawable-{mdpi..xxxhdpi}/ic_bg_service_small.png — они перебивают
-  плагинские (app res > library res). Vector оставлен как fallback.
+  ic_bg_service_small.png в density-папках. Этот generic vector его НЕ
+  перебивает (Android для конкретной плотности берёт density-match PNG),
+  поэтому фирменный щит лежит ещё и PNG-ами в drawable-{mdpi..xxxhdpi}/
+  ic_bg_service_small.png — они перебивают плагинские. Vector — fallback.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportWidth="512"
+    android:viewportHeight="512">
 
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M12,2 L20,5 L20,11 C20,16.5 16.5,20.8 12,22 C7.5,20.8 4,16.5 4,11 L4,5 Z" />
+        android:pathData="M256,480 C256,480 448,384 448,128 L256,64 L64,128 C64,384 256,480 256,480 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="34"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <path android:fillColor="#FFFFFFFF" android:pathData="M244,140 H268 V340 H244 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M190,170 H210 V310 H190 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M140,200 H156 V280 H140 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M302,170 H322 V310 H302 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M356,200 H372 V280 H356 Z" />
 </vector>

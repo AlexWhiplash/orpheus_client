@@ -2,7 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppConfig {
   // Final Release 1.0.0
-  static const String appVersion = "v1.1.7";
+  static const String appVersion = "v1.1.8";
 
   // Тест-сборки: писать все логи в файл (переживает рестарт) + перехват print +
   // шаринг из экрана отладки. Перед РЕАЛЬНЫМ релизом ставить false — persist-логи

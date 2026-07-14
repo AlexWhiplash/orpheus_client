@@ -121,6 +121,9 @@
   "updateDownloading": "Downloading Update",
   "@updateDownloading": {"description": "Update downloading progress dialog title"},
 
+  "updateConfirmInstall": "Confirm the installation in the system dialog",
+  "@updateConfirmInstall": {"description": "Snackbar shown after download when the system install prompt appears"},
+
   "updateUpToDate": "You have the latest version",
   "@updateUpToDate": {"description": "Snackbar shown when no update is available"},
 

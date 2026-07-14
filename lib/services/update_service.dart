@@ -80,7 +80,7 @@ class UpdateService {
         // 3. Если на сервере версия больше -> предлагаем обновить
         if (serverBuildNumber > currentBuildNumber) {
           if (context.mounted) {
-            _showUpdateDialog(context, versionName, downloadUrl, isRequired);
+            _showUpdateDialog(context, versionName, downloadUrl, isRequired, serverBuildNumber);
           }
         } else if (showNoUpdateFeedback && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -115,15 +115,20 @@ class UpdateService {
   }
 
   static String resolveDownloadUrl(String urlPath) {
-    // Абсолютные ссылки (например update.orpheus.click) используем как есть.
-    if (urlPath.startsWith("http://") || urlPath.startsWith("https://")) {
+    // HTTPS обязателен: cleartext заблокирован дефолтом и небезопасен для APK.
+    // Абсолютный https:// берём как есть; http:// апгрейдим до https:// (тот же хост),
+    // а не принимаем молча.
+    if (urlPath.startsWith("https://")) {
       return urlPath;
     }
-    // Относительные ссылки резолвим через текущий serverIp (новый домен в новых релизах).
+    if (urlPath.startsWith("http://")) {
+      return urlPath.replaceFirst("http://", "https://");
+    }
+    // Относительные ссылки резолвим через текущий serverIp (httpUrl уже даёт https).
     return AppConfig.httpUrl(urlPath);
   }
 
-  static void _showUpdateDialog(BuildContext context, String version, String urlPath, bool required) {
+  static void _showUpdateDialog(BuildContext context, String version, String urlPath, bool required, int targetBuild) {
     _isUpdateDialogShown = true;
 
     // Формируем полную ссылку
@@ -157,7 +162,7 @@ class UpdateService {
             onPressed: () async {
               // Try to download and install APK in-app first
               // If it fails, fallback to browser
-              await _downloadAndInstallApk(context, fullUrl, required);
+              await _downloadAndInstallApk(context, fullUrl, required, targetBuild);
             },
             child: Text(l10n.updateDownload, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
@@ -167,8 +172,17 @@ class UpdateService {
   }
 
   /// Download and install APK in-app with fallback to browser
-  static Future<void> _downloadAndInstallApk(BuildContext context, String url, bool required) async {
+  static Future<void> _downloadAndInstallApk(BuildContext context, String url, bool required, int targetBuild) async {
     print('UPDATE: Attempting in-app APK download from $url');
+
+    // Второй барьер против даунгрейда/переустановки: ставим только если целевая сборка
+    // строго новее текущей. checkForUpdate уже это гарантирует, но URL не привязан к
+    // версии — защита переживает будущие рефакторинги и серверный баг выбора версии.
+    final currentBuild = await _getCurrentBuildNumber();
+    if (targetBuild <= currentBuild) {
+      print('UPDATE: Refusing downgrade/reinstall: target=$targetBuild current=$currentBuild');
+      return;
+    }
 
     try {
       // Check if we can install APK in-app (checks permission too).
@@ -273,6 +287,17 @@ class UpdateService {
       }
 
       print('UPDATE: APK installation initiated successfully');
+
+      // Системное окно "Установить?" сейчас поднято (его показывает InstallStatusReceiver).
+      // Сообщаем честно, а не делаем вид, что обновление уже применено.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(L10n.of(context).updateConfirmInstall),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
 
       // Close update dialog after successful installation start
       if (!required && context.mounted) {

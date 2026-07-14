@@ -129,6 +129,23 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- Статус PackageInstaller-сессии. Дёргается системой только через наш
+             PendingIntent (getBroadcast) -> exported=false. На STATUS_PENDING_USER_ACTION
+             поднимает системное окно установки из EXTRA_INTENT. -->
+        <receiver
+            android:name=".InstallStatusReceiver"
+            android:exported="false" />
+
+        <!-- После самообновления процесс убит и сам не поднимается; восстанавливаем
+             доставку пушей уведомлением, открывающим приложение. -->
+        <receiver
+            android:name=".PackageReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
     <queries>
@@ -145,6 +162,12 @@
             <action android:name="android.intent.action.VIEW" />
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:scheme="http" />
+        </intent>
+        <!-- Фолбэк-путь установки APK (ACTION_VIEW/OpenFilex) на Android 11+ без этого
+             не резолвится (resolveActivity вернёт null). Основной session-путь не требует. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.android.package-archive" />
         </intent>
     </queries>
 </manifest>

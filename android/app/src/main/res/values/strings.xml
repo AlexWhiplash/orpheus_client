@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown after a self-update: the process was killed, tapping reopens the app
+         and re-initializes the push delivery service. -->
+    <string name="update_installed_channel">Updates</string>
+    <string name="update_installed_title">Orpheus updated</string>
+    <string name="update_installed_body">Tap to reopen and restore your connection</string>
+</resources>

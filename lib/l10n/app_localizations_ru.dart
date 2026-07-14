@@ -137,6 +137,9 @@ class L10nRu extends L10n {
   String get updateDownloading => 'Скачивание обновления';
 
   @override
+  String get updateConfirmInstall => 'Подтвердите установку в системном окне';
+
+  @override
   String get updateUpToDate => 'У вас последняя версия';
 
   @override

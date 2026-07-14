@@ -373,11 +373,20 @@ class MainActivity: FlutterFragmentActivity() {
                 }
             }
 
-            // Create a pending intent for the install result
-            val intent = Intent(Intent.ACTION_VIEW)
-            val pendingIntent = android.app.PendingIntent.getActivity(
-                this, sessionId, intent,
-                android.app.PendingIntent.FLAG_MUTABLE
+            // Status callback: the system delivers PackageInstaller.EXTRA_STATUS through
+            // this IntentSender. It MUST target an explicit BroadcastReceiver that, on
+            // STATUS_PENDING_USER_ACTION, launches the confirm dialog from EXTRA_INTENT.
+            // An empty ACTION_VIEW here resolves to nothing -> no dialog, session hangs.
+            // FLAG_MUTABLE is required on API 31+: the system fills in EXTRA_STATUS/
+            // EXTRA_INTENT via a fill-in Intent; an immutable PendingIntent would drop them.
+            val statusIntent = Intent(this, InstallStatusReceiver::class.java)
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            } else {
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = android.app.PendingIntent.getBroadcast(
+                this, sessionId, statusIntent, flags
             )
 
             session.commit(pendingIntent.intentSender)

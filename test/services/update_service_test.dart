@@ -21,6 +21,13 @@ void main() {
       expect(UpdateService.resolveDownloadUrl(path), equals(AppConfig.httpUrl(path)));
     });
 
+    test('resolveDownloadUrl: http:// апгрейдится до https://', () {
+      expect(
+        UpdateService.resolveDownloadUrl('http://update.orpheus.click/orpheus.apk'),
+        equals('https://update.orpheus.click/orpheus.apk'),
+      );
+    });
+
     test('getWithFallback: возвращает ответ основного хоста', () async {
       final called = <Uri>[];
       UpdateService.debugHttpGet = (uri) async {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_installed_channel">Обновления</string>
+    <string name="update_installed_title">Orpheus обновлён</string>
+    <string name="update_installed_body">Нажмите, чтобы открыть и восстановить соединение</string>
+</resources>

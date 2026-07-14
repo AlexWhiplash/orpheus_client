@@ -295,6 +295,12 @@ abstract class L10n {
   /// **'Downloading Update'**
   String get updateDownloading;
 
+  /// Snackbar shown after download when the system install prompt appears
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the installation in the system dialog'**
+  String get updateConfirmInstall;
+
   /// Snackbar shown when no update is available
   ///
   /// In en, this message translates to:

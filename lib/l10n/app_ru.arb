@@ -56,6 +56,9 @@
   "updateDownloading": "Скачивание обновления",
   "@updateDownloading": {"description": "Update downloading progress dialog title"},
 
+  "updateConfirmInstall": "Подтвердите установку в системном окне",
+  "@updateConfirmInstall": {"description": "Snackbar shown after download when the system install prompt appears"},
+
   "updateUpToDate": "У вас последняя версия",
   "@updateUpToDate": {"description": "Snackbar shown when no update is available"},
 

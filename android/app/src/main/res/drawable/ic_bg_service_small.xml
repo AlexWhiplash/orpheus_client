@@ -6,6 +6,13 @@
 
   Тот же монохромный щит, что и ic_stat_orpheus — единый стиль во всех
   статусбар-иконках (сервис, уведомления, звонки).
+
+  ВАЖНО: плагин flutter_background_service_android поставляет СВОЙ
+  ic_bg_service_small.png в density-папках (drawable-hdpi/mdpi/xhdpi/xxhdpi).
+  Этот generic vector density-specific PNG плагина НЕ перебивает (Android для
+  конкретной плотности предпочитает density-match). Поэтому наш щит лежит ещё и
+  как PNG в drawable-{mdpi..xxxhdpi}/ic_bg_service_small.png — они перебивают
+  плагинские (app res > library res). Vector оставлен как fallback.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"

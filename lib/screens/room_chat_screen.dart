@@ -5,12 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
-import 'package:orpheus_project/main.dart' show cryptoService, websocketService;
+import 'package:orpheus_project/main.dart' show authService, cryptoService, websocketService;
 import 'package:orpheus_project/models/room_message_model.dart';
 import 'package:orpheus_project/models/room_model.dart';
 import 'package:orpheus_project/models/note_model.dart';
 import 'package:orpheus_project/services/badge_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/room_alias_service.dart';
 import 'package:orpheus_project/services/room_unread_service.dart';
 import 'package:orpheus_project/services/rooms_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
@@ -48,6 +49,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
   bool _warningDismissed = true;
   bool _notificationsEnabled = true;
   Map<String, String> _contactNames = <String, String>{};
+  Map<String, String> _aliases = <String, String>{};
 
   @override
   void initState() {
@@ -59,25 +61,47 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     _loadMessages();
     _loadMyBadge();
     _loadRoomPrefs();
-    _loadContactNames();
+    _loadNames();
     _wsSub = websocketService.stream.listen(_handleWsMessage);
     _scrollController.addListener(_onScroll);
   }
 
-  /// Имена участников из адресной книги (по pubkey) — чтобы в комнате показывать
-  /// имя контакта вместо хвоста ключа. Кого нет в контактах — фолбэк на серверное
-  /// имя или префикс ключа (участник комнаты может быть не из твоих контактов).
-  /// В duress-режиме getContacts() пуст — имена не раскрываются.
-  Future<void> _loadContactNames() async {
+  /// Имена участников комнаты: сначала из адресной книги (по pubkey), затем ручные
+  /// локальные псевдонимы для тех, кого нет в контактах. Кого нет ни там, ни там —
+  /// «Неизвестный». В duress-режиме имена/псевдонимы не раскрываются (getContacts()
+  /// пуст, псевдонимы гейтим по isDuressMode).
+  Future<void> _loadNames() async {
     try {
       final contacts = await DatabaseService.instance.getContacts();
+      final aliases = authService.isDuressMode
+          ? <String, String>{}
+          : await RoomAliasService.instance.getAll();
       if (!mounted) return;
       setState(() {
         _contactNames = {
           for (final c in contacts) c.publicKey: c.name,
         };
+        _aliases = aliases;
       });
     } catch (_) {}
+  }
+
+  /// Задать/изменить локальное имя участника, которого нет в контактах.
+  Future<void> _renameSender(String pubkey, String? current) async {
+    final l10n = L10n.of(context);
+    final name = await AppInputDialog.show(
+      context: context,
+      icon: Icons.badge_outlined,
+      title: l10n.roomSetParticipantName,
+      hintText: l10n.roomParticipantNameHint,
+      initialValue: current ?? '',
+      primaryLabel: l10n.save,
+      secondaryLabel: l10n.cancel,
+    );
+    if (name == null) return; // отменили
+    // Пустая строка -> сброс псевдонима (обратно в «Неизвестный»).
+    await RoomAliasService.instance.setAlias(pubkey, name);
+    await _loadNames();
   }
 
   @override
@@ -623,6 +647,8 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
             _RoomMessageBubble(
               message: message,
               contactNames: _contactNames,
+              aliases: _aliases,
+              onRenameSender: _renameSender,
               onLongPress:
                   message.isSystem ? null : () => _saveNoteFromRoom(message),
             ),
@@ -816,11 +842,15 @@ class _RoomMessageBubble extends StatelessWidget {
   const _RoomMessageBubble({
     required this.message,
     this.contactNames = const {},
+    this.aliases = const {},
+    this.onRenameSender,
     this.onLongPress,
   });
 
   final RoomMessage message;
   final Map<String, String> contactNames;
+  final Map<String, String> aliases;
+  final void Function(String pubkey, String? currentAlias)? onRenameSender;
   final VoidCallback? onLongPress;
 
   @override
@@ -833,15 +863,28 @@ class _RoomMessageBubble extends StatelessWidget {
         message.senderKey == myKey;
 
     final l10n = L10n.of(context);
-    // Приоритет имени автора: официальный -> имя из адресной книги (если участник
-    // у тебя в контактах) -> серверное sender_name -> первые 8 символов ключа.
-    final contactName =
-        message.senderKey == null ? null : contactNames[message.senderKey];
-    final senderLabel = isOfficial
-        ? l10n.orpheusOfficialName
-        : (contactName ??
-            message.senderName ??
-            (message.senderKey?.substring(0, 8) ?? '—'));
+    final key = message.senderKey;
+    final contactName = key == null ? null : contactNames[key];
+    final alias = key == null ? null : aliases[key];
+    // Участника можно переименовать локально, только если он не я, не официальный
+    // и НЕ в контактах (контактам имя правят через контакт).
+    final isAliasable =
+        !isMine && !isOfficial && !message.isSystem && key != null && contactName == null;
+    // Приоритет имени автора: официальный -> контакт -> ручной псевдоним ->
+    // «Неизвестный» + короткий фрагмент ключа (различать нескольких незнакомцев).
+    final String senderLabel;
+    if (isOfficial) {
+      senderLabel = l10n.orpheusOfficialName;
+    } else if (contactName != null) {
+      senderLabel = contactName;
+    } else if (alias != null) {
+      senderLabel = alias;
+    } else {
+      final tag = (key != null && key.length >= 4) ? key.substring(0, 4) : '';
+      senderLabel = tag.isEmpty
+          ? l10n.roomUnknownParticipant
+          : '${l10n.roomUnknownParticipant} · $tag';
+    }
 
     if (message.isSystem) {
       final systemText = _mapSystemMessage(message, l10n);
@@ -889,22 +932,34 @@ class _RoomMessageBubble extends StatelessWidget {
               isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             if (!isMine) ...[
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isOfficial) ...[
-                    const Icon(Icons.verified,
-                        size: 14, color: AppColors.primary),
-                    const SizedBox(width: 6),
+              GestureDetector(
+                onTap: (isAliasable && onRenameSender != null)
+                    ? () => onRenameSender!(key, alias)
+                    : null,
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isOfficial) ...[
+                      const Icon(Icons.verified,
+                          size: 14, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      senderLabel,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                    // Подсказка, что имя можно закрепить локально.
+                    if (isAliasable) ...[
+                      const SizedBox(width: 4),
+                      const Icon(Icons.edit_outlined,
+                          size: 12, color: AppColors.textTertiary),
+                    ],
                   ],
-                  Text(
-                    senderLabel,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: AppColors.textSecondary),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 4),
             ],

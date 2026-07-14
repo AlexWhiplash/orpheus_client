@@ -791,6 +791,15 @@ class L10nEn extends L10n {
   String get rename => 'Rename';
 
   @override
+  String get roomUnknownParticipant => 'Unknown';
+
+  @override
+  String get roomSetParticipantName => 'Set name';
+
+  @override
+  String get roomParticipantNameHint => 'Name for this participant';
+
+  @override
   String get enterNewName => 'Enter new name';
 
   @override

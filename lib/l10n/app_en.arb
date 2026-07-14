@@ -752,7 +752,16 @@
   
   "rename": "Rename",
   "@rename": {"description": "Rename action"},
-  
+
+  "roomUnknownParticipant": "Unknown",
+  "@roomUnknownParticipant": {"description": "Label for a room participant who is not in your contacts"},
+
+  "roomSetParticipantName": "Set name",
+  "@roomSetParticipantName": {"description": "Dialog title to assign a local name to a room participant"},
+
+  "roomParticipantNameHint": "Name for this participant",
+  "@roomParticipantNameHint": {"description": "Hint in the set-name dialog for a room participant"},
+
   "enterNewName": "Enter new name",
   "@enterNewName": {"description": "Rename hint"},
   

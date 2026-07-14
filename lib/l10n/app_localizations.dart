@@ -1513,6 +1513,24 @@ abstract class L10n {
   /// **'Rename'**
   String get rename;
 
+  /// Label for a room participant who is not in your contacts
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get roomUnknownParticipant;
+
+  /// Dialog title to assign a local name to a room participant
+  ///
+  /// In en, this message translates to:
+  /// **'Set name'**
+  String get roomSetParticipantName;
+
+  /// Hint in the set-name dialog for a room participant
+  ///
+  /// In en, this message translates to:
+  /// **'Name for this participant'**
+  String get roomParticipantNameHint;
+
   /// Rename hint
   ///
   /// In en, this message translates to:

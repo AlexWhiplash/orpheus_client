@@ -798,6 +798,15 @@ class L10nRu extends L10n {
   String get rename => 'Переименовать';
 
   @override
+  String get roomUnknownParticipant => 'Неизвестный';
+
+  @override
+  String get roomSetParticipantName => 'Задать имя';
+
+  @override
+  String get roomParticipantNameHint => 'Имя для этого участника';
+
+  @override
   String get enterNewName => 'Введите новое имя';
 
   @override

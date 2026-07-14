@@ -590,6 +590,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   late bool _keysExist;
   bool _isLocked = false;
+  // Lock was deferred because the app went background while a call was
+  // active/pending (call UI must stay reachable without PIN). Re-armed in
+  // _onCallActiveChanged when the call ends and in the resumed backstop.
+  bool _lockPendedByCall = false;
   Timer? _inactivityTimer;
   DateTime _lastUserActivity = DateTime.now();
   StreamSubscription<String>? _licenseSubscription;
@@ -741,6 +745,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _onUnlocked() {
     DebugLogger.info('APP', '🔓 App unlocked');
+    _lockPendedByCall = false;
     setState(() => _isLocked = false);
     _registerUserActivity('unlock');
 
@@ -767,6 +772,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   void _onDuressMode() {
     DebugLogger.warn('APP', '🔓 App unlocked in DURESS MODE');
+    _lockPendedByCall = false;
     setState(() => _isLocked = false);
     // В duress mode приложение работает, но показывает пустой профиль
   }
@@ -798,18 +804,37 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// Single point that actually engages the app lock (clears the deferred
+  /// flag so a stale "lock pended by call" can never linger past a real lock).
+  void _lockApp(String reason) {
+    _lockPendedByCall = false;
+    authService.lock();
+    if (mounted) setState(() => _isLocked = true);
+    DebugLogger.info('LIFECYCLE', '🔒 App locked ($reason)');
+  }
+
   /// Звонок на время своего показа снимает keyguard (enableCallMode -> дать
   /// ответить на заблокированном телефоне). По завершении звонка, если устройство
   /// всё ещё под системной блокировкой, лочим и приложение — иначе после звонка
   /// над локскрином мелькнёт интерфейс Orpheus (утечка). Если устройство уже
   /// разблокировано (пользователь сам ввёл PIN во время звонка) — не мешаем.
+  /// Исключение: если лок был ОТЛОЖЕН из-за ухода в фон во время звонка
+  /// (_lockPendedByCall), лочим безусловно — иначе после несоединившегося или
+  /// завершённого в фоне звонка приложение остаётся разблокированным до
+  /// таймаута неактивности (обход PIN).
   Future<void> _onCallActiveChanged() async {
     if (CallStateService.instance.isCallActive.value) return; // звонок начался
-    if (!authService.config.isPinEnabled || _isLocked) return;
+    if (!authService.config.isPinEnabled || _isLocked) {
+      _lockPendedByCall = false;
+      return;
+    }
+    if (_lockPendedByCall) {
+      _lockApp('after call, deferred by background during call');
+      return;
+    }
     try {
       if (await DeviceSettingsService.isDeviceLocked()) {
-        authService.lock();
-        if (mounted) setState(() => _isLocked = true);
+        _lockApp('after call, device keyguard engaged');
       }
     } catch (_) {}
   }
@@ -838,9 +863,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (!mounted) return;
       final elapsed = DateTime.now().difference(_lastUserActivity);
       if (elapsed >= timeout && authService.config.isPinEnabled && !_isLocked) {
-        authService.lock();
-        setState(() => _isLocked = true);
-        DebugLogger.info('LIFECYCLE', '🔒 App locked by inactivity timeout');
+        _lockApp('inactivity timeout');
       }
     });
   }
@@ -872,7 +895,19 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // ещё не закрыл сокет» — иначе они ждали бы следующего рестарта (гейт внутри
       // пропустит слив, если под локом/duress).
       _drainPendingInbox();
-      
+
+      // Deferred-lock backstop: the app went background while a call was up
+      // and the call is already over — lock now, regardless of the inactivity
+      // window, BEFORE any pending-call/UI processing below.
+      if (_lockPendedByCall &&
+          !CallStateService.instance.isCallActive.value) {
+        if (authService.config.isPinEnabled && !_isLocked) {
+          _lockApp('on resume, deferred by call');
+        } else {
+          _lockPendedByCall = false;
+        }
+      }
+
       // КРИТИЧНО: Обработка отложенного звонка при возврате из background
       // Если пользователь принял звонок через CallKit, но Navigator был ещё не готов,
       // звонок сохранился в _pendingCall. Обрабатываем его сейчас.
@@ -895,9 +930,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           authService.config.isPinEnabled &&
           !_isLocked &&
           DateTime.now().difference(_lastUserActivity) >= timeout) {
-        authService.lock();
-        setState(() => _isLocked = true);
-        DebugLogger.info('LIFECYCLE', '🔒 App locked on resume (inactivity timeout)');
+        _lockApp('on resume, inactivity timeout');
       } else {
         _resetInactivityTimer();
       }
@@ -916,13 +949,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Строгая блокировка: как только приложение уходит в фон / гаснет экран —
       // сразу лочим (при включённом PIN). Исключение — активный ИЛИ входящий
       // звонок: экран звонка и приём должны остаться доступными без PIN.
+      // Но пропуск НЕ бесследный: помечаем лок отложенным (_lockPendedByCall),
+      // и он будет взведён при завершении звонка / на resume — иначе после
+      // звонка приложение открывается без PIN до таймаута неактивности.
       if (authService.config.isPinEnabled &&
           !_isLocked &&
           !hasActiveCall &&
           !hasPendingCall) {
-        authService.lock();
-        setState(() => _isLocked = true);
-        DebugLogger.info('LIFECYCLE', '🔒 App locked on background (immediate)');
+        _lockApp('on background, immediate');
+      } else if (authService.config.isPinEnabled &&
+          !_isLocked &&
+          (hasActiveCall || hasPendingCall)) {
+        _lockPendedByCall = true;
+        DebugLogger.info(
+            'LIFECYCLE', '🔒 Lock deferred: active/pending call in background');
       } else if (hasPendingCall) {
         DebugLogger.info('LIFECYCLE', '📞 Есть pending call');
       }

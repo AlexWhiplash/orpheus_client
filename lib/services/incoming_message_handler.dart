@@ -457,6 +457,10 @@ class IncomingMessageHandler {
         subtitle: 'Missed call',
         callbackText: 'Call back',
       ),
+      // No plugin ongoing-call notification: the app runs its own in-call FGS
+      // (CallAudioService); the plugin's START_STICKY service leaks when
+      // endAllCalls finds the active-call list already empty.
+      callingNotification: const NotificationParams(showNotification: false),
       extra: <String, dynamic>{
         'callerKey': callerKey,
         'offerData': json.encode(offerData),

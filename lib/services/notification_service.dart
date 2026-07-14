@@ -284,6 +284,11 @@ Future<void> _showNativeIncomingCall(Map<String, dynamic> data) async {
         subtitle: l10n.missedCall,
         callbackText: l10n.callBack,
       ),
+      // No plugin ongoing-call notification: the app runs its own in-call FGS
+      // (CallAudioService). The plugin one is redundant AND leaks: its service
+      // is START_STICKY and only stops via ACTION_CALL_ENDED, which endAllCalls
+      // skips when the plugin's active-call list is already empty.
+      callingNotification: const NotificationParams(showNotification: false),
       duration: 45000, // 45 seconds ringtone
       extra: <String, dynamic>{
         'callerKey': callerKey,
@@ -630,7 +635,8 @@ class NotificationService {
         body: l10n.newMessage, // ни содержимого, ни отправителя
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
-        groupKey: 'orpheus_messages_group',
+        // No groupKey: a lone grouped child without a posted group summary makes
+        // Samsung One UI synthesize a blank "Orpheus" header row in the shade.
         ongoing: false,
         fullScreenIntent: false,
       );
@@ -661,7 +667,8 @@ class NotificationService {
         body: l10n.newMessageInChat,
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
-        groupKey: 'orpheus_messages_group',
+        // No groupKey: a lone grouped child without a posted group summary makes
+        // Samsung One UI synthesize a blank "Orpheus" header row in the shade.
         ongoing: false,
         fullScreenIntent: false,
       );
@@ -686,7 +693,8 @@ class NotificationService {
         body: l10n.officialOrpheusReply,
         category: AndroidNotificationCategory.message,
         androidSmallIcon: _androidSmallIcon,
-        groupKey: 'orpheus_messages_group',
+        // No groupKey: a lone grouped child without a posted group summary makes
+        // Samsung One UI synthesize a blank "Orpheus" header row in the shade.
         ongoing: false,
         fullScreenIntent: false,
       );

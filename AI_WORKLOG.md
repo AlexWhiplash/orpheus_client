@@ -5,7 +5,43 @@
 
 ---
 
-## 2026-07-13 (3) — Баг device-теста: потеря первого сообщения в спящий телефон (fixed, +22)
+## 2026-07-14 — PIN-обход после звонков + задвоение уведомлений (fixed, +30, device-verified)
+
+**Симптомы (device, Samsung b28):** (1) приложение открывается без PIN — только после звонков;
+(2) в шторке два уведомления Orpheus («Protecting your connection» + пустое), изредка две карточки в recents.
+
+**Исследование:** multi-agent workflow, 13 агентов: 4 разведчика (lock-система, call-flow, Android-слой,
+git-форензика) -> 7 гипотез -> адверсариальная проверка каждой по коду (1 CONFIRMED, 1 PLAUSIBLE, 5 REFUTED).
+Опровергнуто в т.ч.: answer-over-lock сам разблокирует (нет — pending-механика корректна), cold-start без
+PIN (нет — `_isLocked` сеется из `requiresUnlock`), иконки 106dc6d/5b9322d (только ресурсы), taskAffinity
+(форкающие пути — мёртвый код).
+
+**Корень PIN (CONFIRMED):** единственный немедленный лок — `paused`-хендлер — гейтится на
+`!hasActiveCall && !hasPendingCall` (введено 5aeff60 «strict lock»); пропуск бесследный, ре-лок только по
+инактивити-таймауту (у владельца 5 мин) — `_onCallActiveChanged` требовал системный keyguard (после HOME
+не взведён). 0b9cc33 «caller patience» расширил окно: несоединившийся исходящий живёт до 45с watchdog.
+**Фикс:** флаг `_lockPendedByCall` (main.dart) — ставится при пропуске лока из-за звонка, взводит лок в
+`_onCallActiveChanged` (безусловно) и в resume-бэкстопе (мимо инактивити-окна); хелпер `_lockApp()`
+централизует лок+сброс флага. 0b9cc33 НЕ ревертился (дефект старше него).
+
+**Корень задвоения (PLAUSIBLE, оба кандидата закрыты):** (1) ongoing-FGS вендоренного callkit-плагина:
+стартует на каждый нативный ACCEPT, гасится только по ACTION_CALL_ENDED, который `endAllCalls()` шлёт
+лишь для звонков ещё в ACTIVE_CALLS (список «часто 0»); START_STICKY + stopWithTask=false. Отключено
+`callingNotification: showNotification=false` (оба showCallkitIncoming; свой CallAudioService id889 уже
+есть) + плагин hardening: stopService в DECLINE/TIMEOUT-ветках ресивера, stopSelf на null-intent рестарте.
+(2) groupKey `orpheus_messages_group` без setAsGroupSummary (латентно с февраля, мог проявиться после бампа
+flutter_local_notifications 17->22) — groupKey убран (id фиксированный, группа не нужна).
+
+**Hardening:** `_handleCallKitDecline` чистит `_pendingCall`; AuthService.init fail-closed через
+не-секретный маркер `orpheus_pin_was_enabled` (prefs) + `_configLoadFailed` (verifyPin -> invalid, иначе
+пустой конфиг пускал любым вводом; retry чтения 200мс; performWipe сбрасывает); requiresUnlock-гейт в
+`_checkActiveCallOnStart` (cold-start pending — через unlock, не прямой нав); биометрия ->
+`markUnlockedExternally()` (десинк `_isUnlocked`).
+
+**Адверсариал-ревью патча (3 агента):** блокер — устаревший тест groupKey (обновлён); minor — performWipe
+не сбрасывал `_configLoadFailed` (закрыт); осознанный over-lock: возврат в звонок + отбой в форграунде =
+PIN сразу (соответствует строгому локу, владельцу озвучено). Инварианты (answer-over-lock, cold-start
+звонок, duress, wipe, missed-call) — проверены, целы. Device-тест b30 на обоих телефонах: ok.
 
 **Симптом (device-тест на b21, Samsung->Pixel):** первое «привет» на убитый/свёрнутый Pixel — уведомление
 пришло, а в чате сообщения нет; следующие сообщения ходят нормально. **Корень (разобран по коду, логи

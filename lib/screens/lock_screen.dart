@@ -143,6 +143,9 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       if (didAuth && mounted) {
         // Биометрия успешна — проверяем основной PIN для разблокировки
         // (биометрия только как быстрый вход, не как duress)
+        // Синхронизируем модель: иначе requiresUnlock остаётся true при
+        // разблокированном UI (входящий звонок ушёл бы в pending).
+        _auth.markUnlockedExternally();
         widget.onUnlocked();
       }
     } catch (e) {

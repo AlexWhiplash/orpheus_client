@@ -119,6 +119,15 @@ Future<void> _checkActiveCallOnStart() async {
   // RAM данные (_pendingCall) теряются, но storage сохраняется.
   final storedPending = await PendingCallStorage.instance.loadAndClear();
   if (storedPending != null && storedPending.isValid) {
+    // Под локом НЕ навигируем напрямую (защита в глубину: сейчас от прямой
+    // навигации спасает только LockScreen-overlay) — кладём в pending, экран
+    // откроет processPendingCallAfterUnlock после ввода PIN.
+    if (authService.requiresUnlock) {
+      DebugLogger.info(
+          'CALLKIT', '🔒 Pending call из STORAGE под локом — жду разблокировки');
+      _pendingCall = storedPending;
+      return;
+    }
     DebugLogger.info('CALLKIT', '📞 Найден pending call в STORAGE, открываю CallScreen');
     _isProcessingCallKitAnswer = true;
     _navigateToCallScreen(
@@ -129,9 +138,14 @@ Future<void> _checkActiveCallOnStart() async {
     );
     return;
   }
-  
+
   // Fallback: проверяем pending call в RAM (для случаев без перезапуска)
   if (_pendingCall != null && _pendingCall!.isValid) {
+    if (authService.requiresUnlock) {
+      DebugLogger.info(
+          'CALLKIT', '🔒 Pending call в RAM под локом — жду разблокировки');
+      return;
+    }
     DebugLogger.info('CALLKIT', '📞 Найден pending call в RAM, открываю CallScreen');
     final pending = _pendingCall!;
     _pendingCall = null;
@@ -336,9 +350,14 @@ Future<void> _handleCallKitDecline(Map<String, dynamic>? body) async {
   
   // Скрываем нативный UI СРАЗУ
   await FlutterCallkitIncoming.endAllCalls();
-  
+
   // Очищаем буфер
   incomingCallBuffer.clearLastIncomingCall();
+
+  // Отклонённый/просроченный звонок не должен оставаться pending: иначе он
+  // 30с подавляет строгий лок при уходе в фон (main.dart, hasPendingCall) и
+  // вспыхивает мёртвым CallScreen после следующей разблокировки.
+  _pendingCall = null;
 
   // Освобождаем активный call_id: отклонённый/несостоявшийся входящий не должен
   // блокировать следующий звонок до истечения TTL 15с.

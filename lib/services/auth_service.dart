@@ -95,6 +95,10 @@ class AuthService {
   final Future<int?> Function() _monotonicNow;
   final bool _fastHashForTesting;
   static const _configKey = 'orpheus_security_config';
+  // Non-secret marker (SharedPreferences): "a PIN exists on this install".
+  // Lets init() fail CLOSED when the secure-storage config is unreadable or
+  // missing — otherwise a storage hiccup silently opens the app without PIN.
+  static const _pinMarkerKey = 'orpheus_pin_was_enabled';
 
   /// Текущая конфигурация безопасности
   SecurityConfig _config = SecurityConfig.empty;
@@ -117,10 +121,22 @@ class AuthService {
   bool _isUnlocked = false;
   bool get isUnlocked => _isUnlocked;
 
+  /// Fail-closed: конфиг не прочитался/пропал, хотя маркер говорит, что PIN
+  /// был настроен. Приложение остаётся заблокированным (см. requiresUnlock),
+  /// а не тихо открывается без PIN. Выход — wipe/переустановка.
+  bool _configLoadFailed = false;
+
   /// Инициализация сервиса — загрузка конфигурации
   Future<void> init() async {
     try {
-      final configJson = await _secureStorage.read(key: _configKey);
+      String? configJson;
+      try {
+        configJson = await _secureStorage.read(key: _configKey);
+      } catch (_) {
+        // Один retry: транзиентные сбои Keystore сразу после старта процесса.
+        await Future.delayed(const Duration(milliseconds: 200));
+        configJson = await _secureStorage.read(key: _configKey);
+      }
       if (configJson != null) {
         final map = json.decode(configJson) as Map<String, dynamic>;
         _config = SecurityConfig.fromMap(map);
@@ -128,16 +144,37 @@ class AuthService {
       } else {
         _config = SecurityConfig.empty;
         print("AUTH: Config not found, using empty");
+        if (await _pinWasEnabled()) {
+          _configLoadFailed = true;
+          DebugLogger.error(
+              'AUTH', 'Config missing but PIN marker set — fail closed');
+        }
       }
-      
+
       // Если PIN не настроен — приложение автоматически разблокировано
-      if (!_config.requiresUnlock) {
+      if (!_config.requiresUnlock && !_configLoadFailed) {
         _isUnlocked = true;
       }
     } catch (e) {
       print("AUTH ERROR: Config load error: $e");
       _config = SecurityConfig.empty;
-      _isUnlocked = true;
+      if (await _pinWasEnabled()) {
+        _configLoadFailed = true;
+        DebugLogger.error(
+            'AUTH', 'Config load error with PIN marker set — fail closed');
+      } else {
+        _isUnlocked = true;
+      }
+    }
+  }
+
+  Future<bool> _pinWasEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_pinMarkerKey) ?? false;
+    } catch (_) {
+      // Нет prefs (unit-тесты / ранний старт) — ведём себя как раньше.
+      return false;
     }
   }
 
@@ -145,10 +182,16 @@ class AuthService {
   Future<void> _saveConfig() async {
     final configJson = json.encode(_config.toMap());
     await _secureStorage.write(key: _configKey, value: configJson);
+    // Маркер держим в синхроне с конфигом (best effort, не секрет).
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_pinMarkerKey, _config.isPinEnabled);
+    } catch (_) {}
   }
 
   /// Проверить, нужна ли разблокировка
-  bool get requiresUnlock => _config.requiresUnlock && !_isUnlocked;
+  bool get requiresUnlock =>
+      (_config.requiresUnlock || _configLoadFailed) && !_isUnlocked;
 
   // === УПРАВЛЕНИЕ PIN ===
 
@@ -212,6 +255,11 @@ class AuthService {
 
   /// Проверить PIN-код
   Future<PinVerifyResult> verifyPin(String pin) async {
+    // Fail-closed состояние: конфиг утерян, сверить не с чем — НЕ пускать
+    // (без этого ветка ниже разблокировала бы любым вводом по pinHash==null).
+    if (_configLoadFailed) {
+      return PinVerifyResult.invalid;
+    }
     if (!_config.isPinEnabled || _config.pinHash == null) {
       _isUnlocked = true;
       return PinVerifyResult.success;
@@ -481,6 +529,14 @@ class AuthService {
     }
   }
 
+  /// Отметить разблокировку, выполненную вне verifyPin (успешная биометрия).
+  /// Без этого requiresUnlock остаётся true при разблокированном UI, и,
+  /// например, входящий звонок в форграунде уходит в pending вместо экрана.
+  void markUnlockedExternally() {
+    _isUnlocked = true;
+    DebugLogger.info('AUTH', 'Unlocked externally (biometric)');
+  }
+
   /// Выйти из duress mode (требует основной PIN)
   Future<bool> exitDuressMode(String mainPin) async {
     final result = await verifyPin(mainPin);
@@ -551,6 +607,7 @@ class AuthService {
     // 5. Сброс состояния (всегда)
     _config = SecurityConfig.empty;
     _isUnlocked = false;
+    _configLoadFailed = false;
     _setDuressMode(false);
 
     // 6. Всегда уведомляем UI (даже при частичных ошибках), чтобы навигация

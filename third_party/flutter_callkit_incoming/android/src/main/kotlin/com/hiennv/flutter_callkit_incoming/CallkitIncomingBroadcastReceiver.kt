@@ -232,6 +232,11 @@ class CallkitIncomingBroadcastReceiver : BroadcastReceiver() {
                     FlutterCallkitIncomingPlugin.notifyEventCallbacks(CallkitEventCallback.CallEvent.DECLINE, data)
                     // clear notification
                     getCallkitNotificationManager()?.clearIncomingNotification(data, false)
+                    // Orpheus fix: a DECLINE arriving after an ACCEPT (system-driven)
+                    // used to strand the ongoing-call FGS: the call is removed from
+                    // ACTIVE_CALLS, so a later endAllCalls() finds nothing and never
+                    // emits ACTION_CALL_ENDED. Stop the service here as ENDED does.
+                    CallkitNotificationService.stopService(context)
                     sendEventFlutter(CallkitConstants.ACTION_CALL_DECLINE, data)
                     removeCall(context, Data.fromBundle(data))
                 } catch (error: Exception) {
@@ -260,6 +265,8 @@ class CallkitIncomingBroadcastReceiver : BroadcastReceiver() {
                     val notificationManager = getCallkitNotificationManager()
                     notificationManager?.clearIncomingNotification(data, false)
                     notificationManager?.showMissCallNotification(data)
+                    // Orpheus fix: same as DECLINE — do not strand the ongoing FGS.
+                    CallkitNotificationService.stopService(context)
                     sendEventFlutter(CallkitConstants.ACTION_CALL_TIMEOUT, data)
                     removeCall(context, Data.fromBundle(data))
                 } catch (error: Exception) {

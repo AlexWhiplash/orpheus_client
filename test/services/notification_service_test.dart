@@ -138,7 +138,9 @@ void main() {
       expect(s.body, equals('Новое сообщение'));
       expect(s.category, equals(AndroidNotificationCategory.message));
       expect(s.androidSmallIcon, equals('ic_stat_orpheus'));
-      expect(s.groupKey, equals('orpheus_messages_group'));
+      // groupKey убран: одиночный grouped-child без summary давал пустой
+      // заголовок группы на Samsung One UI (задвоение уведомлений).
+      expect(s.groupKey, isNull);
     });
 
     test('hideMessageNotifications: cancelAll, ошибки игнорируются (best-effort)', () async {

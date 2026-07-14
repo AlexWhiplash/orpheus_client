@@ -57,6 +57,14 @@ class CallkitNotificationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Orpheus fix: a START_STICKY restart re-delivers a null intent, leaving
+        // the service alive with a stale/blank notification and no way to stop
+        // it (endAllCalls no-ops on an empty active-call list). Nothing to show
+        // on such a restart — shut down instead of lingering.
+        if (intent == null) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (intent?.action === CallkitConstants.ACTION_CALL_START) {
             intent.getBundleExtra(CallkitConstants.EXTRA_CALLKIT_INCOMING_DATA)
                 ?.let {

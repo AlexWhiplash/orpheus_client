@@ -419,7 +419,17 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (log.contains("Connected")) {
         if (_callState != CallState.Connected) _onConnected();
       } else if (log.contains("Failed")) {
-        if (!_isDisposed) _onError("Failed (ICE)");
+        if (_isDisposed) return;
+        // Терпение до ПЕРВОГО соединения: на cold-start ответ/кандидаты могли опоздать
+        // (свежий сокет ещё верифицировался). Не рвём звонок на первом ICE-Failed —
+        // собеседник сам инициирует ICE-restart (его watchdog 4с/6с), который теперь
+        // долетит на верифицированный сокет и соединит звонок. Backstop — 45с
+        // outgoing-watchdog. Рвём сразу только если звонок УЖЕ был соединён.
+        if (_everConnected) {
+          _onError("Failed (ICE)");
+        } else {
+          _addLog("ICE Failed до соединения — ждём ICE-restart собеседника (45с backstop)");
+        }
       }
 
       if (log.contains("REMOTE TRACK RECEIVED") || log.contains("Remote stream assigned")) {
@@ -507,6 +517,31 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
   Future<void> _startOutgoingCall() async {
     try {
+      // WS-guard (cold-start): call-answer и входящие ICE-кандидаты прилетают ТОЛЬКО
+      // по WS и только на PoP-verified сокет. Сразу после полного перезапуска свежий
+      // сокет ещё проходит PoP — если отправить offer раньше, ответ уйдёт в старую
+      // мёртвую сессию и звонок не соединится (device-тест 14.07.2026). Ждём Connected
+      // (=pop-ok) до ~4с; по таймауту звоним всё равно (offer идёт и по HTTP, а поздний
+      // ICE-restart от собеседника долетит, когда сокет верифицируется). Зеркало guard
+      // отвечающего (_waitForWebSocketConnected в main_callkit).
+      if (websocketService.currentStatus != ConnectionStatus.Connected) {
+        final st = websocketService.currentStatus;
+        // Форсим свежий реконнект только если сокет застрял (не рвём идущий PoP).
+        if (st == ConnectionStatus.Disconnected || st == ConnectionStatus.AuthFailed) {
+          final pubkey = cryptoService.addressBase64;
+          if (pubkey != null) websocketService.forceReconnectIfStale(pubkey);
+        }
+        final deadline = DateTime.now().add(const Duration(seconds: 4));
+        while (websocketService.currentStatus != ConnectionStatus.Connected &&
+            DateTime.now().isBefore(deadline)) {
+          if (!mounted || _isDisposed) return;
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+        // Экран мог быть закрыт (dispose) в последние 150мс ожидания — не поднимаем
+        // микрофон и не шлём offer к уже отменённому звонку.
+        if (!mounted || _isDisposed) return;
+        _addLog("WS перед offer: ${websocketService.currentStatus}");
+      }
       await _webrtcService.initiateCall(
         onOfferCreated: (offer) {
           _addLog("📤 call-offer");

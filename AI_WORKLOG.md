@@ -114,6 +114,27 @@ kill (сессия молодая) не покрывает. Митигации: 
 answer-watchdog как у отвечающего + WS-guard перед call-offer на cold-start). ЖДЁМ ЛОГИ (владелец шарит
 через экран отладки, оба телефона) для подтверждения перед правкой звонков (критичный путь).
 
+## 2026-07-14 — Cold-start первый звонок: глубокий анализ 3 агентами + Фаза 1 (клиент, +28)
+
+**Глубокий анализ (workflow, 3 агента: серверный/клиентский/security).** Корень — routing-target, не крипто:
+на cold-start свежий сокет инициатора ещё проходит PoP, verified только старый мёртвый push-сокет; сервер
+«доставляет» call-answer в него (на полуживом TCP send не падает -> delivered>0 -> НЕ кладёт в offline ->
+ответ потерян). Оптимальный вариант — ГИБРИД, клиентский primary поверх уже-живущей серверной базы
+(S8 takeover + fan-out + offline-persist). Серверные варианты либо опасны (снижение порогов 45с/75с бьёт по
+РФ/РКН-юзерам — ОТКЛОНЕНО), либо тяжёлые (ACK — v2). Security-долги (не блокируют): DoS offline-очереди
+(нет cap, ice не дедупится), флип SIGNAL_REQUIRE_POP (рано — клиенты без токена).
+
+**Фаза 1 СДЕЛАНА (клиент, +28, коммит следующий):** (a) WS-guard в `_startOutgoingCall` — перед offer ждём
+Connected (=pop-ok) до 4с (форсим реконнект только если Disconnected/AuthFailed, не рвём идущий PoP;
+по таймауту звоним, offer идёт по HTTP); свежий сокет verified ДО ответа -> fan-out доставит на живой.
+(b) Терпение: pre-connect ICE-Failed (!_everConnected) НЕ рвёт звонок — собеседник сам делает ICE-restart
+(его watchdog 4/6с), инициатор только ОТВЕЧАЕТ (нет glare!), 45с backstop. Ревью (7/8 correct): нашло
+реальный дефект — пропущен post-loop `!mounted/_isDisposed` guard (dispose в последние 150мс -> initiateCall
+после dispose -> повторный захват микрофона + spurious offer); ИСПРАВЛЕНО. flutter test 373, analyze 0.
+**Резерв caller-side ICE-restart watchdog — НЕ делаю** (WS-guard+терпение должны хватить; наивный watchdog =
+glare-дедлок; анализ пометил «только если field-тест покажет»). **Фаза 2 (сервер offline DoS cap+dedup) —
+следующая.** SIGNAL_REQUIRE_POP флип — НЕ трогаю (рано).
+
 ---
 
 ## 2026-07-13 (2) — Инцидент «PoP-lockout» разобран; клиент: статус AuthFailed; сервер: PR #16

@@ -764,6 +764,16 @@ class DatabaseService {
     );
   }
 
+  /// Суммарное число непрочитанных сообщений по всем контактам (для метки на
+  /// таб-баре). В duress mode — 0.
+  Future<int> getTotalUnreadCount() async {
+    if (_isDuressMode) return 0;
+    final db = await instance.database;
+    final result = await db.rawQuery(
+        'SELECT COUNT(*) FROM messages WHERE isRead = 0');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
   // Получить количество непрочитанных для контакта
   Future<int> getUnreadCount(String contactKey) async {
     final db = await instance.database;

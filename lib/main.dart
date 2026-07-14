@@ -37,6 +37,7 @@ import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/services/telemetry_service.dart';
 import 'package:orpheus_project/services/call_id_storage.dart';
 import 'package:orpheus_project/services/push_connection_service.dart';
+import 'package:orpheus_project/services/room_unread_service.dart';
 import 'package:orpheus_project/services/secure_storage_options.dart';
 import 'package:orpheus_project/theme/app_theme.dart';
 import 'package:orpheus_project/welcome_screen.dart';
@@ -63,6 +64,12 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // Потоки для обновлений UI
 final StreamController<String> messageUpdateController = StreamController.broadcast();
 final StreamController<Map<String, dynamic>> signalingStreamController = StreamController.broadcast();
+
+/// Fired when unread/badge state may have changed and the home tab badges should
+/// recompute — specifically the "marked as read" case (a new incoming message
+/// already fires messageUpdateController). Kept separate so it does not re-trigger
+/// chat_screen's per-contact listener (which would loop on read).
+final StreamController<void> badgeRefreshController = StreamController.broadcast();
 
 /// Буфер входящих сигналов звонка (ICE candidates и т.п.)
 final IncomingCallBuffer incomingCallBuffer = IncomingCallBuffer.instance;
@@ -418,6 +425,7 @@ void _listenForMessages() {
 
   websocketService.stream.listen((messageJson) async {
     try {
+      _handleRoomEventForBadge(messageJson);
       await handler.handleRawMessage(messageJson);
     } catch (e, stackTrace) {
       DebugLogger.error('MAIN', 'Message Handler Error: $e');
@@ -425,6 +433,31 @@ void _listenForMessages() {
       Sentry.captureException(e, stackTrace: stackTrace);
     }
   });
+}
+
+/// Rooms have no local storage and the strict mutual-add handler drops room frames
+/// (participants aren't necessarily contacts), so room "new message" signals are
+/// handled here: light the Rooms-tab badge and, when the app is backgrounded, show
+/// a neutral (anonymized) alert. The open room screen renders the message itself and
+/// is skipped via RoomUnreadService.activeRoomId.
+void _handleRoomEventForBadge(String messageJson) {
+  try {
+    final decoded = json.decode(messageJson);
+    if (decoded is! Map<String, dynamic>) return;
+    if (decoded['type'] != 'room-message') return;
+    final roomId = decoded['room_id']?.toString() ?? '';
+    if (roomId.isEmpty) return;
+    // Official Orpheus room is hidden until release and has its own notification path.
+    if (roomId == 'orpheus') return;
+    // Don't badge/alert on our own message echoed back by the server.
+    final senderKey = decoded['sender_pubkey']?.toString();
+    if (senderKey != null && senderKey == cryptoService.addressBase64) return;
+    RoomUnreadService.instance.noteIncoming(roomId);
+    // Neutral alert only when backgrounded; in foreground the tab badge is enough.
+    if (!isAppInForeground) {
+      NotificationService.showRoomMessageNotification();
+    }
+  } catch (_) {}
 }
 
 /// Слить конверты, сохранённые push-изолятом при убитом/фоновом приложении, через

@@ -4,6 +4,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/models/room_model.dart';
 import 'package:orpheus_project/screens/notes_vault_screen.dart';
 import 'package:orpheus_project/screens/room_chat_screen.dart';
+import 'package:orpheus_project/services/room_unread_service.dart';
 import 'package:orpheus_project/services/rooms_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
@@ -48,12 +49,22 @@ class _RoomsScreenState extends State<RoomsScreen> {
   @override
   void initState() {
     super.initState();
-    _roomsFuture = _service.loadRooms();
+    _roomsFuture = _loadAndSyncUnread();
+  }
+
+  /// Load rooms and recompute the Rooms-tab unread dot from the fresh list
+  /// (excludes the hidden official room).
+  Future<List<Room>> _loadAndSyncUnread() async {
+    final rooms = await _service.loadRooms();
+    await RoomUnreadService.instance.syncWithRooms(
+      rooms.where((r) => r.id != _orpheusRoomId).toList(),
+    );
+    return rooms;
   }
 
   void _refreshRooms() {
     setState(() {
-      _roomsFuture = _service.loadRooms();
+      _roomsFuture = _loadAndSyncUnread();
     });
   }
 

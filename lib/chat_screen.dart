@@ -171,6 +171,9 @@ class _ChatScreenState extends State<ChatScreen>
 
   Future<void> _markAsRead() async {
     await DatabaseService.instance.markMessagesAsRead(widget.contact.publicKey);
+    // Nudge the home tab badge to recompute (a separate signal from
+    // messageUpdateController so this listener doesn't re-trigger itself).
+    badgeRefreshController.add(null);
   }
 
   /// Иконка статуса исходящего сообщения. Раньше всегда показывалась двойная

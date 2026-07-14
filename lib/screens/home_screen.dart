@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:orpheus_project/contacts_screen.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
+import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/screens/rooms_screen.dart';
 import 'package:orpheus_project/screens/settings_screen.dart';
 import 'package:orpheus_project/screens/status_screen.dart';
+import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
+import 'package:orpheus_project/services/room_unread_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,10 +29,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int _currentIndex = 1; // По умолчанию открываем Контакты
 
+  // Метки на таб-баре: точка «есть новое».
+  bool _hasContactUnread = false; // непрочитанные личные сообщения + недозвоны
+  StreamSubscription<String>? _msgSub;
+  StreamSubscription<void>? _badgeSub;
+
   @override
   void initState() {
     super.initState();
     LocaleService.instance.addListener(_onLocaleChanged);
+
+    // Метка «Контакты»: пересчитываем при новом сообщении (messageUpdateController)
+    // и при отметке «прочитано» (badgeRefreshController). Метка «Комнаты» — по
+    // ValueNotifier RoomUnreadService.
+    _msgSub = messageUpdateController.stream
+        .listen((_) => _recomputeContactUnread());
+    _badgeSub = badgeRefreshController.stream
+        .listen((_) => _recomputeContactUnread());
+    RoomUnreadService.instance.hasUnread.addListener(_onRoomUnreadChanged);
+    _recomputeContactUnread();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeShowBetaDisclaimer();
@@ -41,11 +61,35 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     LocaleService.instance.removeListener(_onLocaleChanged);
+    _msgSub?.cancel();
+    _badgeSub?.cancel();
+    RoomUnreadService.instance.hasUnread.removeListener(_onRoomUnreadChanged);
     super.dispose();
   }
 
   void _onLocaleChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onRoomUnreadChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _recomputeContactUnread() async {
+    try {
+      final total = await DatabaseService.instance.getTotalUnreadCount();
+      if (!mounted) return;
+      final has = total > 0;
+      if (has != _hasContactUnread) {
+        setState(() => _hasContactUnread = has);
+      }
+    } catch (_) {}
+  }
+
+  /// Иконка вкладки с точкой «есть новое», когда [show] == true.
+  Widget _tabIcon(IconData icon, bool show) {
+    final iconWidget = Icon(icon);
+    return show ? Badge(child: iconWidget) : iconWidget;
   }
 
   Future<bool> _isBetaDisclaimerDismissed() async {
@@ -310,13 +354,15 @@ class _HomeScreenState extends State<HomeScreen> {
             label: l10n.system,
           ),
           NavigationDestination(
-            icon: const Icon(Icons.chat_bubble_outline),
-            selectedIcon: const Icon(Icons.chat_bubble),
+            icon: _tabIcon(Icons.chat_bubble_outline, _hasContactUnread),
+            selectedIcon: _tabIcon(Icons.chat_bubble, _hasContactUnread),
             label: l10n.contacts,
           ),
           NavigationDestination(
-            icon: const Icon(Icons.forum_outlined),
-            selectedIcon: const Icon(Icons.forum),
+            icon: _tabIcon(
+                Icons.forum_outlined, RoomUnreadService.instance.hasUnread.value),
+            selectedIcon:
+                _tabIcon(Icons.forum, RoomUnreadService.instance.hasUnread.value),
             label: l10n.rooms,
           ),
           NavigationDestination(

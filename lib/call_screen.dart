@@ -778,11 +778,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               .messageExistsByMessageId(widget.contactPublicKey, _callId)) {
         return;
       }
+      // Входящий недозвон — непрочитанное событие: даёт метку на таб-баре и
+      // «пилюлю» в списке контактов, очищается при открытии чата. Свои исходящие
+      // и состоявшиеся звонки прочитаны сразу (для тебя это не «новое»).
+      final isMissedIncoming = !isSentByMe && messageText == "Missed call";
       final callMessage = ChatMessage(
         text: messageText,
         isSentByMe: isSentByMe,
         status: MessageStatus.sent,
-        isRead: true,
+        isRead: !isMissedIncoming,
         messageId: _callId.isNotEmpty ? _callId : null,
       );
       await DatabaseService.instance.addMessage(callMessage, widget.contactPublicKey);

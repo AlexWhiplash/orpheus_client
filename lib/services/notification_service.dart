@@ -411,6 +411,10 @@ class NotificationService {
   // Notification IDs
   static const int _callNotificationId = 1001;
   static const int _messageNotificationId = 1002;
+  // Distinct id so a room alert and a personal-message alert don't overwrite each
+  // other (both are anonymized; still one shared id across all rooms so we don't
+  // reveal the number of active rooms).
+  static const int _roomMessageNotificationId = 1003;
 
   /// Инициализация сервиса (только локальные уведомления — без Google/FCM).
   ///
@@ -660,7 +664,7 @@ class NotificationService {
       final l10n = await notificationL10n();
 
       await _localBackend!.show(
-        id: _messageNotificationId,
+        id: _roomMessageNotificationId,
         channelId: _messageChannelId,
         channelName: _messageChannelName,
         title: 'Orpheus',

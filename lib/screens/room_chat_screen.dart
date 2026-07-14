@@ -11,6 +11,7 @@ import 'package:orpheus_project/models/room_model.dart';
 import 'package:orpheus_project/models/note_model.dart';
 import 'package:orpheus_project/services/badge_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/room_unread_service.dart';
 import 'package:orpheus_project/services/rooms_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_dialog.dart';
@@ -46,19 +47,46 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
   bool _prefsLoaded = false;
   bool _warningDismissed = true;
   bool _notificationsEnabled = true;
+  Map<String, String> _contactNames = <String, String>{};
 
   @override
   void initState() {
     super.initState();
+    // Viewing this room: its live messages shouldn't badge, and opening it clears
+    // any pending unread mark for it.
+    RoomUnreadService.instance.activeRoomId = widget.room.id;
+    RoomUnreadService.instance.markSeen(widget.room.id);
     _loadMessages();
     _loadMyBadge();
     _loadRoomPrefs();
+    _loadContactNames();
     _wsSub = websocketService.stream.listen(_handleWsMessage);
     _scrollController.addListener(_onScroll);
   }
 
+  /// Имена участников из адресной книги (по pubkey) — чтобы в комнате показывать
+  /// имя контакта вместо хвоста ключа. Кого нет в контактах — фолбэк на серверное
+  /// имя или префикс ключа (участник комнаты может быть не из твоих контактов).
+  /// В duress-режиме getContacts() пуст — имена не раскрываются.
+  Future<void> _loadContactNames() async {
+    try {
+      final contacts = await DatabaseService.instance.getContacts();
+      if (!mounted) return;
+      setState(() {
+        _contactNames = {
+          for (final c in contacts) c.publicKey: c.name,
+        };
+      });
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
+    // Everything shown up to now is seen; stop treating this room as active.
+    RoomUnreadService.instance.markSeen(widget.room.id);
+    if (RoomUnreadService.instance.activeRoomId == widget.room.id) {
+      RoomUnreadService.instance.activeRoomId = null;
+    }
     _wsSub?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
@@ -594,6 +622,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
             if (showDateSep) _buildDateSeparator(context, message.createdAt),
             _RoomMessageBubble(
               message: message,
+              contactNames: _contactNames,
               onLongPress:
                   message.isSystem ? null : () => _saveNoteFromRoom(message),
             ),
@@ -784,9 +813,14 @@ class _WarningBanner extends StatelessWidget {
 }
 
 class _RoomMessageBubble extends StatelessWidget {
-  const _RoomMessageBubble({required this.message, this.onLongPress});
+  const _RoomMessageBubble({
+    required this.message,
+    this.contactNames = const {},
+    this.onLongPress,
+  });
 
   final RoomMessage message;
+  final Map<String, String> contactNames;
   final VoidCallback? onLongPress;
 
   @override
@@ -799,9 +833,14 @@ class _RoomMessageBubble extends StatelessWidget {
         message.senderKey == myKey;
 
     final l10n = L10n.of(context);
+    // Приоритет имени автора: официальный -> имя из адресной книги (если участник
+    // у тебя в контактах) -> серверное sender_name -> первые 8 символов ключа.
+    final contactName =
+        message.senderKey == null ? null : contactNames[message.senderKey];
     final senderLabel = isOfficial
         ? l10n.orpheusOfficialName
-        : (message.senderName ??
+        : (contactName ??
+            message.senderName ??
             (message.senderKey?.substring(0, 8) ?? '—'));
 
     if (message.isSystem) {

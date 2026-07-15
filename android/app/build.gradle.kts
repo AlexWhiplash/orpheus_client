@@ -64,6 +64,9 @@ android {
                 keyAlias = keystoreProperties["keyAlias"] as String?
                 keyPassword = keystoreProperties["keyPassword"] as String?
             }
+
+            // v3 несёт lineage — без неё смена ключа подписи в будущем невозможна.
+            enableV3Signing = true
         }
     }
 

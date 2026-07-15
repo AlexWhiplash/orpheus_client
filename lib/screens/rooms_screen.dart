@@ -445,10 +445,10 @@ class _RoomRow extends StatelessWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
                           child: Image.asset(
-                            'assets/images/logo.png',
+                            'assets/images/logo_mark.png',
                             width: 26,
                             height: 26,
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       )

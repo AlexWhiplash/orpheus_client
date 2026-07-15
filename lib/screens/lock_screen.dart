@@ -415,9 +415,10 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
           ),
           child: ClipOval(
             child: Image.asset(
-              'assets/images/logo.png',
+              'assets/images/logo_mark.png',
               width: 60,
               height: 60,
+              fit: BoxFit.contain,
               errorBuilder: (c, e, s) => const Icon(
                 Icons.shield,
                 color: Color(0xFFB0BEC5),

@@ -291,10 +291,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               borderRadius:
                                   const BorderRadius.all(Radius.circular(20)),
                               child: Image.asset(
-                                'assets/images/logo.png',
+                                'assets/images/logo_mark.png',
                                 height: 88,
                                 width: 88,
-                                fit: BoxFit.cover,
+                                fit: BoxFit.contain,
                                 errorBuilder: (c, e, s) {
                                   return Container(
                                     width: 88,

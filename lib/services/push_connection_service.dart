@@ -32,6 +32,7 @@ import 'package:web_socket_channel/io.dart';
 
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
+import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/notification_service.dart';
 import 'package:orpheus_project/services/pending_inbox_storage.dart';
 
@@ -252,6 +253,9 @@ class PushConnectionService {
 @pragma('vm:entry-point')
 void pushConnectionOnStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
+  // Статики пер-изолятны: запрещаем генерацию ключа БД во ВСЁМ сервисном изоляте
+  // (handleBackgroundPush дублирует это у себя — оба входа закрыты независимо).
+  DatabaseService.allowDbKeyGeneration = false;
   if (service is AndroidServiceInstance) {
     service.setAsForegroundService();
   }

@@ -37,19 +37,47 @@ class DatabaseService {
   /// (вход/duress/lock/wipe), чтобы read-методы фильтровали данные корректно.
   void setDuressMode(bool value) => _isDuressMode = value;
 
+  // Разрешена ли ГЕНЕРАЦИЯ ключа БД в этом изоляте. Статики пер-изолятны, поэтому
+  // изолят push-сервиса выставляет false в своих entry-point'ах: чтение ключа там
+  // легально (имя звонящего), но ложный null при заблокированном экране (Keystore
+  // в этот момент самый ненадёжный) не должен откладывать живую БД и перезаписывать
+  // ключ под основным изолятом. Основной изолят флаг не трогает (true).
+  static bool allowDbKeyGeneration = true;
+
+  // Single-flight открытия БД в пределах изолята: файловый лок ниже — fcntl,
+  // внутри одного процесса он НЕ взаимоисключает, и два конкурентных первых
+  // обращения к `database` генерировали два разных ключа (в логе устройства —
+  // две записи «Сгенерирован новый ключ» в одну миллисекунду, builds 33-35).
+  static Future<Database>? _dbOpenFuture;
+
   // Метод для тестов: инициализация с готовой БД
   void initWithDatabase(Database db) {
     _database = db;
+    _dbOpenFuture = null;
   }
 
   Future<Database> get database async {
     if (_isWiping) throw StateError('Database is being wiped');
     if (_database != null) return _database!;
-    _database = await _initDB(_dbFileName);
-    // Разово при первом открытии синкаем allow-list адресов контактов в secure storage
-    // (для фонового строгого-mutual-add гейта; покрывает и существующие контакты после апгрейда).
-    _syncContactAllowlist();
-    return _database!;
+    // Без await между проверкой и присваиванием — атомарно в event loop изолята.
+    _dbOpenFuture ??= _openDbOnce();
+    return _dbOpenFuture!;
+  }
+
+  Future<Database> _openDbOnce() async {
+    try {
+      final db = await _initDB(_dbFileName);
+      _database = db;
+      // Разово при первом открытии синкаем allow-list адресов контактов в secure storage
+      // (для фонового строгого-mutual-add гейта; покрывает и существующие контакты после апгрейда).
+      _syncContactAllowlist();
+      return db;
+    } catch (e) {
+      // Провал не кэшируем: следующий вызов попробует открыть заново (прежнее
+      // поведение — ретраи открытия при временных сбоях).
+      _dbOpenFuture = null;
+      rethrow;
+    }
   }
 
   Future<Database> _initDB(String filePath) async {
@@ -83,14 +111,15 @@ class DatabaseService {
   /// возможную старую НЕзашифрованную БД: критичных данных в приложении нет,
   /// перенос не требуется (см. AUDIT_REPORT SEC-1).
   ///
-  /// Сериализовано файловой блокировкой: метод вызывается ОДНОВРЕМЕННО основным
-  /// изолятом и push-изолятом (foreground-сервис — отдельный процесс). Без лока
-  /// оба видели пустое хранилище, генерировали РАЗНЫЕ ключи и оба их записывали:
-  /// в хранилище оставался ключ последнего, а файл БД создавался ключом первого —
-  /// дальше база не открывалась уже никогда (ключ есть -> регенерации нет ->
-  /// файл не удаляется -> open_failed на каждом старте). Подтверждено на
-  /// устройстве: две записи "Сгенерирован новый ключ" в одну миллисекунду.
-  /// `synchronized` тут не годится — он не выходит за пределы изолята.
+  /// Защита от гонок — слоями (важно, прежний комментарий тут ошибался):
+  /// push-сервис — отдельный ИЗОЛЯТ в ТОМ ЖЕ процессе (android:process в
+  /// манифесте нет), а файловый лок ниже — fcntl, который внутри одного процесса
+  /// НЕ взаимоисключает. Наблюдавшаяся двойная генерация (две записи
+  /// «Сгенерирован новый ключ» в одну миллисекунду, builds 33-35) была гонкой
+  /// двух вызовов в ОДНОМ изоляте — её закрывает single-flight `_dbOpenFuture`.
+  /// Межизолятную гонку закрывает запрет генерации в push-изоляте
+  /// ([allowDbKeyGeneration]). Файловый лок оставлен как страховка на случай
+  /// реального второго процесса в будущем.
   Future<String> _getOrCreateDbKey() async {
     final lockFile = File('${await _dbPath()}.keylock');
     try {
@@ -120,9 +149,14 @@ class DatabaseService {
     final existing = await readSecureWithRetry(_secureStorage, _dbKeyStoreKey);
     if (existing != null && existing.isNotEmpty) return existing;
 
-    // Ключа нет — расшифровать существующий файл БД нечем, он безвозвратно мёртв.
-    // Удаляем вместе с sidecar-файлами, иначе openDatabase упрётся в open_failed.
-    await _deleteDbFilesIfAny();
+    if (!allowDbKeyGeneration) {
+      DebugLogger.warn('DB', 'Ключ БД отсутствует, генерация в этом изоляте запрещена');
+      throw StateError('DB key missing; generation is banned in this isolate');
+    }
+
+    // Ключа нет — расшифровать существующий файл БД нечем. Откладываем его в
+    // сторону и создаём новый, иначе openDatabase упрётся в open_failed.
+    await _setAsideDbFilesIfAny();
 
     final rnd = Random.secure();
     final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
@@ -132,21 +166,38 @@ class DatabaseService {
     return key;
   }
 
-  /// Удаляет файл БД и его sidecar-файлы (journal/wal/shm), если есть.
+  /// Откладывает файл БД в `<db>.orphaned` (sidecar-файлы journal/wal/shm удаляет).
   ///
-  /// Вызывать ТОЛЬКО когда ключ шифрования отсутствует: тогда файл нечем открыть
-  /// и терять нечего. Прежнее имя (`_deletePlainDbFilesIfAny`) обещало удаление
-  /// лишь legacy-БД без шифрования, хотя метод всегда сносил файл безусловно.
-  Future<void> _deleteDbFilesIfAny() async {
+  /// Вызывать ТОЛЬКО когда ключ шифрования отсутствует: файл нечем открыть.
+  /// Именно ПЕРЕИМЕНОВАНИЕ, не удаление: «ключа нет» — это ответ хранилища,
+  /// которое умеет лгать (ложный null), и безвозвратное действие по нему один
+  /// раз уже стоило всей истории чатов (17.07.2026, 06:20 — файл с историей
+  /// удалён после того, как миграция снесла ключ). Слот один, прежний orphan
+  /// перезаписывается — мусор не копится. Громкий лог обязателен: `существовал:
+  /// true` в будущем логе = данные были и отложены (а при живом ключе — маркер
+  /// ложного null).
+  Future<void> _setAsideDbFilesIfAny() async {
     try {
       final path = await _dbPath();
-      for (final suffix in const ['', '-journal', '-wal', '-shm']) {
+      final main = File(path);
+      final existed = await main.exists();
+      DebugLogger.warn(
+          'DB', 'Ключ шифрования БД не найден — откладываю файл БД (существовал: $existed)');
+      if (existed) {
+        final orphan = File('$path.orphaned');
+        try {
+          if (await orphan.exists()) await orphan.delete();
+        } catch (_) {}
+        await main.rename(orphan.path);
+      }
+      for (final suffix in const ['-journal', '-wal', '-shm']) {
         final f = File('$path$suffix');
         if (await f.exists()) await f.delete();
       }
-    } catch (_) {
-      // best-effort: если удалить не удалось, открытие зашифрованной БД всё равно
-      // пройдёт (или создаст новую), данные не критичны.
+    } catch (e) {
+      // best-effort: если отложить не удалось, открытие зашифрованной БД всё равно
+      // пройдёт (или создаст новую), но событие фиксируем.
+      DebugLogger.error('DB', 'Не удалось отложить файл БД: $e');
     }
   }
 
@@ -430,7 +481,9 @@ class DatabaseService {
   /// при ошибке/отсутствии (тогда фоновый гейт дропнет всё — безопасный дефолт).
   static Future<Set<String>> loadContactAllowlist() async {
     try {
-      final raw = await appSecureStorage.read(key: kContactAllowlistKey);
+      // Ретрай обязателен: ложный null здесь = молчаливый дроп входящего
+      // звонка/сообщения в фоновом изоляте (строгий mutual-add).
+      final raw = await readSecureWithRetry(appSecureStorage, kContactAllowlistKey);
       if (raw == null || raw.isEmpty) return <String>{};
       final decoded = json.decode(raw);
       if (decoded is List) return decoded.map((e) => e.toString()).toSet();
@@ -941,6 +994,7 @@ class DatabaseService {
   }
 
   Future close() async {
+    _dbOpenFuture = null; // иначе single-flight вернул бы закрытую БД после reopen
     if (_database != null) {
       await _database!.close();
       _database = null;
@@ -968,8 +1022,9 @@ class DatabaseService {
         await file.delete();
       }
 
-      // 4. Also delete journal/wal files
-      for (final suffix in ['-journal', '-wal', '-shm']) {
+      // 4. Also delete journal/wal files and a possible set-aside orphan copy
+      //    (wipe means wipe: отложенный при потере ключа файл тоже уносим).
+      for (final suffix in ['-journal', '-wal', '-shm', '.orphaned']) {
         final f = File('$path$suffix');
         if (await f.exists()) await f.delete();
       }

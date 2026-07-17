@@ -31,6 +31,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// `data` — это раскодированный JSON WS-кадра (data-only, без notification payload).
 @pragma('vm:entry-point')
 Future<void> handleBackgroundPush(Map<String, dynamic> data) async {
+  // Фоновому изоляту генерировать ключ БД запрещено: ложный null от Keystore
+  // при заблокированном экране откладывал бы живую БД и перезаписывал ключ под
+  // основным изолятом. Чтение ключа (имя звонящего ниже) остаётся легальным,
+  // деградация мягкая — try/catch с фолбэком на префикс ключа уже стоит.
+  DatabaseService.allowDbKeyGeneration = false;
+
   final type = data['type'];
   print("PUSH BACKGROUND type: $type");
 

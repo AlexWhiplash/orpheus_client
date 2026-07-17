@@ -37,10 +37,36 @@ const AndroidOptions kAndroidSecureStorageOptions = AndroidOptions(
   storageCipherAlgorithm: StorageCipherAlgorithm.AES_GCM_NoPadding,
   // Пинуем алгоритм: не даём плагину авто-мигрировать PKCS1 -> OAEP (вернуло бы баг).
   migrateOnAlgorithmChange: false,
-  // Сеть безопасности: при реальной неустранимой порче — чистое пересоздание, а не
-  // тупик "нет данных" на чёрном экране. Данные и так в жертву (закрытая бета).
-  resetOnError: true,
+  // НЕ включать resetOnError. С ним ОДНА ошибка чтения (в т.ч. разовая осечка
+  // Keystore) молча стирает ВСЁ хранилище и возвращает null — а null неотличим от
+  // "ключа нет". Итог, подтверждённый на Samsung: после рестарта root seed читается
+  // как отсутствующий -> экран приветствия поверх живого аккаунта, ключ БД пропадает
+  // -> генерируется новый -> база не открывается. Пусть ошибка чтения будет ошибкой:
+  // её ретраит вызывающий (см. readWithRetry), а не маскирует уничтожением данных.
+  resetOnError: false,
 );
+
+/// Чтение secure storage с ретраями.
+///
+/// Осечка Keystore на строгом KeyMint (Samsung Knox, Pixel Titan M2) — разовая и
+/// лечится повтором. Без ретрая любой сбой означает "данных нет", а это худший из
+/// возможных ответов: приложение предложит создать аккаунт поверх существующего.
+/// Возвращает `null` ТОЛЬКО если ключа действительно нет; при неустранимой ошибке
+/// чтения — пробрасывает исключение, чтобы вызывающий не принял сбой за пустоту.
+Future<String?> readSecureWithRetry(
+  FlutterSecureStorage storage,
+  String key, {
+  int attempts = 3,
+}) async {
+  for (var attempt = 1; ; attempt++) {
+    try {
+      return await storage.read(key: key);
+    } catch (_) {
+      if (attempt >= attempts) rethrow;
+      await Future<void>.delayed(Duration(milliseconds: 150 * attempt));
+    }
+  }
+}
 
 /// Единый экземпляр FlutterSecureStorage. Использовать ВЕЗДЕ вместо
 /// `const FlutterSecureStorage()`.

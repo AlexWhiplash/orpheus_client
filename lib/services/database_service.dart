@@ -82,11 +82,47 @@ class DatabaseService {
   /// secure storage. При первой генерации (переход на шифрование) удаляем
   /// возможную старую НЕзашифрованную БД: критичных данных в приложении нет,
   /// перенос не требуется (см. AUDIT_REPORT SEC-1).
+  ///
+  /// Сериализовано файловой блокировкой: метод вызывается ОДНОВРЕМЕННО основным
+  /// изолятом и push-изолятом (foreground-сервис — отдельный процесс). Без лока
+  /// оба видели пустое хранилище, генерировали РАЗНЫЕ ключи и оба их записывали:
+  /// в хранилище оставался ключ последнего, а файл БД создавался ключом первого —
+  /// дальше база не открывалась уже никогда (ключ есть -> регенерации нет ->
+  /// файл не удаляется -> open_failed на каждом старте). Подтверждено на
+  /// устройстве: две записи "Сгенерирован новый ключ" в одну миллисекунду.
+  /// `synchronized` тут не годится — он не выходит за пределы изолята.
   Future<String> _getOrCreateDbKey() async {
-    final existing = await _secureStorage.read(key: _dbKeyStoreKey);
+    final lockFile = File('${await _dbPath()}.keylock');
+    try {
+      await lockFile.parent.create(recursive: true);
+    } catch (_) {}
+    RandomAccessFile? raf;
+    try {
+      raf = await lockFile.open(mode: FileMode.append);
+      await raf.lock(FileLock.blockingExclusive);
+      return await _getOrCreateDbKeyLocked();
+    } finally {
+      if (raf != null) {
+        try {
+          await raf.unlock();
+        } catch (_) {}
+        try {
+          await raf.close();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Тело [_getOrCreateDbKey] под блокировкой. Отдельно — чтобы лок гарантированно
+  /// охватывал ВЕСЬ путь read -> generate -> write, а не только запись.
+  Future<String> _getOrCreateDbKeyLocked() async {
+    // Ретрай обязателен: осечка чтения здесь = "ключа нет" = снос файла БД ниже.
+    final existing = await readSecureWithRetry(_secureStorage, _dbKeyStoreKey);
     if (existing != null && existing.isNotEmpty) return existing;
 
-    await _deletePlainDbFilesIfAny();
+    // Ключа нет — расшифровать существующий файл БД нечем, он безвозвратно мёртв.
+    // Удаляем вместе с sidecar-файлами, иначе openDatabase упрётся в open_failed.
+    await _deleteDbFilesIfAny();
 
     final rnd = Random.secure();
     final bytes = List<int>.generate(32, (_) => rnd.nextInt(256));
@@ -96,8 +132,12 @@ class DatabaseService {
     return key;
   }
 
-  /// Удаляет старый файл БД и его sidecar-файлы (journal/wal/shm), если есть.
-  Future<void> _deletePlainDbFilesIfAny() async {
+  /// Удаляет файл БД и его sidecar-файлы (journal/wal/shm), если есть.
+  ///
+  /// Вызывать ТОЛЬКО когда ключ шифрования отсутствует: тогда файл нечем открыть
+  /// и терять нечего. Прежнее имя (`_deletePlainDbFilesIfAny`) обещало удаление
+  /// лишь legacy-БД без шифрования, хотя метод всегда сносил файл безусловно.
+  Future<void> _deleteDbFilesIfAny() async {
     try {
       final path = await _dbPath();
       for (final suffix in const ['', '-journal', '-wal', '-shm']) {

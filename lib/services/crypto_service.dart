@@ -102,9 +102,17 @@ class CryptoService {
   @visibleForTesting
   Future<void> deriveFromSeedForTest(List<int> rootBytes) => _deriveFromSeed(rootBytes);
 
+  /// Загружает личность из secure storage.
+  ///
+  /// `false` означает РОВНО "ключей нет" (первый запуск/после wipe) — по нему
+  /// показывается экран приветствия. Сбой чтения сюда попасть не должен: осечку
+  /// Keystore ретраим, неустранимую ошибку пробрасываем. Иначе получалось, что
+  /// живому аккаунту предлагали создать новый поверх (баг на Samsung: seed на
+  /// месте, читается как null, дальше "восстановление" и мёртвая база).
   Future<bool> init() async {
-    final rootB64 = await _secureStorage.read(key: _rootSeedStoreKey);
-    final registrationDateStr = await _secureStorage.read(key: _registrationDateKey);
+    final rootB64 = await readSecureWithRetry(_secureStorage, _rootSeedStoreKey);
+    final registrationDateStr =
+        await readSecureWithRetry(_secureStorage, _registrationDateKey);
 
     if (rootB64 != null) {
       await _deriveFromSeed(base64.decode(rootB64));

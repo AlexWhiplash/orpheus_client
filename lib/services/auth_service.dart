@@ -605,6 +605,20 @@ class AuthService {
       errors.add('secure_storage: $e');
     }
 
+    // 3.5. Контроль полноты: у wipe-кода/panic смысл ровно один — данных НЕ должно
+    //      остаться. Keystore умеет «успешно» не удалить; молчаливый провал здесь
+    //      недопустим — повторяем точечно и честно репортим, если seed выжил.
+    try {
+      if (await CryptoService.instance.hasStoredIdentity()) {
+        await CryptoService.instance.deleteAccount();
+        if (await CryptoService.instance.hasStoredIdentity()) {
+          errors.add('secure_storage: root seed survived deleteAll');
+        }
+      }
+    } catch (e) {
+      errors.add('wipe-verify: $e');
+    }
+
     // 4. Локальные настройки
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -612,6 +626,13 @@ class AuthService {
     } catch (e) {
       errors.add('prefs: $e');
     }
+
+    // 4.5. clear() стёр и флаг одноразовой миграции secure storage — без его
+    //      восстановления СЛЕДУЮЩИЙ холодный старт снова выполнит deleteAll и
+    //      молча уничтожит аккаунт, созданный/восстановленный после этого wipe
+    //      в той же сессии (ночной «слёт аккаунта» 17.07.2026). Сама миграция
+    //      уже не нужна: шаг 3 только что вычистил хранилище целиком.
+    await markSecureStorageMigrated();
 
     // 5. Сброс состояния (всегда)
     _config = SecurityConfig.empty;

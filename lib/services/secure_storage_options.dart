@@ -19,6 +19,8 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:orpheus_project/services/debug_logger_service.dart';
+
 /// Android-опции secure storage.
 ///
 /// key-шифр: PKCS1 вместо дефолтного v10 OAEP. Дефолт
@@ -51,8 +53,13 @@ const AndroidOptions kAndroidSecureStorageOptions = AndroidOptions(
 /// Осечка Keystore на строгом KeyMint (Samsung Knox, Pixel Titan M2) — разовая и
 /// лечится повтором. Без ретрая любой сбой означает "данных нет", а это худший из
 /// возможных ответов: приложение предложит создать аккаунт поверх существующего.
-/// Возвращает `null` ТОЛЬКО если ключа действительно нет; при неустранимой ошибке
-/// чтения — пробрасывает исключение, чтобы вызывающий не принял сбой за пустоту.
+/// Ретраится и `null`: осечка Keystore может проявляться как "успешное" чтение
+/// без данных (ложный null), а не только как исключение — цена лишь ~450мс на
+/// первом запуске/после wipe, когда ключа действительно нет. При неустранимой
+/// ошибке чтения — пробрасывает исключение, чтобы вызывающий не принял сбой
+/// за пустоту. Гарантировать, что финальный `null` не ложный, невозможно —
+/// поэтому безвозвратные действия по `null` дополнительно страхуются на месте
+/// (см. `_deleteDbFilesIfAny` в DatabaseService: файл откладывается, не удаляется).
 Future<String?> readSecureWithRetry(
   FlutterSecureStorage storage,
   String key, {
@@ -60,11 +67,18 @@ Future<String?> readSecureWithRetry(
 }) async {
   for (var attempt = 1; ; attempt++) {
     try {
-      return await storage.read(key: key);
+      final value = await storage.read(key: key);
+      if (value != null || attempt >= attempts) {
+        if (value != null && attempt > 1) {
+          DebugLogger.warn('STORAGE',
+              'Ключ "$key" прочитан с попытки $attempt (ложный null Keystore)');
+        }
+        return value;
+      }
     } catch (_) {
       if (attempt >= attempts) rethrow;
-      await Future<void>.delayed(Duration(milliseconds: 150 * attempt));
     }
+    await Future<void>.delayed(Duration(milliseconds: 150 * attempt));
   }
 }
 
@@ -84,14 +98,44 @@ const String _resetFlagKey = 'secure_storage_reset_v10_pkcs1';
 /// `deleteAll` выполняется только на первом запуске после апгрейда (флаг в
 /// SharedPreferences), дальше — no-op. `deleteAll` не расшифровывает данные,
 /// поэтому старый формат v9 стирается без риска краша авто-миграции.
+///
+/// КРИТИЧНО: любой код, стирающий SharedPreferences (performWipe -> prefs.clear),
+/// ОБЯЗАН восстановить флаг через [markSecureStorageMigrated] — иначе следующий
+/// холодный старт выполнит deleteAll поверх заново созданного аккаунта. Именно
+/// так 17.07.2026 за ночь «слетел» аккаунт: wipe 15.07 стёр флаг, аккаунт
+/// восстановили в той же сессии, а первый же холодный старт молча снёс seed и
+/// ключ БД. Каждая ветка логируется — молчаливый deleteAll стоил двух суток отладки.
 Future<void> ensureSecureStorageMigrated() async {
   try {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_resetFlagKey) ?? false) return;
+    if (prefs.getBool(_resetFlagKey) ?? false) {
+      DebugLogger.info('STORAGE', 'Миграция v10: флаг на месте, сброс не требуется');
+      return;
+    }
+    DebugLogger.warn(
+        'STORAGE', 'Флаг миграции v10 отсутствует — одноразовый deleteAll secure storage');
     await appSecureStorage.deleteAll();
     await prefs.setBool(_resetFlagKey, true);
-  } catch (_) {
+    DebugLogger.success('STORAGE', 'Secure storage сброшен, флаг миграции выставлен');
+  } catch (e) {
     // best-effort: даже если сброс не удался, resetOnError:false не даст стереть
     // данные молча, а следующий запуск повторит попытку (флаг не выставлен).
+    DebugLogger.error('STORAGE', 'Сбой миграции secure storage: $e');
+  }
+}
+
+/// Выставить флаг миграции БЕЗ deleteAll.
+///
+/// Для мест, где хранилище заведомо уже в актуальном формате (PKCS1+AES/GCM) и
+/// сбрасывать нечего: сразу после performWipe (deleteAll там уже выполнен, а
+/// prefs.clear стёр флаг) и после записи свежего seed при создании/импорте
+/// аккаунта. Best-effort: при сбое следующий холодный старт выполнит deleteAll
+/// по пустому/свежему хранилищу — это потеря аккаунта, поэтому сбой логируется.
+Future<void> markSecureStorageMigrated() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_resetFlagKey, true);
+  } catch (e) {
+    DebugLogger.error('STORAGE', 'Не удалось выставить флаг миграции: $e');
   }
 }

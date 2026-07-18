@@ -71,10 +71,13 @@ class AppConfig {
   static Future<void> resetHostToProd() => setActiveHost(primaryApiHost);
 
   // --- Ready URLs ---
-  static String webSocketUrl(String publicKey, {String? host}) {
+  /// [service] — сокет push-изолята (`?role=svc`): сервер доставляет в него
+  /// кадры, но НЕ учитывает его в презенсе, иначе «онлайн» значил бы «телефон
+  /// включён» (постоянный сервис держит сокет и при убитом приложении).
+  static String webSocketUrl(String publicKey, {String? host, bool service = false}) {
     final encodedPublicKey = Uri.encodeComponent(publicKey);
     final h = host ?? serverIp;
-    return 'wss://$h/ws/$encodedPublicKey';
+    return 'wss://$h/ws/$encodedPublicKey${service ? '?role=svc' : ''}';
   }
 
   static String httpUrl(String path, {String? host}) {

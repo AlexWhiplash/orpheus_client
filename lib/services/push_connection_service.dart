@@ -399,7 +399,9 @@ class _ServicePushRunner {
     _connecting = true;
     try {
       final host = AppConfig.apiHosts[_hostIndex % AppConfig.apiHosts.length];
-      final uri = AppConfig.webSocketUrl(pubkey, host: host);
+      // role=svc: сервер доставляет кадры, но не считает этот сокет презенсом —
+      // иначе убитое приложение с живым сервисом выглядело бы «онлайн».
+      final uri = AppConfig.webSocketUrl(pubkey, host: host, service: true);
       final ws = await WebSocket.connect(uri)
           .timeout(const Duration(seconds: 20));
       if (_stopped) {

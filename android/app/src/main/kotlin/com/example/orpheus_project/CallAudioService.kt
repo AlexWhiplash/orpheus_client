@@ -29,7 +29,11 @@ import androidx.core.app.NotificationCompat
 class CallAudioService : Service() {
     companion object {
         const val TAG = "CallAudioService"
-        const val CHANNEL_ID = "orpheus_call_audio"
+        // v2 (_min): канал пересоздан с IMPORTANCE_MIN — во время звонка уже висит
+        // основное уведомление сервиса доставки («<имя> / длительность»), и второе
+        // заметное «In call» читалось как задвоение (device-скрин 18.07). Каналы
+        // Android неизменяемы, поэтому новый id.
+        const val CHANNEL_ID = "orpheus_call_audio_min"
         const val NOTIFICATION_ID = 889
         const val ACTION_STOP = "com.example.orpheus_project.CALL_AUDIO_STOP"
         const val EXTRA_TITLE = "title"
@@ -64,7 +68,7 @@ class CallAudioService : Service() {
                 .setSmallIcon(R.drawable.ic_stat_orpheus)
                 .setOngoing(true)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_MIN)
                 .build()
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -92,7 +96,7 @@ class CallAudioService : Service() {
                 val ch = NotificationChannel(
                     CHANNEL_ID,
                     "Call audio",
-                    NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_MIN
                 ).apply {
                     setSound(null, null)
                     enableVibration(false)

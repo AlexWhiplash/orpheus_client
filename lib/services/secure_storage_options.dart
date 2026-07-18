@@ -121,6 +121,23 @@ Future<void> ensureSecureStorageMigrated() async {
     // best-effort: даже если сброс не удался, resetOnError:false не даст стереть
     // данные молча, а следующий запуск повторит попытку (флаг не выставлен).
     DebugLogger.error('STORAGE', 'Сбой миграции secure storage: $e');
+    // Особый случай (device-лог 18.07): хвост записей СТАРОГО шифра (OAEP, до b34)
+    // валит deleteAll «Key mismatch after algorithm change» на КАЖДОМ старте, хотя
+    // PKCS1-записи (личность) читаются нормально. Мигрировать тут нечего: мёртвый
+    // хвост нечитаем и безвреден. Если seed жив — выставляем флаг и больше не
+    // ретраим, иначе ошибка шумит в логах вечно.
+    if ('$e'.contains('Key mismatch after algorithm change')) {
+      try {
+        // Литерал = CryptoService._rootSeedStoreKey (импорт создал бы цикл).
+        final seed = await appSecureStorage.read(key: 'orpheus_root_seed');
+        if (seed != null && seed.isNotEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(_resetFlagKey, true);
+          DebugLogger.warn('STORAGE',
+              'Мёртвый хвост старого шифра: seed читается, миграция помечена выполненной');
+        }
+      } catch (_) {}
+    }
   }
 }
 

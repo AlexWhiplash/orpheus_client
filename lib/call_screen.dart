@@ -130,6 +130,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   // аккаунта и она даже не может отклонить).
   Timer? _outgoingRingWatchdog;
 
+  // Момент появления экрана — для тап-гарда входящего (см. _ignoreEarlyIncomingTap).
+  final DateTime _uiShownAt = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -143,7 +146,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _displayName = widget.contactPublicKey.substring(0, 8);
     // Поднимаем микрофонный foreground-сервис из видимого CallScreen — тогда
     // микрофон переживёт сворачивание приложения во время разговора (Android 14).
-    CallNativeUiService.startCallAudio(title: _displayName);
+    // Без имени: в этот момент _displayName — ещё префикс ключа, и он утекал в
+    // шторку (device-скрин 18.07: «e_wfH1Zr / In call»). Уведомление нейтральное,
+    // личность звонка показывает основное уведомление сервиса доставки.
+    CallNativeUiService.startCallAudio();
     _resolveContactName();
 
     // Единый call_id для корреляции логов.
@@ -581,6 +587,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   }
 
   void _acceptCall() async {
+    if (_ignoreEarlyIncomingTap()) return;
     SoundService.instance.stopAllSounds();
     _controller.onConnecting();
 
@@ -636,7 +643,23 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     });
   }
 
+  /// Тап-гард входящего: экран появляется мгновенно (в т.ч. под пальцем, когда
+  /// пользователь печатает в чате), и тап «в полёте» попадал в Принять/Отклонить —
+  /// device-лог 18.07: call-rejected через 330мс после показа, звонок сорван.
+  /// Только для состояния Incoming: авто-пути (autoAnswer — Connecting, watchdog
+  /// исходящего — Dialing) под гард не попадают.
+  bool _ignoreEarlyIncomingTap() {
+    if (_callState != CallState.Incoming) return false;
+    final elapsed = DateTime.now().difference(_uiShownAt);
+    if (elapsed < const Duration(milliseconds: 400)) {
+      _addLog("🛡️ Игнорирую тап по входящему в первые 400мс (${elapsed.inMilliseconds}мс)");
+      return true;
+    }
+    return false;
+  }
+
   void _endCallButton() async {
+    if (_ignoreEarlyIncomingTap()) return;
     if (_messagesSent) return;  // Предотвращаем повторные вызовы
     _messagesSent = true;
 

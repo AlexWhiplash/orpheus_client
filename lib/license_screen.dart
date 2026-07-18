@@ -8,6 +8,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/screens/purchase_screen.dart';
 import 'package:orpheus_project/screens/support_chat_screen.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:orpheus_project/widgets/app_card.dart';
@@ -300,12 +301,20 @@ class _LicenseScreenState extends State<LicenseScreen> {
       if (myPubkey == null) throw Exception(l10n.keysNotInitialized);
 
       final url = Uri.parse(AppConfig.httpUrl('/api/activate-promo'));
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: json.encode({"pubkey": myPubkey, "code": code}),
-      );
+      final response = await http
+          .post(
+            url,
+            headers: {"Content-Type": "application/json"},
+            body: json.encode({"pubkey": myPubkey, "code": code}),
+          )
+          // Без таймаута зависший коннект держал бы спиннер минуты (дефолт сокета).
+          .timeout(const Duration(seconds: 15));
 
+      // decode ДО проверки статуса, но под свой лог: сервер без глобального
+      // JSON-обработчика на необработанном исключении отвечает plain-text 500
+      // («Internal Server Error») — раньше это молча проваливалось в общий catch
+      // и показывалось как «проверьте интернет» (инцидент 18.07: unique tx_id
+      // на переиспользованном промокоде).
       final data = json.decode(response.body);
 
       if (response.statusCode == 200 && data['status'] == 'ok') {
@@ -324,9 +333,20 @@ class _LicenseScreenState extends State<LicenseScreen> {
         // пускало (device-тест). onLicenseConfirmed идемпотентен (setState+persist).
         if (mounted) widget.onLicenseConfirmed();
       } else {
-        setState(() => _promoError = data['message'] ?? l10n.invalidCode);
+        DebugLogger.warn('LICENSE',
+            'Активация отклонена: HTTP ${response.statusCode}, ${response.body.length > 200 ? response.body.substring(0, 200) : response.body}');
+        // 'detail' — формат FastAPI (HTTPException, в т.ч. 429 rate-limit):
+        // без него реальная причина («Слишком много попыток...») показывалась
+        // как «Неверный код». Только String: у 422 detail — список.
+        final serverMessage = data['message'] is String
+            ? data['message'] as String
+            : (data['detail'] is String ? data['detail'] as String : null);
+        setState(() => _promoError = serverMessage ?? l10n.invalidCode);
       }
-    } catch (_) {
+    } catch (e) {
+      // Сюда попадают и сетевые сбои, и не-JSON ответ сервера (plain-text 500).
+      // Код активации в лог не пишем.
+      DebugLogger.error('LICENSE', 'Сбой активации: ${e.runtimeType}: $e');
       setState(() => _promoError = l10n.connectionError);
     } finally {
       if (mounted) setState(() => _isActivatingPromo = false);

@@ -167,6 +167,14 @@ class L10nRu extends L10n {
   }
 
   @override
+  String get updateRejectedSamsungBlocker =>
+      'Обновление не установилось. На Samsung установку может блокировать «Автоблокировка»: Настройки → Безопасность и конфиденциальность → Автоблокировка — временно отключите, обновитесь и включите обратно.';
+
+  @override
+  String get updateSamsungBlockerHint =>
+      'На Samsung для установки может потребоваться временно отключить «Автоблокировку» (Настройки → Безопасность и конфиденциальность → Автоблокировка).';
+
+  @override
   String get updateOpenBrowser => 'Открыть в браузере';
 
   @override

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -55,6 +56,21 @@ class UpdateService {
   // папка == getApplicationSupportDirectory). Формат: `status|message`.
   static const String _installFailureMarker = 'last_install_failure.txt';
 
+  // Samsung? Определяется один раз. Строго под Platform.isAndroid: на хосте
+  // (unit/widget-тесты) device_info не вызывается — иначе повис бы как path_provider.
+  static bool? _isSamsungCached;
+  static Future<bool> _isSamsungDevice() async {
+    if (!Platform.isAndroid) return false;
+    final cached = _isSamsungCached;
+    if (cached != null) return cached;
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      return _isSamsungCached = info.manufacturer.toLowerCase() == 'samsung';
+    } catch (_) {
+      return _isSamsungCached = false;
+    }
+  }
+
   /// Числовой PackageInstaller.STATUS_* -> короткое имя (для строки лога).
   static String _installStatusName(int s) => switch (s) {
         1 => 'FAILURE',
@@ -90,9 +106,20 @@ class UpdateService {
       final status =
           int.tryParse(sep >= 0 ? raw.substring(0, sep) : raw) ?? -999;
       final message = sep >= 0 ? raw.substring(sep + 1) : '';
+      final msgLower = message.toLowerCase();
+      // Явный след ИМЕННО Автоблокировки в тексте отказа (перебивает трактовку
+      // «пользователь отменил» — блокировка выглядит как abort). Узко, без общего
+      // «blocked»: иначе штатный STATUS_FAILURE_BLOCKED на не-Samsung (напр. Play
+      // Protect на Pixel) ложно подписался бы Автоблокировкой Samsung.
+      final looksAutoBlocker =
+          msgLower.contains('auto blocker') || msgLower.contains('autoblocker');
 
-      // ABORTED (3) — пользователь сам отменил установку: не бьём тревогу.
-      if (status == 3) {
+      final isSamsung = await _isSamsungDevice();
+
+      // ABORTED (3) на НЕ-Samsung без следа блокировки — обычная отмена
+      // пользователем, тревогу не бьём. На Samsung abort двусмысленный
+      // (вероятна Автоблокировка) — показываем подсказку ниже.
+      if (status == 3 && !isSamsung && !looksAutoBlocker) {
         DebugLogger.info('UPDATE', 'Установка отменена пользователем');
         return;
       }
@@ -101,6 +128,7 @@ class UpdateService {
       DebugLogger.error(
           'UPDATE',
           'Установка обновления отклонена системой: $name (status=$status)'
+          '${isSamsung ? " [samsung]" : ""}'
           '${message.isNotEmpty ? " — $message" : ""}');
 
       if (!context.mounted) return;
@@ -113,15 +141,20 @@ class UpdateService {
       final isCorrupt = status == 4 ||
           message.contains('INVALID_APK') ||
           message.contains('PARSE');
+      // Точные причины (подпись/место/повреждён) приоритетнее — их совет вернее,
+      // чем Автоблокировка. Иначе на Samsung (или при явном следе блокировки)
+      // подсказываем про Автоблокировку — единственный рычаг у пользователя.
       final text = isSignature
           ? l10n.updateRejectedSignature
           : isStorage
               ? l10n.updateRejectedStorage
               : isCorrupt
                   ? l10n.updateRejectedCorrupt
-                  : l10n.updateRejectedGeneric(status);
+                  : (isSamsung || looksAutoBlocker)
+                      ? l10n.updateRejectedSamsungBlocker
+                      : l10n.updateRejectedGeneric(status);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(text), duration: const Duration(seconds: 6)),
+        SnackBar(content: Text(text), duration: const Duration(seconds: 8)),
       );
     } catch (_) {
       // best-effort: диагностика не должна ломать проверку обновлений.
@@ -163,8 +196,13 @@ class UpdateService {
 
         // 3. Если на сервере версия больше -> предлагаем обновить
         if (serverBuildNumber > currentBuildNumber) {
+          // На Samsung установку сайдлоада может блокировать «Автоблокировка» —
+          // предупреждаем в окне заранее (isSamsung=false на хосте -> тесты не
+          // трогают device_info и не виснут).
+          final isSamsung = await _isSamsungDevice();
           if (context.mounted) {
-            _showUpdateDialog(context, versionName, downloadUrl, isRequired, serverBuildNumber);
+            _showUpdateDialog(context, versionName, downloadUrl, isRequired,
+                serverBuildNumber, isSamsung);
           }
         } else if (showNoUpdateFeedback && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -212,7 +250,7 @@ class UpdateService {
     return AppConfig.httpUrl(urlPath);
   }
 
-  static void _showUpdateDialog(BuildContext context, String version, String urlPath, bool required, int targetBuild) {
+  static void _showUpdateDialog(BuildContext context, String version, String urlPath, bool required, int targetBuild, [bool isSamsung = false]) {
     _isUpdateDialogShown = true;
 
     // Формируем полную ссылку
@@ -220,6 +258,8 @@ class UpdateService {
 
     // Получаем локализацию
     final l10n = L10n.of(context);
+    final message =
+        required ? l10n.updateMessageRequired(version) : l10n.updateMessageOptional(version);
 
     showDialog(
       context: context,
@@ -228,10 +268,20 @@ class UpdateService {
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.grey)),
         title: Text(l10n.updateAvailable, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        content: Text(
-          required ? l10n.updateMessageRequired(version) : l10n.updateMessageOptional(version),
-          style: const TextStyle(color: Colors.white70),
-        ),
+        content: isSamsung
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(message, style: const TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.updateSamsungBlockerHint,
+                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                ],
+              )
+            : Text(message, style: const TextStyle(color: Colors.white70)),
         actions: [
           if (!required)
             TextButton(

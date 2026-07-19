@@ -148,6 +148,12 @@
     "placeholders": {"code": {"type": "int"}}
   },
 
+  "updateRejectedSamsungBlocker": "Update didn't install. On Samsung it may be blocked by Auto Blocker: Settings > Security and privacy > Auto Blocker — turn it off, update, then turn it back on.",
+  "@updateRejectedSamsungBlocker": {"description": "Snackbar shown on Samsung devices when the install was likely blocked by the Auto Blocker security feature"},
+
+  "updateSamsungBlockerHint": "On Samsung you may need to temporarily turn off Auto Blocker to install (Settings > Security and privacy > Auto Blocker).",
+  "@updateSamsungBlockerHint": {"description": "Hint shown inside the update dialog on Samsung devices about the Auto Blocker feature"},
+
   "updateOpenBrowser": "Open in Browser",
   "@updateOpenBrowser": {"description": "Open in browser button"},
 

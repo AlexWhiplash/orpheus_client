@@ -343,6 +343,18 @@ abstract class L10n {
   /// **'Update didn\'t install (code {code}). Details are in the debug log.'**
   String updateRejectedGeneric(int code);
 
+  /// Snackbar shown on Samsung devices when the install was likely blocked by the Auto Blocker security feature
+  ///
+  /// In en, this message translates to:
+  /// **'Update didn\'t install. On Samsung it may be blocked by Auto Blocker: Settings > Security and privacy > Auto Blocker — turn it off, update, then turn it back on.'**
+  String get updateRejectedSamsungBlocker;
+
+  /// Hint shown inside the update dialog on Samsung devices about the Auto Blocker feature
+  ///
+  /// In en, this message translates to:
+  /// **'On Samsung you may need to temporarily turn off Auto Blocker to install (Settings > Security and privacy > Auto Blocker).'**
+  String get updateSamsungBlockerHint;
+
   /// Open in browser button
   ///
   /// In en, this message translates to:

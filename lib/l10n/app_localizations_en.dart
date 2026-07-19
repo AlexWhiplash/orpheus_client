@@ -164,6 +164,14 @@ class L10nEn extends L10n {
   }
 
   @override
+  String get updateRejectedSamsungBlocker =>
+      'Update didn\'t install. On Samsung it may be blocked by Auto Blocker: Settings > Security and privacy > Auto Blocker — turn it off, update, then turn it back on.';
+
+  @override
+  String get updateSamsungBlockerHint =>
+      'On Samsung you may need to temporarily turn off Auto Blocker to install (Settings > Security and privacy > Auto Blocker).';
+
+  @override
   String get updateOpenBrowser => 'Open in Browser';
 
   @override

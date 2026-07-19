@@ -452,6 +452,25 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       final type = signal['type'];
       final data = signal['data'];
 
+      // ЕДИНЫЙ гейт call_id для ВСЕХ типов сигналов. Раньше фильтр стоял только
+      // на hang-up/call-rejected: ice-restart МЁРТВОГО звонка лёг на PeerConnection
+      // СЛЕДУЮЩЕГО («Called in wrong state: have-local-offer») — экран навечно
+      // завис в «ICE restart…» (инцидент 19.07 11:48). Сигнал без call_id
+      // (старые клиенты) — легаси-поведение, пропускаем в обработку.
+      final signalCallId = data is Map ? data['call_id'] : null;
+      if (signalCallId != null && signalCallId != _callId) {
+        _addLog("📞 Игнорирую $type чужого звонка (call_id=$signalCallId ≠ $_callId)");
+        return;
+      }
+      // Гейт тирдауна: звонок уже хоронится (_messagesSent) — поздние answer/ICE
+      // не должны его воскрешать. В том же инциденте call-answer, пришедший через
+      // 0.5с после call-rejected, реанимировал WebRTC (state Rejected → Connecting).
+      // Повторные hang-up/rejected пропускаем: _onRemoteHangup сам идемпотентен.
+      if (_messagesSent && type != 'hang-up' && type != 'call-rejected') {
+        _addLog("📞 Игнорирую $type: звонок уже завершается");
+        return;
+      }
+
       if (type == 'call-answer') {
         _controller.setDebugStatus("Answer received");
         await _webrtcService.handleAnswer(data);
@@ -470,17 +489,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       } else if (type == 'ice-candidate') {
         await _webrtcService.addCandidate(data);
       } else if (type == 'hang-up' || type == 'call-rejected') {
-        // Проверяем call_id: устаревший hang-up/reject от ПРЕДЫДУЩЕГО захода
-        // (например, тайаут-reject старого звонка, долетевший поздно по
-        // HTTP-fallback) не должен завершать ТЕКУЩИЙ соединённый звонок.
-        // Если call_id нет (старые клиенты) — обрабатываем как раньше.
-        final signalCallId = data is Map ? data['call_id'] : null;
-        if (signalCallId != null && signalCallId != _callId) {
-          _addLog("📞 Игнорирую устаревший $type (call_id=$signalCallId ≠ $_callId)");
-        } else {
-          _addLog("📞 Получен $type - завершаем звонок");
-          _onRemoteHangup();
-        }
+        // Фильтр call_id уже пройден единым гейтом выше.
+        _addLog("📞 Получен $type - завершаем звонок");
+        _onRemoteHangup();
       }
     });
 

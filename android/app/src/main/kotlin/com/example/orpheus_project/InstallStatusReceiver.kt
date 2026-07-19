@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.util.Log
+import java.io.File
 
 /// Receives PackageInstaller session status from installApk (MainActivity).
 ///
@@ -12,6 +13,13 @@ import android.util.Log
 /// install confirmation dialog itself. It hands us a ready-made Intent in
 /// EXTRA_INTENT, and the app must launch it. Without this the session stays pending
 /// forever and nothing installs (the old empty-ACTION_VIEW bug).
+///
+/// A FAILURE (signature mismatch, no space, corrupted APK, ...) does NOT kill the
+/// process, so it used to vanish silently into logcat and the user was stuck in a
+/// silent update loop (incident 19.07, SM-S948B: 37 -> 40 by круг). We now drop a
+/// one-line marker file that the Dart side drains on the next update check to write
+/// the exact reason into the debug log (readable via "Поделиться", no cable) and to
+/// tell the user what happened. See UpdateService._reportPendingInstallFailure.
 ///
 /// Declared exported="false": it is triggered only by our own PendingIntent.
 class InstallStatusReceiver : BroadcastReceiver() {
@@ -41,7 +49,20 @@ class InstallStatusReceiver : BroadcastReceiver() {
             else -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                 Log.w("APK_INSTALL", "Install status=$status message=$message")
+                persistFailure(context, status, message)
             }
+        }
+    }
+
+    /// Персистим отказ установки в маркер-файл во внутренней files-папке
+    /// (== getApplicationSupportDirectory у Dart). Одна строка `status|message`,
+    /// перезаписывается. Best-effort: сбой записи не должен ничего ронять.
+    private fun persistFailure(context: Context, status: Int, message: String?) {
+        try {
+            val marker = File(context.filesDir, "last_install_failure.txt")
+            marker.writeText("$status|${message ?: ""}")
+        } catch (e: Exception) {
+            Log.e("APK_INSTALL", "persistFailure failed: ${e.message}")
         }
     }
 }

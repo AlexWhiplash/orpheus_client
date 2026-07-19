@@ -133,6 +133,21 @@
   "updateInstallErrorMessage": "Could not install the update automatically. You can download it via browser.",
   "@updateInstallErrorMessage": {"description": "Update install error dialog message"},
 
+  "updateRejectedSignature": "Update rejected: signature mismatch. Reinstall the app from scratch.",
+  "@updateRejectedSignature": {"description": "Snackbar when the OS rejected the install because the update is signed with a different key than the installed app"},
+
+  "updateRejectedStorage": "Update didn't install: not enough free space.",
+  "@updateRejectedStorage": {"description": "Snackbar when the OS rejected the install for insufficient storage"},
+
+  "updateRejectedCorrupt": "Update didn't install: the downloaded file is corrupted.",
+  "@updateRejectedCorrupt": {"description": "Snackbar when the OS rejected the install because the APK failed to parse/verify"},
+
+  "updateRejectedGeneric": "Update didn't install (code {code}). Details are in the debug log.",
+  "@updateRejectedGeneric": {
+    "description": "Snackbar when the OS rejected the install for another reason; code is the PackageInstaller status",
+    "placeholders": {"code": {"type": "int"}}
+  },
+
   "updateOpenBrowser": "Open in Browser",
   "@updateOpenBrowser": {"description": "Open in browser button"},
 

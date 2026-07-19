@@ -147,6 +147,23 @@ class L10nEn extends L10n {
       'Could not install the update automatically. You can download it via browser.';
 
   @override
+  String get updateRejectedSignature =>
+      'Update rejected: signature mismatch. Reinstall the app from scratch.';
+
+  @override
+  String get updateRejectedStorage =>
+      'Update didn\'t install: not enough free space.';
+
+  @override
+  String get updateRejectedCorrupt =>
+      'Update didn\'t install: the downloaded file is corrupted.';
+
+  @override
+  String updateRejectedGeneric(int code) {
+    return 'Update didn\'t install (code $code). Details are in the debug log.';
+  }
+
+  @override
   String get updateOpenBrowser => 'Open in Browser';
 
   @override

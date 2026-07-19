@@ -13,6 +13,37 @@
 
 ---
 
+## 2026-07-19 — b41: отказ установки обновления виден в логе и на экране (конец немого цикла)
+
+**Контекст:** SM-S948B (третий телефон, не мой adb) циклил 37→40: скачивает, системный диалог
+«Обновить приложение?», жмёшь «Обновить» — остаётся 37, по кругу. Разбор (файлы на S3 = наш
+b40 байт-в-байт, versionCode 40, подпись = наш релизный ключ 373494b1, схемы v2+v3): скачивание
+и клиентский код исправны, установку отклоняет САМА ОС уже после подтверждения, а код отказа
+уходил в `InstallStatusReceiver` → `android.util.Log` (только logcat, не файловый лог). Точную
+причину без кабеля не увидеть — это и чиним (диагностика, не root-cause вслепую).
+
+**Сделано (native `InstallStatusReceiver.kt`):** в ветке провала пишем маркер-файл
+`<filesDir>/last_install_failure.txt` = `status|message` (best-effort, try/catch). filesDir ==
+`getApplicationSupportDirectory` Dart — проверено по исходнику path_provider_android 2.3.1
+(`getApplicationSupportPath` возвращает `context.filesDir`).
+
+**Сделано (Dart `update_service.dart`):** `_reportPendingInstallFailure` в начале
+`checkForUpdate`: читает маркер, пишет причину `DebugLogger.error('UPDATE', ...)` (→ файловый
+лог), показывает локализованный снекбар (подпись/место/повреждён/generic с кодом), удаляет
+маркер; ABORTED(3) = отмена юзером → info без тревоги. Строки l10n `updateRejected*` (EN+RU).
+
+**ГРАБЛЯ (поймана до коммита):** `getApplicationSupportDirectory()` в flutter_test НЕ кидает
+исключение, а ВИСНЕТ (path_provider 2.3.1 через JNI без Android-контекста) → 3 widget-теста
+апдейтера «did not complete», полный сьют залипал на +389. Починка: гард `if
+(!Platform.isAndroid) return` в начале drain — и корректно (маркер только на Android), и
+безопасно. После — 392 passed.
+
+**Проверки:** `flutter analyze` — 0 ошибок (старые avoid_print не мои), `flutter test` —
+392 passed, `flutter gen-l10n` ок. Путь маркера сверен по исходнику плагина. Логика установки
+не тронута — только перестали глотать ошибку.
+
+---
+
 ## 2026-07-19 — b40: единый гейт сигналов звонка (зомби-«ICE restart»)
 
 **Контекст:** исходящий звонок завис в «Calling… / ICE restart…» без соединения (скрин+лог

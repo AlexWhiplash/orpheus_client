@@ -150,6 +150,23 @@ class L10nRu extends L10n {
       'Не удалось установить обновление автоматически. Можно скачать через браузер.';
 
   @override
+  String get updateRejectedSignature =>
+      'Обновление отклонено: подпись не совпадает. Переустановите приложение начисто.';
+
+  @override
+  String get updateRejectedStorage =>
+      'Обновление не установилось: не хватает свободного места.';
+
+  @override
+  String get updateRejectedCorrupt =>
+      'Обновление не установилось: скачанный файл повреждён.';
+
+  @override
+  String updateRejectedGeneric(int code) {
+    return 'Обновление не установилось (код $code). Подробности в отладочном логе.';
+  }
+
+  @override
   String get updateOpenBrowser => 'Открыть в браузере';
 
   @override

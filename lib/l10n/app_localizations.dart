@@ -319,6 +319,30 @@ abstract class L10n {
   /// **'Could not install the update automatically. You can download it via browser.'**
   String get updateInstallErrorMessage;
 
+  /// Snackbar when the OS rejected the install because the update is signed with a different key than the installed app
+  ///
+  /// In en, this message translates to:
+  /// **'Update rejected: signature mismatch. Reinstall the app from scratch.'**
+  String get updateRejectedSignature;
+
+  /// Snackbar when the OS rejected the install for insufficient storage
+  ///
+  /// In en, this message translates to:
+  /// **'Update didn\'t install: not enough free space.'**
+  String get updateRejectedStorage;
+
+  /// Snackbar when the OS rejected the install because the APK failed to parse/verify
+  ///
+  /// In en, this message translates to:
+  /// **'Update didn\'t install: the downloaded file is corrupted.'**
+  String get updateRejectedCorrupt;
+
+  /// Snackbar when the OS rejected the install for another reason; code is the PackageInstaller status
+  ///
+  /// In en, this message translates to:
+  /// **'Update didn\'t install (code {code}). Details are in the debug log.'**
+  String updateRejectedGeneric(int code);
+
   /// Open in browser button
   ///
   /// In en, this message translates to:

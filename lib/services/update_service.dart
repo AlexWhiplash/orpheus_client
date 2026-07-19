@@ -1,12 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/services/apk_download_service.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 
 class UpdateService {
   static bool _isUpdateDialogShown = false;
@@ -48,8 +51,89 @@ class UpdateService {
     return int.tryParse(packageInfo.buildNumber) ?? 0;
   }
 
+  // Файл-маркер отказа установки (пишет InstallStatusReceiver на native-стороне,
+  // папка == getApplicationSupportDirectory). Формат: `status|message`.
+  static const String _installFailureMarker = 'last_install_failure.txt';
+
+  /// Числовой PackageInstaller.STATUS_* -> короткое имя (для строки лога).
+  static String _installStatusName(int s) => switch (s) {
+        1 => 'FAILURE',
+        2 => 'BLOCKED',
+        3 => 'ABORTED',
+        4 => 'INVALID',
+        5 => 'CONFLICT',
+        6 => 'STORAGE',
+        7 => 'INCOMPATIBLE',
+        _ => 'UNKNOWN',
+      };
+
+  /// Слить отложенный отказ установки: записать причину в файловый лог (читается
+  /// через «Поделиться», без кабеля) и показать пользователю понятный текст.
+  /// Полностью изолирован: любая ошибка гасится и НЕ влияет на проверку обновлений
+  /// (в т.ч. отсутствие плагина path_provider в unit-тестах).
+  static Future<void> _reportPendingInstallFailure(BuildContext context) async {
+    // Маркер пишет ТОЛЬКО Android-ресивер (PackageInstaller). На прочих платформах
+    // и в unit/widget-тестах (хост-VM) файла нет — а вызов path_provider там ещё и
+    // виснет (JNI без Android-контекста). Ранний выход = и корректно, и безопасно.
+    if (!Platform.isAndroid) return;
+    try {
+      final dir = await getApplicationSupportDirectory();
+      final f = File('${dir.path}/$_installFailureMarker');
+      if (!await f.exists()) return;
+      final raw = (await f.readAsString()).trim();
+      try {
+        await f.delete();
+      } catch (_) {}
+      if (raw.isEmpty) return;
+
+      final sep = raw.indexOf('|');
+      final status =
+          int.tryParse(sep >= 0 ? raw.substring(0, sep) : raw) ?? -999;
+      final message = sep >= 0 ? raw.substring(sep + 1) : '';
+
+      // ABORTED (3) — пользователь сам отменил установку: не бьём тревогу.
+      if (status == 3) {
+        DebugLogger.info('UPDATE', 'Установка отменена пользователем');
+        return;
+      }
+
+      final name = _installStatusName(status);
+      DebugLogger.error(
+          'UPDATE',
+          'Установка обновления отклонена системой: $name (status=$status)'
+          '${message.isNotEmpty ? " — $message" : ""}');
+
+      if (!context.mounted) return;
+      final l10n = L10n.of(context);
+      final isSignature = status == 7 ||
+          message.contains('UPDATE_INCOMPATIBLE') ||
+          message.contains('signatures do not match');
+      final isStorage =
+          status == 6 || message.contains('INSUFFICIENT_STORAGE');
+      final isCorrupt = status == 4 ||
+          message.contains('INVALID_APK') ||
+          message.contains('PARSE');
+      final text = isSignature
+          ? l10n.updateRejectedSignature
+          : isStorage
+              ? l10n.updateRejectedStorage
+              : isCorrupt
+                  ? l10n.updateRejectedCorrupt
+                  : l10n.updateRejectedGeneric(status);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(text), duration: const Duration(seconds: 6)),
+      );
+    } catch (_) {
+      // best-effort: диагностика не должна ломать проверку обновлений.
+    }
+  }
+
   // Главный метод проверки
   static Future<void> checkForUpdate(BuildContext context, {bool showNoUpdateFeedback = false}) async {
+    // Сначала — отложенный отказ прошлой установки (если был): пишем причину в
+    // лог и показываем пользователю, вместо немого цикла «предложил -> отклонено».
+    await _reportPendingInstallFailure(context);
+
     if (_isUpdateDialogShown) return; // Не спамить окнами
 
     try {

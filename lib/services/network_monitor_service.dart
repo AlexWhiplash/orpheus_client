@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:rxdart/rxdart.dart';
 
@@ -32,6 +33,12 @@ class NetworkMonitorService {
   List<ConnectivityResult> _lastConnectivity = [];
   DateTime? _lastOfflineTime;
 
+  /// Момент последней смены сетевого пути (networkSwitch/reconnected).
+  /// Потребитель — GeoService: кэш страны, записанный до этой отметки,
+  /// не считается свежим (VPN вкл/выкл меняет внешний IP).
+  DateTime? _lastNetworkChangeAt;
+  DateTime? get lastNetworkChangeAt => _lastNetworkChangeAt;
+
   /// Инициализация сервиса
   Future<void> init() async {
     DebugLogger.info('NETWORK', 'Инициализация NetworkMonitorService...');
@@ -48,7 +55,15 @@ class NetworkMonitorService {
 
   void _handleConnectivityChange(List<ConnectivityResult> results) {
     DebugLogger.info('NETWORK', 'Изменение сети: $_lastConnectivity → $results');
-    
+
+    // Отметка для GeoService: ЛЮБОЙ сдвиг набора типов сети (в т.ч. VPN,
+    // который connectivity_plus дописывает НЕ первым элементом и который
+    // networkSwitch ниже не ловит — тот сравнивает только .first и его
+    // семантику «форс-реконнект WS» расширять нельзя).
+    if (!setEquals(_lastConnectivity.toSet(), results.toSet())) {
+      _lastNetworkChangeAt = DateTime.now();
+    }
+
     final wasOffline = _isOffline(_lastConnectivity);
     final isOffline = _isOffline(results);
     final isOnline = !isOffline;
@@ -62,7 +77,7 @@ class NetworkMonitorService {
       
       DebugLogger.success('NETWORK', '📶 Связь восстановлена (был offline ${offlineDuration.inSeconds}s)');
       _stateController.add(NetworkState.reconnecting);
-      
+
       _networkChangeController.add(NetworkChangeEvent(
         type: NetworkChangeType.reconnected,
         newConnectivity: results,
@@ -91,7 +106,7 @@ class NetworkMonitorService {
       // Смена типа сети (WiFi <-> Mobile) без потери связи
       DebugLogger.info('NETWORK', '🔄 Смена типа сети');
       _stateController.add(NetworkState.reconnecting);
-      
+
       _networkChangeController.add(NetworkChangeEvent(
         type: NetworkChangeType.networkSwitch,
         newConnectivity: results,

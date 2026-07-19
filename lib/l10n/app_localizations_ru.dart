@@ -834,6 +834,9 @@ class L10nRu extends L10n {
   String get regionSourceIp => 'По IP • зашифровано';
 
   @override
+  String get regionSourceIpCache => 'По IP • кэш, тап — обновить';
+
+  @override
   String get regionSourceLocale => 'Из настроек устройства';
 
   @override

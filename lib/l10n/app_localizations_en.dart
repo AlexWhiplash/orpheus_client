@@ -827,6 +827,9 @@ class L10nEn extends L10n {
   String get regionSourceIp => 'IP check • encrypted';
 
   @override
+  String get regionSourceIpCache => 'IP check • cached, tap to refresh';
+
+  @override
   String get regionSourceLocale => 'From device settings';
 
   @override

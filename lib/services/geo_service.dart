@@ -8,7 +8,14 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
+
+/// Источник последнего результата [GeoService.getIpCountry] — для честной
+/// подписи на карточке «Регион»: кэш не должен маскироваться под свежий IP
+/// (инцидент 19.07: немецкий VPN, а карточка показывала кэшированный RU
+/// с подписью «По IP»).
+enum GeoSource { network, cache, none }
 
 /// Один HTTPS-эндпоинт цепочки. [parse] извлекает сырое значение страны
 /// из тела ответа (plain text или поле JSON).
@@ -77,9 +84,14 @@ class GeoService {
   Future<void>? _prefsLoad;
   Future<String?>? _inflight;
 
+  /// Откуда взялся последний ответ [getIpCountry] (сеть/кэш/ничего).
+  GeoSource lastSource = GeoSource.none;
+
   /// Страна по IP (ISO 3166-1 alpha-2) или null, если цепочка недоступна.
   /// Свежий кэш (моложе 12 ч) возвращается без сетевого запроса;
-  /// [forceRefresh] пробивает кэш.
+  /// [forceRefresh] пробивает кэш. Смена сети (VPN вкл/выкл, WiFi<->Mobile)
+  /// тоже инвалидирует кэш: IP сменился — страна могла тоже (инцидент 19.07:
+  /// кэшированный RU показывался при немецком VPN).
   Future<String?> getIpCountry({bool forceRefresh = false}) async {
     await (_prefsLoad ??= _loadPrefsCache());
 
@@ -87,12 +99,32 @@ class GeoService {
     final age = _cachedAt == null
         ? null
         : DateTime.now().difference(_cachedAt!);
-    final isFresh = age != null && age >= Duration.zero && age < _cacheTtl;
-    if (!forceRefresh && _cachedCode != null && isFresh) return _cachedCode;
+    // Кэш записан ДО последней смены сети — не свежий (ограничение: смену сети,
+    // случившуюся при неработающем приложении, отследить нечем — там спасает
+    // только TTL/тап).
+    final lastNetChange = NetworkMonitorService.instance.lastNetworkChangeAt;
+    final preDatesNetwork =
+        lastNetChange != null && _cachedAt != null && !_cachedAt!.isAfter(lastNetChange);
+    final isFresh =
+        age != null && age >= Duration.zero && age < _cacheTtl && !preDatesNetwork;
+    if (!forceRefresh && _cachedCode != null && isFresh) {
+      lastSource = GeoSource.cache;
+      DebugLogger.info('GEO',
+          'Страна из кэша: $_cachedCode (возраст ${age.inMinutes} мин)');
+      return _cachedCode;
+    }
+    if (preDatesNetwork && !forceRefresh) {
+      DebugLogger.info('GEO', 'Кэш страны инвалидирован сменой сети — запрос заново');
+    }
 
     try {
       final online = await (_isOnline ?? NetworkMonitorService.instance.isOnline)();
-      if (!online) return _cachedCode;
+      if (!online) {
+        lastSource = _cachedCode != null ? GeoSource.cache : GeoSource.none;
+        DebugLogger.info('GEO',
+            'Офлайн — возвращаю ${_cachedCode == null ? "ничего" : "кэш $_cachedCode"}');
+        return _cachedCode;
+      }
     } catch (_) {
       // Сбой монитора сети не должен блокировать цепочку — пробуем запрос.
     }
@@ -100,7 +132,16 @@ class GeoService {
     final fetch = _inflight ??=
         _fetchChain().whenComplete(() => _inflight = null);
     final result = await fetch;
-    return result ?? _cachedCode;
+    if (result != null) {
+      lastSource = GeoSource.network;
+      return result;
+    }
+    // Вся цепочка не ответила: отдаём кэш (возможно, устаревший) — вызывающий
+    // видит через lastSource, что это НЕ свежие данные.
+    lastSource = _cachedCode != null ? GeoSource.cache : GeoSource.none;
+    DebugLogger.warn('GEO',
+        'Цепочка geo-сервисов не ответила — ${_cachedCode == null ? "страны нет" : "возвращаю кэш $_cachedCode"}');
+    return _cachedCode;
   }
 
   Future<String?> _fetchChain() async {
@@ -110,6 +151,8 @@ class GeoService {
         final code = await _fetchOne(client, endpoint);
         if (code != null) {
           _storeCache(code);
+          DebugLogger.info('GEO',
+              'Страна по сети: $code (${Uri.parse(endpoint.url).host})');
           return code;
         }
       }

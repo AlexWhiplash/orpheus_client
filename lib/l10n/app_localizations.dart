@@ -1579,6 +1579,12 @@ abstract class L10n {
   /// **'IP check • encrypted'**
   String get regionSourceIp;
 
+  /// Region subtitle when the shown country is a cached IP result, not a fresh network response
+  ///
+  /// In en, this message translates to:
+  /// **'IP check • cached, tap to refresh'**
+  String get regionSourceIpCache;
+
   /// Region subtitle when country came from the device locale
   ///
   /// In en, this message translates to:

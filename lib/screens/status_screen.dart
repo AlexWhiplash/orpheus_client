@@ -52,6 +52,7 @@ class _StatusScreenState extends State<StatusScreen>
 
   // Регион
   String _countryCode = '--';
+  bool _regionFromCache = false;
   bool _isTrafficControlRegion = false;
   bool _regionFromIp = false;
 
@@ -145,6 +146,9 @@ class _StatusScreenState extends State<StatusScreen>
     setState(() {
       _countryCode = ipCode;
       _regionFromIp = true;
+      // Кэш не маскируем под свежий IP-ответ (инцидент 19.07: VPN Германия,
+      // а карточка показывала кэшированный RU с подписью «По IP»).
+      _regionFromCache = _geo.lastSource == GeoSource.cache;
       // Union: VPN-выход не понижает «усиленный» режим у RU-локали, а IP=RU
       // поднимает его при иностранной локали.
       _isTrafficControlRegion = _trafficControlCountries.contains(localeCode) ||
@@ -282,7 +286,9 @@ class _StatusScreenState extends State<StatusScreen>
                     icon: Icons.public_rounded,
                     value: _countryCode,
                     subtitle: _regionFromIp
-                        ? l10n.regionSourceIp
+                        ? (_regionFromCache
+                            ? l10n.regionSourceIpCache
+                            : l10n.regionSourceIp)
                         : l10n.regionSourceLocale,
                     valueColor: _isTrafficControlRegion
                         ? AppColors.warning

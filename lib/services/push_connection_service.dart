@@ -89,14 +89,15 @@ class PluginPushServiceBackend implements PushServiceBackend {
     required String channelName,
     required String description,
   }) async {
-    // Новый канал (id _v2) с showBadge=false: тихий постоянный сервис не должен вешать
-    // отметку «непрочитано» на иконку. Старый 'orpheus_connection' (showBadge=true)
-    // остаётся осиротевшим, но активного уведомления на нём не будет -> без отметки.
+    // Канал _v3: Importance.min — БЕЗ иконки в статусбаре (LOW её показывал —
+    // «два щита», 19.07). На живучесть foreground-сервиса важность канала не
+    // влияет (приоритет процесса даёт startForeground) — обкатано на канале
+    // orpheus_call_audio_min (b39).
     final channel = AndroidNotificationChannel(
       channelId,
       channelName,
       description: description,
-      importance: Importance.low, // тихое постоянное уведомление
+      importance: Importance.min, // тихо и без иконки в статусбаре
       enableVibration: false,
       playSound: false,
       showBadge: false, // не бэйджить иконку постоянным уведомлением сервиса
@@ -149,10 +150,13 @@ class PluginPushServiceBackend implements PushServiceBackend {
 class PushConnectionService {
   static bool _isInitialized = false;
 
-  // v2: канал пересоздан с showBadge=false (старый 'orpheus_connection' вешал
-  // постоянную отметку «непрочитано» на иконку — foreground-уведомление сервиса
-  // всегда активно). Каналы Android неизменяемы, поэтому нужен новый id.
-  static const String channelId = 'orpheus_connection_v2';
+  // v3: канал пересоздан с Importance.min — постоянное уведомление сервиса не
+  // должно держать иконку в статусбаре (владелец, 19.07: «два щита сверху»);
+  // MIN не показывает иконку вовсе, уведомление живёт внизу шторки в «тихих».
+  // v2 был про showBadge=false (отметка «непрочитано» на иконке приложения).
+  // Каналы Android неизменяемы, поэтому на каждую смену — новый id; старые
+  // каналы осиротели, активных уведомлений на них нет.
+  static const String channelId = 'orpheus_connection_v3';
   static const String channelName = 'Connection';
   static const int _notificationId = 887;
 

@@ -791,6 +791,9 @@
   "regionSourceIp": "IP check \u2022 encrypted",
   "@regionSourceIp": {"description": "Region subtitle when country was resolved by IP geolocation"},
 
+  "regionSourceIpCache": "IP check \u2022 cached, tap to refresh",
+  "@regionSourceIpCache": {"description": "Region subtitle when the shown country is a cached IP result, not a fresh network response"},
+
   "regionSourceLocale": "From device settings",
   "@regionSourceLocale": {"description": "Region subtitle when country came from the device locale"},
 

@@ -315,6 +315,7 @@
   "queue": "Очередь",
   "region": "Регион",
   "regionSourceIp": "По IP • зашифровано",
+  "regionSourceIpCache": "По IP • кэш, тап — обновить",
   "regionSourceLocale": "Из настроек устройства",
   "mode": "Режим",
   "enhanced": "Усиленный",

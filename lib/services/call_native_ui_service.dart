@@ -43,6 +43,26 @@ class CallNativeUiService {
       // best-effort
     }
   }
+
+  /// Взять proximity wake lock: экран гаснет и тач отключается, пока датчик у уха
+  /// закрыт (как штатная звонилка; заодно защищает от ушных тапов по кнопкам).
+  /// Брать при соединении и выключенном динамике. Best-effort.
+  static Future<void> acquireProximityLock() async {
+    try {
+      await _callChannel.invokeMethod('acquireProximityLock');
+    } catch (_) {
+      // best-effort: нет датчика/реализации -> просто без гашения экрана.
+    }
+  }
+
+  /// Отпустить proximity wake lock (динамик включён / звонок завершён).
+  static Future<void> releaseProximityLock() async {
+    try {
+      await _callChannel.invokeMethod('releaseProximityLock');
+    } catch (_) {
+      // best-effort
+    }
+  }
 }
 
 

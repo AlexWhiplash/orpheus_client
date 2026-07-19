@@ -13,6 +13,37 @@
 
 ---
 
+## 2026-07-19 — b43: proximity screen-off у уха (Вариант A аудита звонков)
+
+**Контекст:** аудит аудио-тракта звонка (микрофон/динамик/BT/датчик приближения, workflow —
+3 Explore-агента + чтение плагина flutter_webrtc 1.5.2). Вывод: микрофон и маршрутизация
+исправны, трогать не надо; датчика приближения нет НИГДЕ (ни в коде, ни в плагине) → экран у
+уха не гаснет, ухом можно тапать по кнопкам (in-call кнопки без тап-гарда; b39-гард только на
+приёме входящего). Владелец выбрал Вариант A (нативный wake-lock) — он же закрывает ушные тапы
+(тач мёртв у уха), поэтому отдельный in-call тап-гард НЕ нужен.
+
+**Сделано (только Вариант A):**
+- `MainActivity.kt`: поле `proximityWakeLock`; методы канала `acquireProximityLock`/
+  `releaseProximityLock`; `PROXIMITY_SCREEN_OFF_WAKE_LOCK` через PowerManager (гейт
+  `isWakeLockLevelSupported`, тег `orpheus:call_proximity`, `setReferenceCounted(false)` +
+  `isHeld` = идемпотентность; release с `RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY`); страховочный
+  release в новом `onDestroy`. Разрешение `WAKE_LOCK` уже было.
+- `call_native_ui_service.dart`: мост `acquireProximityLock`/`releaseProximityLock`
+  (best-effort, зеркало enableCallMode).
+- `call_screen.dart`: `_syncProximityLock()` — держим lock только при
+  `_everConnected && !_isSpeakerOn && !_isDisposed`; хук в `_onConnected` (берём при
+  соединении у уха), в `_toggleSpeaker` (динамик → отпустить, назад к уху → взять),
+  безусловный release в `dispose`. Наушник/BT спец-логики не требуют (датчик открыт в руке →
+  экран горит).
+
+**Проверки:** `flutter analyze` 0 ошибок, `flutter test` 392 passed, `flutter build apk`
+(компиляция Kotlin). **Датчик — железо, автотеста нет:** device-чеклист (обе модели):
+звонок → закрыть верхний датчик → экран гаснет + тач мёртв → открыть → вернулся; «Динамик» →
+не гаснет; завершить → норма, без залипшего чёрного. Отложены (не баги): ресинк «Динамика»
+с реальным устройством, 3-way route picker, await у setSpeakerphoneOn, BT-фолбэк.
+
+---
+
 ## 2026-07-19 — b42: Samsung Auto Blocker — подсказка (A+B), обойти нельзя
 
 **Контекст:** владелец выяснил причину неустановки на новом Samsung (SM-S948B) — функция

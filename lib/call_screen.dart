@@ -93,6 +93,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   bool _isSpeakerOn = false;
   bool _isMicMuted = false;
 
+  // Взят ли proximity wake lock (экран у уха тухнет + тач отключён). Держим только
+  // при СОЕДИНЁННОМ звонке и выключенном динамике. Флаг — чтобы acquire/release
+  // не дёргались лишний раз (нативная сторона тоже идемпотентна).
+  bool _proximityAcquired = false;
+
   // Флаги жизненного цикла
   bool _isDisposed = false;
   bool _messagesSent = false;
@@ -721,6 +726,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     SoundService.instance.stopAllSounds();
     SoundService.instance.playConnectedSound();
 
+    // Звонок соединён — если разговор у уха (динамик выключен), гасим экран у уха.
+    _syncProximityLock();
+
     if (_isReconnecting) {
       _addLog("✅ Соединение восстановлено!");
     }
@@ -779,6 +787,24 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   void _toggleSpeaker() {
     setState(() => _isSpeakerOn = !_isSpeakerOn);
     Helper.setSpeakerphoneOn(_isSpeakerOn);
+    // Динамик = телефон в руке у лица: proximity-гашение экрана тут мешает,
+    // поэтому на динамике отпускаем, а при возврате к уху (и живом звонке) берём.
+    _syncProximityLock();
+  }
+
+  /// Держим proximity wake lock ТОЛЬКО когда звонок соединён и динамик выключен
+  /// (телефон у уха). Идемпотентно по [_proximityAcquired]. Наушник/BT спец-логики
+  /// не требуют: датчик сработает лишь при физическом закрытии (телефон в руке =
+  /// датчик открыт = экран горит).
+  void _syncProximityLock() {
+    final wantLock = _everConnected && !_isSpeakerOn && !_isDisposed;
+    if (wantLock && !_proximityAcquired) {
+      _proximityAcquired = true;
+      CallNativeUiService.acquireProximityLock();
+    } else if (!wantLock && _proximityAcquired) {
+      _proximityAcquired = false;
+      CallNativeUiService.releaseProximityLock();
+    }
   }
 
   void _toggleMic() {
@@ -1195,6 +1221,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     // мёртвым кодом -> активный id висел до TTL 15с, и быстрый повторный звонок
     // (уже с НОВЫМ id) отклонялся trySetActiveCall как "занято, другой активен".
     CallIdStorage.clear();
+    // Отпускаем proximity-lock БЕЗУСЛОВНО (звонок завершён) — не оставляем экран
+    // гаснущим у уха после звонка. _proximityAcquired сбрасываем до _isDisposed.
+    _proximityAcquired = false;
+    CallNativeUiService.releaseProximityLock();
     CallNativeUiService.disableCallMode();
     // Останавливаем микрофонный сервис — звонок завершён.
     CallNativeUiService.stopCallAudio();

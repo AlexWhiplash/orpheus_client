@@ -25,6 +25,7 @@ import 'package:orpheus_project/services/incoming_call_buffer.dart';
 import 'package:orpheus_project/services/incoming_message_handler.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:orpheus_project/services/pending_actions_service.dart';
 import 'package:orpheus_project/services/pending_call_storage.dart';
 import 'package:orpheus_project/services/pending_inbox_storage.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
@@ -296,6 +297,10 @@ Future<void> _initializeApp() async {
   // (сервер не кладёт их в оффлайн-очередь, т.к. считал нас «онлайн» по push-сокету).
   _drainPendingInbox();
 
+  // 9b. Outbox: импорт legacy prefs-очереди + failed для осиротевших sending +
+  // досылка неподтверждённого.
+  _reconcileOutbox();
+
   // 10. Инициализация CallKit для нативного UI звонков
   DebugLogger.info('APP', 'Инициализация CallKit...');
   _initCallKit();
@@ -471,6 +476,50 @@ void _handleRoomEventForBadge(String messageJson) {
 /// Очередь при этом не трогаем — сольём после настоящей разблокировки ([_onUnlocked])
 /// или на следующем resume/старте. Удаляем ТОЛЬКО реально обработанные конверты.
 bool _inboxDraining = false;
+
+/// Reconcile outbox исходящих (зеркало [_drainPendingInbox], инцидент «лифт»):
+/// (1) разовый импорт очереди из SharedPreferences (билды <=41 копили её в
+/// PendingActionsService — иначе застрявшее там потеряется навсегда);
+/// (2) исходящие, зависшие в sending без строки в outbox (крэш между записью
+/// сообщения и постановкой в очередь), переводятся в честный failed;
+/// (3) триггер досылки неподтверждённого, если сокет уже живой.
+/// Гейт по локу/duress тот же: под duress ничего не шлём и не помечаем.
+bool _outboxReconciling = false;
+
+Future<void> _reconcileOutbox() async {
+  if (authService.requiresUnlock || authService.isDuressMode) return;
+  if (_outboxReconciling) return;
+  _outboxReconciling = true;
+  try {
+    final legacy = await PendingActionsService.getPendingMessages();
+    if (legacy.isNotEmpty) {
+      for (final msg in legacy) {
+        await DatabaseService.instance.enqueueOutbox(
+          recipientKey: msg.recipientKey,
+          payload: msg.encryptedPayload,
+          messageId: msg.messageId,
+        );
+      }
+      await PendingActionsService.clearPendingMessages();
+      DebugLogger.info(
+          'OUTBOX', 'Импортировано из prefs-очереди: ${legacy.length}');
+    }
+
+    final orphaned =
+        await DatabaseService.instance.failOrphanedSendingMessages();
+    if (orphaned.isNotEmpty) {
+      DebugLogger.warn(
+          'OUTBOX', 'Осиротевших sending переведено в failed: ${orphaned.length}');
+    }
+
+    websocketService.triggerOutboxDrain();
+  } catch (e, stackTrace) {
+    DebugLogger.error('OUTBOX', 'reconcile error: $e');
+    Sentry.captureException(e, stackTrace: stackTrace);
+  } finally {
+    _outboxReconciling = false;
+  }
+}
 
 Future<void> _drainPendingInbox() async {
   final handler = incomingMessageHandler;
@@ -805,6 +854,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // Разблокировка настоящим PIN (не duress) — самое раннее место, где можно
     // безопасно слить очередь push-изолята (под локом слив пропускался).
     _drainPendingInbox();
+    _reconcileOutbox();
 
     // Обработать отложенный звонок если есть
     // Используем небольшую задержку чтобы UI успел перестроиться
@@ -938,6 +988,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // ещё не закрыл сокет» — иначе они ждали бы следующего рестарта (гейт внутри
       // пропустит слив, если под локом/duress).
       _drainPendingInbox();
+      _reconcileOutbox();
 
       // Deferred-lock backstop: the app went background while a call was up
       // and the call is already over — lock now, regardless of the inactivity

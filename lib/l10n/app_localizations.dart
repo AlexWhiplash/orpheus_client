@@ -2395,6 +2395,18 @@ abstract class L10n {
   /// **'Failed to send message'**
   String get messageNotSent;
 
+  /// Short label under a failed outgoing chat message
+  ///
+  /// In en, this message translates to:
+  /// **'Not sent'**
+  String get notSent;
+
+  /// Action in message menu: retry sending a failed message
+  ///
+  /// In en, this message translates to:
+  /// **'Resend'**
+  String get resendMessage;
+
   /// Write to us title
   ///
   /// In en, this message translates to:

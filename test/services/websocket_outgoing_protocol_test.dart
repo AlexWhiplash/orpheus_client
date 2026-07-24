@@ -3,7 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/websocket_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -75,21 +77,48 @@ class _RecordingWebSocketChannel with StreamChannelMixin<dynamic> implements Web
 }
 
 void main() {
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
   group('WebSocketService outgoing protocol', () {
-    test('sendChatMessage формирует корректный JSON пакет', () {
+    test('sendChatMessage формирует корректный JSON пакет (через outbox)',
+        () async {
+      // Chat теперь ходит через персистентный outbox (инцидент «лифт»).
+      final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+      await db.execute('''
+        CREATE TABLE outbox (
+          messageId TEXT PRIMARY KEY,
+          recipientKey TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          lastAttemptAt INTEGER
+        )
+      ''');
+      DatabaseService.instance.setDuressMode(false);
+      DatabaseService.instance.initWithDatabase(db);
+
       final sent = <dynamic>[];
       final ws = _RecordingWebSocketChannel(sent);
 
       final service = WebSocketService();
       service.debugAttachConnectedChannel(ws, currentPublicKey: 'ME');
 
-      service.sendChatMessage('RECIPIENT', 'PAYLOAD');
+      await service.sendChatMessage('RECIPIENT', 'PAYLOAD', messageId: 'mid-1');
+      // Слив асинхронный — даём микротаскам и запросам к БД отработать.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(sent, hasLength(1));
-      final decoded = json.decode(sent.single as String) as Map<String, dynamic>;
+      // Кадр chat + fence-ping вслед.
+      expect(sent, hasLength(2));
+      final decoded = json.decode(sent.first as String) as Map<String, dynamic>;
       expect(decoded['type'], equals('chat'));
       expect(decoded['recipient_pubkey'], equals('RECIPIENT'));
       expect(decoded['payload'], equals('PAYLOAD'));
+      expect(decoded['message_id'], equals('mid-1'));
+      final fence = json.decode(sent.last as String) as Map<String, dynamic>;
+      expect(fence['type'], equals('ping'));
+
+      await DatabaseService.instance.close();
     });
 
     test('sendSignalingMessage формирует корректный JSON пакет (call-offer)', () {

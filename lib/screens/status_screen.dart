@@ -13,7 +13,6 @@ import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/geo_service.dart';
-import 'package:orpheus_project/services/pending_actions_service.dart';
 import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_card.dart';
@@ -158,9 +157,10 @@ class _StatusScreenState extends State<StatusScreen>
 
   Future<void> _loadPending() async {
     try {
-      final pending = await PendingActionsService.getPendingMessages();
+      // Очередь исходящих переехала из prefs в outbox-таблицу БД (v10).
+      final pending = await DatabaseService.instance.outboxCount();
       if (!mounted) return;
-      setState(() => _pendingCount = pending.length);
+      setState(() => _pendingCount = pending);
     } catch (_) {}
   }
 

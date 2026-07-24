@@ -1272,6 +1272,12 @@ class L10nEn extends L10n {
   String get messageNotSent => 'Failed to send message';
 
   @override
+  String get notSent => 'Not sent';
+
+  @override
+  String get resendMessage => 'Resend';
+
+  @override
   String get writeToUs => 'Write to us!';
 
   @override

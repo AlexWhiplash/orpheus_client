@@ -1242,6 +1242,12 @@
   
   "messageNotSent": "Failed to send message",
   "@messageNotSent": {"description": "Message not sent error"},
+
+  "notSent": "Not sent",
+  "@notSent": {"description": "Short label under a failed outgoing chat message"},
+
+  "resendMessage": "Resend",
+  "@resendMessage": {"description": "Action in message menu: retry sending a failed message"},
   
   "writeToUs": "Write to us!",
   "@writeToUs": {"description": "Write to us title"},

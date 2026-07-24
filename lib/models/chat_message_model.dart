@@ -24,6 +24,18 @@ class ChatMessage {
     this.isRead = true, // Свои сообщения всегда прочитаны, чужие - зависит
   }) : timestamp = timestamp ?? DateTime.now();
 
+  /// Копия с новым статусом — для точечного обновления пузыря в открытом чате
+  /// по подтверждению отправки (без перечитывания истории из БД).
+  ChatMessage copyWith({MessageStatus? status}) => ChatMessage(
+        id: id,
+        messageId: messageId,
+        text: text,
+        isSentByMe: isSentByMe,
+        timestamp: timestamp,
+        status: status ?? this.status,
+        isRead: isRead,
+      );
+
   /// Тексты-маркеры системных записей звонка в истории чата: они хранятся в
   /// таблице `messages` как обычные сообщения (chat_screen рисует их call-иконкой),
   /// но это НЕ переписка. Английские варианты — то, что реально пишет клиент

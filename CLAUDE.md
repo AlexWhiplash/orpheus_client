@@ -31,7 +31,7 @@
 - AuthService - аутентификация, PIN, duress mode, auto-lock
 - CryptoService - E2E шифрование (X25519 + ChaCha20-Poly1305)
 - WebSocketService - real-time messaging с автореконнектом
-- DatabaseService - SQLite (SQLCipher), версия 8, поддержка duress mode
+- DatabaseService - SQLite (SQLCipher), версия 10, поддержка duress mode, таблица outbox для исходящих chat
 - NotificationService - локальные уведомления + CallKit (без Google/FCM)
 - PushConnectionService - постоянный foreground-сервис (specialUse) с WebSocket в отдельном isolate; заменяет FCM для доставки при убитом приложении
 - CallStateService - WebRTC звонки

@@ -890,8 +890,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (encKey == null || encKey.isEmpty) return;
       final payload = await cryptoService.encrypt(encKey, messageText);
       // message_id = call_id: у получателя эта копия дедупится против его локальной
-      // записи того же звонка (см. _saveCallStatusMessageLocally).
-      websocketService.sendChatMessage(widget.contactPublicKey, payload,
+      // записи того же звонка (см. _saveCallStatusMessageLocally). Уходит через
+      // outbox: при пустом _callId id сгенерируется в очереди.
+      await websocketService.sendChatMessage(widget.contactPublicKey, payload,
           messageId: _callId.isNotEmpty ? _callId : null);
     } catch (e) {
       DebugLogger.error('CALL', 'Error sending message to peer: $e',

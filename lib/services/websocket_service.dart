@@ -6,10 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:orpheus_project/config.dart';
+import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/services/crypto_service.dart';
+import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/network_monitor_service.dart';
-import 'package:orpheus_project/services/pending_actions_service.dart';
 import 'package:orpheus_project/services/push_connection_service.dart' show kPrefSignalPopToken;
 import 'package:rxdart/rxdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,9 +51,41 @@ class WebSocketService {
   // не подписывается — иначе получаются два живых сокета и двойная доставка
   // (аудит LOGIC-9).
   int _connectionGeneration = 0;
-  // Защита от параллельного слива очереди pending-сообщений (быстрый реконнект
-  // мог запустить второй проход → дубли/потери в очереди).
-  bool _sendingPending = false;
+
+  // === Outbox: подтверждение доставки chat на сервер ===
+  // Сообщение живёт в таблице outbox (SQLCipher) и удаляется ТОЛЬКО по
+  // подтверждению: явный chat-ack (сервер с caps) либо pong-fence — сервер
+  // читает кадры одного сокета последовательно и отвечает pong после обработки
+  // всего записанного до ping, поэтому pong с номером >= N подтверждает все
+  // кадры, записанные до ping N (контракт закреплён серверным
+  // tests/ws_helpers.py::sync_with_pong). Дизайн: инцидент «лифт» 23.07.2026 —
+  // sink.add в полумёртвый сокет терял сообщение под видом отправленного.
+  bool _serverAcksChat = false;
+  int _pingSeq = 0; // пинги, записанные в сокет текущей сессии
+  int _pongSeq = 0; // pong'и, полученные в текущей сессии
+  final List<_FenceBatch> _awaitingPong = [];
+  // messageId -> момент записи в сокет: ждут подтверждения и не перезаписываются
+  // ретраем, пока не протухнут (нет подтверждения дольше ретрай-интервала).
+  final Map<String, int> _inFlight = {};
+  bool _drainingOutbox = false;
+  bool _drainAgain = false;
+  Timer? _pongWatchdog;
+  Timer? _outboxRetryTimer;
+  static const int _maxChatPayloadBytes = 950000; // сервер молча режет кадры >1МБ
+  static const int _maxSendAttempts = 8;
+  static const Duration _outboxRetryInterval = Duration(seconds: 30);
+  // Watchdog взводится ТОЛЬКО при неподтверждённых сообщениях — в покое не
+  // тикает и радио не трогает (новых кадров он не добавляет: слушает pong'и
+  // на уже отправляемые пинги).
+  @visibleForTesting
+  Duration pongWatchdogTimeout = const Duration(seconds: 10);
+
+  final _messageStatusController =
+      StreamController<OutgoingStatusEvent>.broadcast();
+
+  /// Статусы исходящих (sent по подтверждению сервера / failed) для UI.
+  Stream<OutgoingStatusEvent> get outgoingStatus =>
+      _messageStatusController.stream;
 
   // Подписка на изменения сети
   StreamSubscription? _networkSubscription;
@@ -285,13 +318,19 @@ class WebSocketService {
                   _authFailStreak = 0;
                   lastPopErrorCode = null;
                   _storeSignalToken(data['signal_token']);
+                  // caps: сервер с 'chat-ack' подтверждает каждый chat явно;
+                  // без caps (старый сервер) работаем через pong-fence.
+                  final caps = data['caps'];
+                  _serverAcksChat = caps is List && caps.contains('chat-ack');
+                  _resetFenceState();
                   _statusController.add(ConnectionStatus.Connected);
                   _reconnectAttempt = 0; // Сброс backoff при успешном подключении
                   print("WS: PoP ok — соединение установлено!");
-                  DebugLogger.success('WS', 'PoP ok — соединение установлено!');
+                  DebugLogger.success('WS',
+                      'PoP ok — соединение установлено! (подтверждение chat: ${_serverAcksChat ? "chat-ack" : "pong-fence"})');
                   _startPingPong();
-                  // Отправляем pending сообщения после аутентификации
-                  _sendPendingMessages();
+                  // Слив outbox после аутентификации: ресенд всего неподтверждённого
+                  _drainOutbox();
                   return;
                 } else if (type == 'pop-error') {
                   // Явный отказ сервера с причиной (bad_signature/address_mismatch/...).
@@ -319,15 +358,7 @@ class WebSocketService {
                 return;
               }
             }
-            _socketResponseController.add(message);
-            // Логируем входящие сообщения (кроме pong)
-            try {
-              final data = json.decode(message);
-              final type = data['type'] ?? 'unknown';
-              if (type != 'pong') {
-                DebugLogger.info('WS', '📨 IN: $type');
-              }
-            } catch (_) {}
+            _handlePostAuthFrame(message, gen);
           },
           onDone: () {
             // Событие от УСТАРЕВШЕГО сокета (его закрыл более новый connect) —
@@ -387,6 +418,12 @@ class WebSocketService {
     }
 
     _stopPingPong();
+    // Fence-состояние мертво вместе с сокетом: неподтверждённое остаётся в
+    // outbox и уйдёт заново после следующего pop-ok.
+    _pongWatchdog?.cancel();
+    _outboxRetryTimer?.cancel();
+    _awaitingPong.clear();
+    _inFlight.clear();
 
     if (!_isDisconnectingIntentional) {
       final delay = isAuthFailed ? _maxReconnectDelay : _getReconnectDelay();
@@ -412,6 +449,10 @@ class WebSocketService {
     _connectTimeout?.cancel();
     _authTimeout?.cancel();
     _stopPingPong();
+    _pongWatchdog?.cancel();
+    _outboxRetryTimer?.cancel();
+    _awaitingPong.clear();
+    _inFlight.clear();
     _networkSubscription?.cancel();
     _networkSubscription = null;
 
@@ -424,9 +465,12 @@ class WebSocketService {
   }
 
   @visibleForTesting
-  void debugAttachConnectedChannel(WebSocketChannel channel, {String? currentPublicKey}) {
+  void debugAttachConnectedChannel(WebSocketChannel channel,
+      {String? currentPublicKey, bool serverAcksChat = false}) {
     _channel = channel;
     if (currentPublicKey != null) _currentPublicKey = currentPublicKey;
+    _serverAcksChat = serverAcksChat;
+    _resetFenceState();
     _statusController.add(ConnectionStatus.Connected);
   }
 
@@ -436,6 +480,7 @@ class WebSocketService {
       if (_channel != null && _statusController.value == ConnectionStatus.Connected) {
         try {
           _channel!.sink.add(json.encode({"type": "ping"}));
+          _pingSeq++; // pong'и приходят строго по порядку пингов (FIFO fence)
         } catch (e) {
           print("WS: Ping send error: $e");
         }
@@ -443,35 +488,56 @@ class WebSocketService {
     });
   }
 
+  /// Обработка кадра после PoP. Транспортные подтверждения (pong, chat-ack)
+  /// перехватываются здесь: до общего диспетчера (IncomingMessageHandler дропает
+  /// кадры без sender), остальное уходит подписчикам.
+  void _handlePostAuthFrame(String message, int gen) {
+    try {
+      final data = json.decode(message);
+      final type = data['type'];
+      if (type == 'pong') {
+        _onPong(gen);
+        return;
+      }
+      if (type == 'chat-ack') {
+        _onChatAck(data, gen);
+        return;
+      }
+      DebugLogger.info('WS', '📨 IN: ${type ?? 'unknown'}');
+    } catch (_) {}
+    _socketResponseController.add(message);
+  }
+
+  @visibleForTesting
+  void debugHandlePostAuthFrame(String message) =>
+      _handlePostAuthFrame(message, _connectionGeneration);
+
   void _stopPingPong() {
     _pingTimer?.cancel();
   }
 
-  void sendChatMessage(String recipientPublicKey, String payload, {String? messageId}) {
-    // Прикрепляем свой подписанный enc-ключ inline, чтобы получатель (в т.ч.
-    // незнакомец) мог зарезолвить X25519 для расшифровки без directory-запроса.
-    final bundle = CryptoService.instance.cachedIdentityBundle;
-    final msg = {
-      "recipient_pubkey": recipientPublicKey,
-      "type": "chat",
-      "payload": payload,
-      if (messageId != null) "message_id": messageId,
-      if (bundle != null) "senc": bundle['enc'],
-      if (bundle != null) "ssig": bundle['sig'],
-    };
-
-    // Если нет соединения - сохраняем в очередь
-    if (_channel == null || _statusController.value != ConnectionStatus.Connected) {
-      DebugLogger.warn('WS', '📵 Нет соединения, сообщение сохранено в очередь');
-      PendingActionsService.addPendingMessage(
-        recipientKey: recipientPublicKey,
-        encryptedPayload: payload,
-        messageId: messageId,
-      );
-      return;
+  /// Отправить личное chat-сообщение: ВСЕГДА через персистентный outbox.
+  ///
+  /// Возвращает после персиста в БД — с этого момента сообщение не может
+  /// потеряться молча: слив пишет его в сокет, статус sent выставляется только
+  /// по подтверждению сервера (chat-ack или pong-fence), неподтверждённое
+  /// пересылается после реконнекта. Дубль при ресенде гасится дедупом
+  /// получателя по (contact, messageId).
+  /// Бросает [ArgumentError] при превышении лимита кадра — сервер молча режет
+  /// кадры больше 1 МБ, и это единственный reject, невидимый для fence.
+  Future<void> sendChatMessage(String recipientPublicKey, String payload,
+      {String? messageId}) async {
+    if (payload.length > _maxChatPayloadBytes) {
+      throw ArgumentError(
+          'Chat payload too large: ${payload.length} > $_maxChatPayloadBytes');
     }
-
-    _sendMessage(msg);
+    final id = await DatabaseService.instance.enqueueOutbox(
+      recipientKey: recipientPublicKey,
+      payload: payload,
+      messageId: messageId,
+    );
+    DebugLogger.info('OUTBOX', '➕ В очередь: ${_shortId(id)}');
+    _drainOutbox();
   }
 
   void sendDeleteForBoth(
@@ -488,51 +554,218 @@ class WebSocketService {
     _sendMessage(msg);
   }
   
-  /// Отправить все pending сообщения после восстановления соединения.
-  /// Удаляет из очереди ТОЛЬКО те, что реально ушли в канал.
-  Future<void> _sendPendingMessages() async {
-    // Не допускаем два параллельных слива очереди (иначе removeFirstMessages/
-    // clearPendingMessages двух проходов передерутся → дубли/потери).
-    if (_sendingPending) return;
-    _sendingPending = true;
+  /// Внешний триггер слива outbox (reconcile на старте/разблокировке).
+  void triggerOutboxDrain() => _drainOutbox();
+
+  static String _shortId(String id) =>
+      id.length <= 8 ? id : '${id.substring(0, 8)}…';
+
+  /// Слить outbox в живой сокет. Удаление из очереди — ТОЛЬКО по подтверждению
+  /// ([_confirmDelivered]), не по факту записи в сокет: запись в полумёртвый
+  /// TCP «успешна», даже когда байты никуда не уйдут.
+  Future<void> _drainOutbox() async {
+    if (_drainingOutbox) {
+      // Слив уже идёт — новое сообщение могло не попасть в его снапшот.
+      _drainAgain = true;
+      return;
+    }
+    _drainingOutbox = true;
     try {
-      final pending = await PendingActionsService.getPendingMessages();
-      if (pending.isEmpty) return;
+      do {
+        _drainAgain = false;
+        await _drainOutboxOnce();
+      } while (_drainAgain);
+    } catch (e) {
+      // Вызывается fire-and-forget: ошибка БД не должна стать unhandled.
+      // Сообщения остаются в outbox — ретрай/реконнект дошлёт.
+      DebugLogger.error('OUTBOX', 'Ошибка слива: $e');
+    } finally {
+      _drainingOutbox = false;
+      _scheduleOutboxRetry();
+    }
+  }
 
-      DebugLogger.info('WS', '📤 Отправка ${pending.length} pending сообщений...');
+  Future<void> _drainOutboxOnce() async {
+    if (_channel == null ||
+        _statusController.value != ConnectionStatus.Connected) {
+      return;
+    }
+    final gen = _connectionGeneration;
+    final batch = await DatabaseService.instance.getOutboxBatch();
+    if (batch.isEmpty) return;
 
-      var sentCount = 0;
-      for (final msg in pending) {
-        if (_channel == null || _statusController.value != ConnectionStatus.Connected) {
-          DebugLogger.warn('WS', 'Соединение потеряно при отправке pending сообщений, отправлено $sentCount из ${pending.length}');
-          break;
-        }
-
-        final bundle = CryptoService.instance.cachedIdentityBundle;
-        _sendMessage({
+    final bundle = CryptoService.instance.cachedIdentityBundle;
+    final written = <String>[];
+    for (final msg in batch) {
+      if (gen != _connectionGeneration ||
+          _channel == null ||
+          _statusController.value != ConnectionStatus.Connected) {
+        break;
+      }
+      if (msg.attempts >= _maxSendAttempts) {
+        // Соединение живо, а подтверждения нет N попыток подряд — сервер
+        // стабильно съедает кадр (лимит/лицензия). Честный failed + ручной retry.
+        await _failOutboxMessage(msg);
+        continue;
+      }
+      if (_inFlight.containsKey(msg.messageId)) continue; // ждёт подтверждения
+      try {
+        // Свой подписанный enc-ключ inline, чтобы получатель (в т.ч. незнакомец)
+        // мог зарезолвить X25519 для расшифровки без directory-запроса.
+        _channel!.sink.add(json.encode({
           "recipient_pubkey": msg.recipientKey,
           "type": "chat",
-          "payload": msg.encryptedPayload,
-          if (msg.messageId != null) "message_id": msg.messageId,
+          "payload": msg.payload,
+          "message_id": msg.messageId,
           if (bundle != null) "senc": bundle['enc'],
           if (bundle != null) "ssig": bundle['sig'],
-        });
-        sentCount++;
-
-        // Небольшая задержка между сообщениями
-        await Future.delayed(const Duration(milliseconds: 50));
+        }));
+      } catch (e) {
+        DebugLogger.warn('OUTBOX', 'Запись в сокет прервана: $e');
+        break;
       }
-
-      if (sentCount == pending.length) {
-        await PendingActionsService.clearPendingMessages();
-        DebugLogger.success('WS', 'Все $sentCount pending сообщений отправлены');
-      } else if (sentCount > 0) {
-        await PendingActionsService.removeFirstMessages(sentCount);
-        DebugLogger.warn('WS', 'Отправлено $sentCount из ${pending.length}, остальные остались в очереди');
-      }
-    } finally {
-      _sendingPending = false;
+      _inFlight[msg.messageId] = DateTime.now().millisecondsSinceEpoch;
+      written.add(msg.messageId);
     }
+    if (written.isEmpty) return;
+    await DatabaseService.instance.bumpOutboxAttempts(written);
+    DebugLogger.info('OUTBOX',
+        '📤 В сокет: ${written.length} (подтверждение: ${_serverAcksChat ? "chat-ack" : "pong-fence"})');
+    _sendFencePing(written);
+  }
+
+  /// Fence-ping вслед за пачкой: pong с номером >= номера этого пинга значит,
+  /// что сервер обработал все кадры пачки (live-доставка или offline-очередь).
+  void _sendFencePing(List<String> ids) {
+    try {
+      _channel!.sink.add(json.encode({"type": "ping"}));
+    } catch (e) {
+      DebugLogger.warn('OUTBOX', 'Fence-ping не записан: $e');
+      return;
+    }
+    _pingSeq++;
+    _awaitingPong.add(_FenceBatch(_pingSeq, ids));
+    _armPongWatchdog(_connectionGeneration);
+  }
+
+  void _onPong(int gen) {
+    if (gen != _connectionGeneration) return;
+    _pongSeq++;
+    final due = <String>[];
+    while (_awaitingPong.isNotEmpty &&
+        _awaitingPong.first.pingSeq <= _pongSeq) {
+      due.addAll(_awaitingPong.removeAt(0).ids);
+    }
+    if (_awaitingPong.isEmpty) {
+      _pongWatchdog?.cancel();
+    } else {
+      _armPongWatchdog(gen); // ждём pong следующего fence-пинга
+    }
+    if (due.isEmpty) return;
+    if (_serverAcksChat) {
+      // Строгий режим: подтверждает только chat-ack (pong не отличает «принято»
+      // от «молча съедено»); pong здесь лишь снимает watchdog.
+      return;
+    }
+    _confirmDelivered(due, via: 'pong-fence');
+  }
+
+  void _onChatAck(Map<String, dynamic> data, int gen) {
+    if (gen != _connectionGeneration) return;
+    final id = data['message_id'];
+    if (id is! String || id.isEmpty) return;
+    DebugLogger.info(
+        'OUTBOX', '✅ chat-ack: ${_shortId(id)} (queued=${data['queued']})');
+    _confirmDelivered([id], via: 'chat-ack');
+  }
+
+  /// Сервер подтвердил приём: статус sent + удаление из outbox + событие для UI.
+  /// Вызывается fire-and-forget из обработчиков кадров — ошибки глотаем в лог
+  /// (строка останется в outbox и будет подтверждена/переслана позже).
+  Future<void> _confirmDelivered(List<String> ids, {required String via}) async {
+    var confirmed = 0;
+    try {
+      for (final id in ids) {
+        _inFlight.remove(id);
+        final row = await DatabaseService.instance.getOutboxMessage(id);
+        if (row == null) continue; // уже подтверждён (fence и ack пересекаются)
+        // Порядок: сначала статус sent, потом удаление из outbox. Крэш между ними
+        // даст лишний ресенд (дедуп получателя погасит), а не потерю.
+        await DatabaseService.instance.updateMessageStatusByMessageId(
+            row.recipientKey, id, MessageStatus.sent);
+        await DatabaseService.instance.removeFromOutbox([id]);
+        _messageStatusController.add(
+            OutgoingStatusEvent(row.recipientKey, id, MessageStatus.sent));
+        confirmed++;
+      }
+    } catch (e) {
+      DebugLogger.error('OUTBOX', 'Ошибка подтверждения ($via): $e');
+    }
+    if (confirmed > 0) {
+      DebugLogger.success('OUTBOX', '✅ Подтверждено ($via): $confirmed');
+    }
+  }
+
+  Future<void> _failOutboxMessage(OutboxMessage msg) async {
+    await DatabaseService.instance.updateMessageStatusByMessageId(
+        msg.recipientKey, msg.messageId, MessageStatus.failed);
+    await DatabaseService.instance.removeFromOutbox([msg.messageId]);
+    _inFlight.remove(msg.messageId);
+    _messageStatusController.add(OutgoingStatusEvent(
+        msg.recipientKey, msg.messageId, MessageStatus.failed));
+    DebugLogger.warn('OUTBOX',
+        '⛔ failed после ${msg.attempts} попыток: ${_shortId(msg.messageId)}');
+  }
+
+  /// Watchdog: fence-ping записан, pong не пришёл за [pongWatchdogTimeout] —
+  /// сокет полумёртв (лифт/NAT). Принудительный реконнект, после pop-ok
+  /// неподтверждённое пересылается из outbox.
+  void _armPongWatchdog(int gen) {
+    _pongWatchdog?.cancel();
+    _pongWatchdog = Timer(pongWatchdogTimeout, () {
+      if (gen != _connectionGeneration ||
+          _statusController.value != ConnectionStatus.Connected ||
+          _awaitingPong.isEmpty) {
+        return;
+      }
+      DebugLogger.warn('OUTBOX',
+          '🐕 Нет pong ${pongWatchdogTimeout.inSeconds}с при неподтверждённых сообщениях — реконнект');
+      _forceReconnect(reason: 'pong watchdog (dead socket?)');
+    });
+  }
+
+  /// Ретрай-таймер живёт ТОЛЬКО при Connected и непустом outbox (батарея).
+  /// Протухшие in-flight (без подтверждения дольше интервала при живом сокете)
+  /// освобождаются для повторной записи — attempts растёт до failed-капа.
+  void _scheduleOutboxRetry() {
+    _outboxRetryTimer?.cancel();
+    if (_statusController.value != ConnectionStatus.Connected) return;
+    () async {
+      try {
+        final count = await DatabaseService.instance.outboxCount();
+        if (count == 0 ||
+            _statusController.value != ConnectionStatus.Connected) {
+          return;
+        }
+        _outboxRetryTimer?.cancel();
+        _outboxRetryTimer = Timer(_outboxRetryInterval, () {
+          final cutoff = DateTime.now().millisecondsSinceEpoch -
+              _outboxRetryInterval.inMilliseconds;
+          _inFlight.removeWhere((_, writtenAt) => writtenAt < cutoff);
+          _drainOutbox();
+        });
+      } catch (e) {
+        DebugLogger.warn('OUTBOX', 'Ошибка планирования ретрая: $e');
+      }
+    }();
+  }
+
+  void _resetFenceState() {
+    _pingSeq = 0;
+    _pongSeq = 0;
+    _awaitingPong.clear();
+    _inFlight.clear();
+    _pongWatchdog?.cancel();
   }
 
   // --- ОТПРАВКА СИГНАЛОВ С HTTP FALLBACK ---
@@ -689,10 +922,26 @@ class WebSocketService {
     }
     
     _channel!.sink.add(json.encode(map));
-    
+
     if (isImportant) {
       print("✅ WS: [$type] успешно отправлен в канал");
       DebugLogger.success('SIGNAL', '✅ WS: [$type] отправлен', context: signalContext);
     }
   }
+}
+
+/// Событие смены статуса исходящего сообщения (подтверждение сервера / провал).
+class OutgoingStatusEvent {
+  final String contactKey;
+  final String messageId;
+  final MessageStatus status;
+  OutgoingStatusEvent(this.contactKey, this.messageId, this.status);
+}
+
+/// Снапшот fence-пинга: пачка messageId, записанных в сокет до пинга номер
+/// [pingSeq]. Pong с номером >= pingSeq подтверждает всю пачку.
+class _FenceBatch {
+  final int pingSeq;
+  final List<String> ids;
+  _FenceBatch(this.pingSeq, this.ids);
 }

@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:orpheus_project/services/secure_storage_options.dart';
@@ -11,6 +12,7 @@ import 'package:orpheus_project/models/contact_model.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/models/ai_message_model.dart';
+import 'package:uuid/uuid.dart';
 
 class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
@@ -56,6 +58,11 @@ class DatabaseService {
     _dbOpenFuture = null;
   }
 
+  /// Для тестов миграций: прогнать _upgradeDB на подготовленной БД.
+  @visibleForTesting
+  Future<void> debugRunUpgrade(Database db, int oldVersion, int newVersion) =>
+      _upgradeDB(db, oldVersion, newVersion);
+
   Future<Database> get database async {
     if (_isWiping) throw StateError('Database is being wiped');
     if (_database != null) return _database!;
@@ -92,7 +99,7 @@ class DatabaseService {
       final db = await openDatabase(
         path,
         password: dbKey,
-        version: 9,
+        version: 10,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
         singleInstance: true, // Важно для избежания блокировок
@@ -211,6 +218,7 @@ class DatabaseService {
     await _createMessagesTable(db);
     await _createAiTables(db);
     await _createNotesTable(db);
+    await _createOutboxTable(db);
   }
 
   Future _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -303,6 +311,13 @@ class DatabaseService {
           DebugLogger.warn('DB', 'Ошибка миграции v9: $e');
         }
       }
+      if (oldVersion < 10) {
+        // Персистентный outbox исходящих chat: статус sent только по подтверждению
+        // сервера (chat-ack/pong-fence), ресенд после реконнекта. Заменяет
+        // prefs-очередь PendingActionsService (инцидент «лифт» 23.07.2026).
+        DebugLogger.info('DB', 'Миграция до версии 10 — таблица outbox');
+        await _createOutboxTable(db);
+      }
       print("DB: Миграция завершена");
     } catch (e) {
       print("DB: ОШИБКА миграции: $e");
@@ -380,6 +395,21 @@ class DatabaseService {
         source_type TEXT NOT NULL,
         source_id TEXT,
         source_label TEXT
+      )
+    ''');
+  }
+
+  Future<void> _createOutboxTable(Database db) async {
+    // Зашифрованный payload живёт здесь до подтверждения сервера; messageId —
+    // ключ подтверждения (chat-ack) и дедупа у получателя.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS outbox (
+        messageId TEXT PRIMARY KEY,
+        recipientKey TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        lastAttemptAt INTEGER
       )
     ''');
   }
@@ -603,6 +633,116 @@ class DatabaseService {
       where: 'contactPublicKey = ? AND messageId = ?',
       whereArgs: [contactKey, messageId],
     );
+  }
+
+  // --- Outbox (персистентная очередь исходящих chat) ---
+  //
+  // Инвариант надёжности: сообщение попадает сюда ДО первой записи в сокет и
+  // удаляется ТОЛЬКО по подтверждению сервера (chat-ack или pong-fence в
+  // WebSocketService). Смерть сокета/процесса между записью и подтверждением
+  // даёт ресенд, а не потерю; дубль у получателя гасится дедупом по messageId.
+
+  /// Поставить сообщение в outbox. Возвращает итоговый messageId (генерирует,
+  /// если не передан — кадры без id невозможно ни подтвердить, ни дедупить).
+  /// Повторная постановка того же id (ручной retry) сбрасывает счётчик попыток.
+  Future<String> enqueueOutbox({
+    required String recipientKey,
+    required String payload,
+    String? messageId,
+  }) async {
+    final id = messageId ?? const Uuid().v4();
+    // В duress mode реальный профиль не должен пополнять очередь (симметрично
+    // пустым чтениям ниже); практически недостижимо — в duress нет контактов.
+    if (_isDuressMode) return id;
+    final db = await instance.database;
+    await db.insert(
+      'outbox',
+      {
+        'messageId': id,
+        'recipientKey': recipientKey,
+        'payload': payload,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'attempts': 0,
+        'lastAttemptAt': null,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    return id;
+  }
+
+  /// Пакет неподтверждённых сообщений в порядке постановки.
+  /// В duress mode пусто: реконнект под duress не должен отправлять данные
+  /// реального профиля.
+  Future<List<OutboxMessage>> getOutboxBatch({int limit = 100}) async {
+    if (_isDuressMode) return [];
+    final db = await instance.database;
+    final maps = await db.query('outbox', orderBy: 'createdAt ASC', limit: limit);
+    return maps.map(OutboxMessage.fromMap).toList();
+  }
+
+  /// Строка outbox по id. БЕЗ duress-гейта: подтверждение (chat-ack), пришедшее
+  /// после переключения в duress, относится к уже отправленному сообщению
+  /// реального профиля и должно быть обработано.
+  Future<OutboxMessage?> getOutboxMessage(String messageId) async {
+    final db = await instance.database;
+    final maps = await db.query('outbox',
+        where: 'messageId = ?', whereArgs: [messageId], limit: 1);
+    if (maps.isEmpty) return null;
+    return OutboxMessage.fromMap(maps.first);
+  }
+
+  /// Удалить подтверждённые/отменённые сообщения из outbox.
+  Future<void> removeFromOutbox(Iterable<String> messageIds) async {
+    final ids = messageIds.toList();
+    if (ids.isEmpty) return;
+    final db = await instance.database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.delete('outbox',
+        where: 'messageId IN ($placeholders)', whereArgs: ids);
+  }
+
+  /// Отметить попытку отправки (записаны в сокет, ждём подтверждения).
+  Future<void> bumpOutboxAttempts(Iterable<String> messageIds) async {
+    final ids = messageIds.toList();
+    if (ids.isEmpty) return;
+    final db = await instance.database;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await db.rawUpdate(
+      'UPDATE outbox SET attempts = attempts + 1, lastAttemptAt = ? '
+      'WHERE messageId IN ($placeholders)',
+      [DateTime.now().millisecondsSinceEpoch, ...ids],
+    );
+  }
+
+  /// Размер очереди (для статус-экрана). В duress mode — 0.
+  Future<int> outboxCount() async {
+    if (_isDuressMode) return 0;
+    final db = await instance.database;
+    final result = await db.rawQuery('SELECT COUNT(*) AS c FROM outbox');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Reconcile на холодном старте: исходящие, зависшие в sending БЕЗ строки в
+  /// outbox (крэш между записью сообщения и постановкой в очередь), переводятся
+  /// в failed — честнее вечных «часиков». Возвращает пары (contactKey, messageId).
+  Future<List<(String, String)>> failOrphanedSendingMessages() async {
+    if (_isDuressMode) return [];
+    final db = await instance.database;
+    final rows = await db.rawQuery('''
+      SELECT contactPublicKey, messageId FROM messages
+      WHERE isSentByMe = 1 AND status = ? AND messageId IS NOT NULL
+        AND messageId NOT IN (SELECT messageId FROM outbox)
+    ''', [MessageStatus.sending.index]);
+    if (rows.isEmpty) return [];
+    await db.rawUpdate('''
+      UPDATE messages SET status = ?
+      WHERE isSentByMe = 1 AND status = ? AND messageId IS NOT NULL
+        AND messageId NOT IN (SELECT messageId FROM outbox)
+    ''', [MessageStatus.failed.index, MessageStatus.sending.index]);
+    return rows
+        .map((r) =>
+            (r['contactPublicKey'] as String, r['messageId'] as String))
+        .toList();
   }
 
   // Получить сообщения (с маппингом новых полей)
@@ -1108,4 +1248,29 @@ class DatabaseService {
       'sent': Sqflite.firstIntValue(sentResult) ?? 0,
     };
   }
+}
+
+/// Строка outbox: исходящий chat, ожидающий подтверждения сервера.
+class OutboxMessage {
+  final String messageId;
+  final String recipientKey;
+  final String payload;
+  final int createdAt;
+  final int attempts;
+
+  OutboxMessage({
+    required this.messageId,
+    required this.recipientKey,
+    required this.payload,
+    required this.createdAt,
+    required this.attempts,
+  });
+
+  static OutboxMessage fromMap(Map<String, dynamic> map) => OutboxMessage(
+        messageId: map['messageId'] as String,
+        recipientKey: map['recipientKey'] as String,
+        payload: map['payload'] as String,
+        createdAt: map['createdAt'] as int,
+        attempts: (map['attempts'] as int?) ?? 0,
+      );
 }

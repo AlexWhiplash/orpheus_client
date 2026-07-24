@@ -1,7 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/websocket_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
   group('WebSocketService Tests', () {
     late WebSocketService service;
 
@@ -24,11 +29,28 @@ void main() {
       expect(status, equals(ConnectionStatus.Disconnected));
     });
 
-    test('Попытка отправки сообщения без подключения', () {
-      // Не должно выбрасывать исключение, но и не отправлять
-      expect(() {
-        service.sendChatMessage('recipient_key', 'payload');
-      }, returnsNormally);
+    test('Попытка отправки сообщения без подключения', () async {
+      // Не бросает: сообщение персистится в outbox и ждёт соединения
+      // (инцидент «лифт» — раньше уходило в prefs-очередь).
+      final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+      await db.execute('''
+        CREATE TABLE outbox (
+          messageId TEXT PRIMARY KEY,
+          recipientKey TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          lastAttemptAt INTEGER
+        )
+      ''');
+      DatabaseService.instance.setDuressMode(false);
+      DatabaseService.instance.initWithDatabase(db);
+
+      await expectLater(
+          service.sendChatMessage('recipient_key', 'payload'), completes);
+      expect(await DatabaseService.instance.outboxCount(), 1);
+
+      await DatabaseService.instance.close();
     });
 
     test('Попытка отправки сигнального сообщения без подключения', () {

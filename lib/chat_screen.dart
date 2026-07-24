@@ -14,6 +14,7 @@ import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/identity_directory_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
+import 'package:orpheus_project/services/websocket_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:orpheus_project/widgets/app_dialog.dart';
@@ -37,6 +38,7 @@ class _ChatScreenState extends State<ChatScreen>
 
   List<ChatMessage> _chatHistory = const <ChatMessage>[];
   StreamSubscription<String>? _messageUpdateSubscription;
+  StreamSubscription<OutgoingStatusEvent>? _outgoingStatusSubscription;
 
   // Пагинация истории (аудит PERF-1): грузим только последнюю страницу, старые
   // сообщения подгружаем по скроллу вверх. Список reverse=true, поэтому "верх"
@@ -80,6 +82,25 @@ class _ChatScreenState extends State<ChatScreen>
         _markAsRead();
       }
     });
+
+    // Подтверждения отправки (sent по chat-ack/pong-fence, failed по капу
+    // попыток): _appendNewMessages смену статуса СУЩЕСТВУЮЩЕЙ строки не видит,
+    // поэтому патчим пузырь точечно.
+    _outgoingStatusSubscription =
+        websocketService.outgoingStatus.listen((event) {
+      if (event.contactKey != widget.contact.publicKey || !mounted) return;
+      final i = _chatHistory.indexWhere((m) => m.messageId == event.messageId);
+      if (i < 0) {
+        // Сообщения ещё нет в списке (подтверждение обогнало перечитывание
+        // истории после отправки) — перечитываем, чтобы не потерять статус.
+        _loadChatHistory();
+        return;
+      }
+      setState(() {
+        _chatHistory = [..._chatHistory]
+          ..[i] = _chatHistory[i].copyWith(status: event.status);
+      });
+    });
   }
 
   /// Инкрементально дописывает сообщения новее последнего известного, без
@@ -106,6 +127,7 @@ class _ChatScreenState extends State<ChatScreen>
   @override
   void dispose() {
     _messageUpdateSubscription?.cancel();
+    _outgoingStatusSubscription?.cancel();
     _messageController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -224,14 +246,13 @@ class _ChatScreenState extends State<ChatScreen>
         throw Exception('Ключ шифрования контакта недоступен');
       }
       final payload = await cryptoService.encrypt(encKey, messageText);
-      websocketService.sendChatMessage(widget.contact.publicKey, payload,
+      // Персист в outbox; статус останется sending («часики») до подтверждения
+      // сервера (chat-ack/pong-fence -> sent приходит через outgoingStatus).
+      // Инцидент «лифт» 23.07.2026: безусловный sent здесь врал пользователю.
+      await websocketService.sendChatMessage(widget.contact.publicKey, payload,
           messageId: messageId);
-      // Успех: сообщение передано в сеть или поставлено в offline-очередь.
-      await DatabaseService.instance.updateMessageStatusByMessageId(
-          widget.contact.publicKey, messageId, MessageStatus.sent);
     } catch (e) {
-      // Раньше ошибка молча проглатывалась, и сообщение выглядело отправленным
-      // (аудит LOGIC-4). Теперь помечаем как failed, чтобы показать это пользователю.
+      // Ошибка шифрования/ключа/персиста — честный failed с ручным повтором.
       DebugLogger.error('CHAT', 'Ошибка отправки сообщения: $e');
       await DatabaseService.instance.updateMessageStatusByMessageId(
           widget.contact.publicKey, messageId, MessageStatus.failed);
@@ -586,9 +607,12 @@ class _ChatScreenState extends State<ChatScreen>
 
         final showDateDivider = nextMessage == null ||
             !_isSameDay(message.timestamp, nextMessage.timestamp);
+        // failed никогда не прячем в склейке: без строки статуса неотправленное
+        // сообщение выглядело бы обычным.
         final hideTime = prevMessage != null &&
             _isSameMinute(message.timestamp, prevMessage.timestamp) &&
-            message.isSentByMe == prevMessage.isSentByMe;
+            message.isSentByMe == prevMessage.isSentByMe &&
+            message.status != MessageStatus.failed;
 
         return Column(
           children: [
@@ -686,6 +710,17 @@ class _ChatScreenState extends State<ChatScreen>
                         const SizedBox(width: 6),
                         _buildStatusIcon(message.status),
                       ],
+                      if (isMyMessage &&
+                          message.status == MessageStatus.failed) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          l10n.notSent,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(color: AppColors.danger),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -772,6 +807,14 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
+              if (message.isSentByMe &&
+                  message.status == MessageStatus.failed &&
+                  message.messageId != null)
+                ListTile(
+                  leading: const Icon(Icons.refresh, color: AppColors.action),
+                  title: Text(l10n.resendMessage),
+                  onTap: () => Navigator.pop(context, 'resend'),
+                ),
               ListTile(
                 leading: const Icon(Icons.copy, color: AppColors.action),
                 title: Text(l10n.copy),
@@ -835,6 +878,52 @@ class _ChatScreenState extends State<ChatScreen>
     if (action == 'select') {
       _toggleSelection(message.timestamp.millisecondsSinceEpoch);
       return;
+    }
+    if (action == 'resend') {
+      await _resendMessage(message);
+      return;
+    }
+  }
+
+  /// Повторная отправка failed-сообщения тем же messageId: у получателя дубль
+  /// гасится дедупом, у нас строка возвращается в sending до подтверждения.
+  Future<void> _resendMessage(ChatMessage message) async {
+    final messageId = message.messageId;
+    if (messageId == null) return;
+    final contactKey = widget.contact.publicKey;
+    await DatabaseService.instance.updateMessageStatusByMessageId(
+        contactKey, messageId, MessageStatus.sending);
+    if (mounted) {
+      final i = _chatHistory.indexWhere((m) => m.messageId == messageId);
+      if (i >= 0) {
+        setState(() {
+          _chatHistory = [..._chatHistory]
+            ..[i] = _chatHistory[i].copyWith(status: MessageStatus.sending);
+        });
+      }
+    }
+    try {
+      final encKey = widget.contact.encryptionKey ??
+          await IdentityDirectoryService.instance.resolveEncKey(contactKey);
+      if (encKey == null || encKey.isEmpty) {
+        throw Exception('Ключ шифрования контакта недоступен');
+      }
+      final payload = await cryptoService.encrypt(encKey, message.text);
+      await websocketService.sendChatMessage(contactKey, payload,
+          messageId: messageId);
+    } catch (e) {
+      DebugLogger.error('CHAT', 'Ошибка повторной отправки: $e');
+      await DatabaseService.instance.updateMessageStatusByMessageId(
+          contactKey, messageId, MessageStatus.failed);
+      if (mounted) {
+        final i = _chatHistory.indexWhere((m) => m.messageId == messageId);
+        if (i >= 0) {
+          setState(() {
+            _chatHistory = [..._chatHistory]
+              ..[i] = _chatHistory[i].copyWith(status: MessageStatus.failed);
+          });
+        }
+      }
     }
   }
 

@@ -1283,6 +1283,12 @@ class L10nRu extends L10n {
   String get messageNotSent => 'Не удалось отправить сообщение';
 
   @override
+  String get notSent => 'Не отправлено';
+
+  @override
+  String get resendMessage => 'Повторить отправку';
+
+  @override
   String get writeToUs => 'Напишите нам!';
 
   @override

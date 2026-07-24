@@ -66,6 +66,40 @@ void main() {
       await ws.disposeTest();
     });
 
+    test('обрыв соединения сбрасывает презенс (нет залипшего «онлайн»)', () async {
+      final ws = _TestWebSocketService()..setStatus(ConnectionStatus.Connected);
+      final service = PresenceService(ws);
+      await Future<void>.delayed(Duration.zero);
+
+      service.setWatchedPubkeys(['a']);
+      ws.emitJson({
+        'type': 'presence-update',
+        'pubkey': 'a',
+        'online': true,
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(service.isOnline('a'), isTrue);
+
+      // Сеть умерла: без соединения презенс неизвестен — «онлайн» не показываем.
+      ws.setStatus(ConnectionStatus.Disconnected);
+      await Future<void>.delayed(Duration.zero);
+      expect(service.isOnline('a'), isFalse);
+
+      // Реконнект: полная переподписка, состояние вернёт presence-state.
+      ws.setStatus(ConnectionStatus.Connected);
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        ws.sentRawMessages
+            .map((m) => json.decode(m) as Map<String, dynamic>)
+            .where((m) => m['type'] == 'presence-subscribe')
+            .length,
+        greaterThanOrEqualTo(2),
+      );
+
+      service.dispose();
+      await ws.disposeTest();
+    });
+
     test('шлёт unsubscribe и subscribe diff-ом', () async {
       final ws = _TestWebSocketService()..setStatus(ConnectionStatus.Connected);
       final service = PresenceService(ws, maxPubkeysPerMessage: 50);

@@ -12,6 +12,15 @@ class PresenceService {
     _statusSub = _ws.status.distinct().listen((status) {
       if (status == ConnectionStatus.Connected) {
         _resubscribeAll();
+      } else if (status == ConnectionStatus.Disconnected ||
+          status == ConnectionStatus.AuthFailed) {
+        // Без соединения презенс неизвестен: сбрасываем, чтобы «онлайн»
+        // не залипал (device-тест b44: контакт горел зелёным при мёртвой
+        // сети). После реконнекта состояние вернётся presence-state'ом
+        // на полную переподписку.
+        if (_states.value.isNotEmpty) {
+          _states.add(<String, bool>{});
+        }
       }
     });
   }

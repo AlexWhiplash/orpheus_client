@@ -488,6 +488,11 @@ bool _outboxReconciling = false;
 
 Future<void> _reconcileOutbox() async {
   if (authService.requiresUnlock || authService.isDuressMode) return;
+  // Без аккаунта reconcile запрещён: после wipe оба гейта выше false, а первое
+  // же обращение к database-getter воссоздало бы пустую БД и НОВЫЙ ключ
+  // шифрования в secure storage (урок «мины миграции»: после wipe ничего не
+  // воссоздаём молча).
+  if (cryptoService.addressBase64 == null) return;
   if (_outboxReconciling) return;
   _outboxReconciling = true;
   try {

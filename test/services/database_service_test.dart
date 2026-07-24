@@ -25,7 +25,7 @@ void main() {
       CREATE TABLE messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         contactPublicKey TEXT NOT NULL,
-        messageId TEXT, 
+        messageId TEXT,
         text TEXT NOT NULL,
         isSentByMe INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,
@@ -33,7 +33,17 @@ void main() {
         isRead INTEGER DEFAULT 1
       )
     ''');
-    
+    await db.execute('''
+      CREATE TABLE outbox (
+        messageId TEXT PRIMARY KEY NOT NULL,
+        recipientKey TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        createdAt INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        lastAttemptAt INTEGER
+      )
+    ''');
+
     // Инициализируем сервис с тестовой БД
     DatabaseService.instance.initWithDatabase(db);
   });

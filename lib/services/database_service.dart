@@ -402,9 +402,12 @@ class DatabaseService {
   Future<void> _createOutboxTable(Database db) async {
     // Зашифрованный payload живёт здесь до подтверждения сервера; messageId —
     // ключ подтверждения (chat-ack) и дедупа у получателя.
+    // NOT NULL обязателен: SQLite разрешает NULL в TEXT PRIMARY KEY, а один
+    // NULL в подзапросе `NOT IN (SELECT messageId FROM outbox)` сделал бы
+    // reconcile тождественно пустым.
     await db.execute('''
       CREATE TABLE IF NOT EXISTS outbox (
-        messageId TEXT PRIMARY KEY,
+        messageId TEXT PRIMARY KEY NOT NULL,
         recipientKey TEXT NOT NULL,
         payload TEXT NOT NULL,
         createdAt INTEGER NOT NULL,
@@ -570,6 +573,7 @@ class DatabaseService {
     final db = await instance.database;
     await db.transaction((txn) async {
       await txn.delete('messages', where: 'contactPublicKey = ?', whereArgs: [publicKey]);
+      await txn.delete('outbox', where: 'recipientKey = ?', whereArgs: [publicKey]);
       await txn.delete('contacts', where: 'id = ?', whereArgs: [id]);
     });
     await _syncContactAllowlist();
@@ -692,12 +696,14 @@ class DatabaseService {
   }
 
   /// Удалить подтверждённые/отменённые сообщения из outbox.
-  Future<void> removeFromOutbox(Iterable<String> messageIds) async {
+  /// Возвращает число реально удалённых строк — вызывающий может «захватить»
+  /// сообщение удалением (0 = кто-то подтвердил/удалил раньше).
+  Future<int> removeFromOutbox(Iterable<String> messageIds) async {
     final ids = messageIds.toList();
-    if (ids.isEmpty) return;
+    if (ids.isEmpty) return 0;
     final db = await instance.database;
     final placeholders = List.filled(ids.length, '?').join(',');
-    await db.delete('outbox',
+    return db.delete('outbox',
         where: 'messageId IN ($placeholders)', whereArgs: ids);
   }
 
@@ -725,20 +731,32 @@ class DatabaseService {
   /// Reconcile на холодном старте: исходящие, зависшие в sending БЕЗ строки в
   /// outbox (крэш между записью сообщения и постановкой в очередь), переводятся
   /// в failed — честнее вечных «часиков». Возвращает пары (contactKey, messageId).
+  ///
+  /// Возрастной фильтр (2 мин) обязателен: reconcile гоняется и на resume, а
+  /// между addMessage(sending) и enqueueOutbox живой отправки лежит асинхронное
+  /// окно (resolveEncKey по сети до 8с + compute-шифрование) — свежие sending
+  /// нельзя трогать. Подзапрос NULL-safe (`WHERE messageId IS NOT NULL`) —
+  /// страховка поверх NOT NULL в схеме.
   Future<List<(String, String)>> failOrphanedSendingMessages() async {
     if (_isDuressMode) return [];
     final db = await instance.database;
-    final rows = await db.rawQuery('''
-      SELECT contactPublicKey, messageId FROM messages
-      WHERE isSentByMe = 1 AND status = ? AND messageId IS NOT NULL
-        AND messageId NOT IN (SELECT messageId FROM outbox)
-    ''', [MessageStatus.sending.index]);
+    final olderThanMs =
+        DateTime.now().millisecondsSinceEpoch - 2 * 60 * 1000;
+    const where = '''
+      isSentByMe = 1 AND status = ? AND messageId IS NOT NULL
+        AND timestamp < ?
+        AND messageId NOT IN
+          (SELECT messageId FROM outbox WHERE messageId IS NOT NULL)
+    ''';
+    final rows = await db.rawQuery(
+      'SELECT contactPublicKey, messageId FROM messages WHERE $where',
+      [MessageStatus.sending.index, olderThanMs],
+    );
     if (rows.isEmpty) return [];
-    await db.rawUpdate('''
-      UPDATE messages SET status = ?
-      WHERE isSentByMe = 1 AND status = ? AND messageId IS NOT NULL
-        AND messageId NOT IN (SELECT messageId FROM outbox)
-    ''', [MessageStatus.failed.index, MessageStatus.sending.index]);
+    await db.rawUpdate(
+      'UPDATE messages SET status = ? WHERE $where',
+      [MessageStatus.failed.index, MessageStatus.sending.index, olderThanMs],
+    );
     return rows
         .map((r) =>
             (r['contactPublicKey'] as String, r['messageId'] as String))
@@ -1048,17 +1066,35 @@ class DatabaseService {
   Future<void> clearChatHistory(String contactKey) async {
     final db = await instance.database;
     await db.delete('messages', where: 'contactPublicKey = ?', whereArgs: [contactKey]);
+    // Удалённое пользователем не должно быть дослано из очереди после реконнекта.
+    await db.delete('outbox', where: 'recipientKey = ?', whereArgs: [contactKey]);
   }
 
   Future<int> deleteMessagesByTimestamps(String contactKey, List<int> timestamps) async {
     if (_isDuressMode || timestamps.isEmpty) return 0;
     final db = await instance.database;
     final placeholders = List.filled(timestamps.length, '?').join(',');
-    return await db.delete(
+    // Сначала собираем messageId удаляемых строк — иначе не вычистить outbox
+    // (удаление по timestamp), и «удалённое» сообщение доставится при drain.
+    final idRows = await db.query(
+      'messages',
+      columns: ['messageId'],
+      where: 'contactPublicKey = ? AND timestamp IN ($placeholders) '
+          'AND messageId IS NOT NULL',
+      whereArgs: [contactKey, ...timestamps],
+    );
+    final deleted = await db.delete(
       'messages',
       where: 'contactPublicKey = ? AND timestamp IN ($placeholders)',
       whereArgs: [contactKey, ...timestamps],
     );
+    final ids = idRows.map((r) => r['messageId'] as String).toList();
+    if (ids.isNotEmpty) {
+      final idPh = List.filled(ids.length, '?').join(',');
+      await db.delete('outbox',
+          where: 'messageId IN ($idPh)', whereArgs: ids);
+    }
+    return deleted;
   }
 
   /// Удалить сообщения по стабильным messageId (для «удалить у обоих»).
@@ -1066,11 +1102,15 @@ class DatabaseService {
     if (_isDuressMode || messageIds.isEmpty) return 0;
     final db = await instance.database;
     final placeholders = List.filled(messageIds.length, '?').join(',');
-    return await db.delete(
+    final deleted = await db.delete(
       'messages',
       where: 'contactPublicKey = ? AND messageId IN ($placeholders)',
       whereArgs: [contactKey, ...messageIds],
     );
+    // Удалённое не досылаем из очереди.
+    await db.delete('outbox',
+        where: 'messageId IN ($placeholders)', whereArgs: messageIds);
+    return deleted;
   }
 
   /// Есть ли уже сообщение с таким messageId от этого контакта (для дедупа входящих).

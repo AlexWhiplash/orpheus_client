@@ -424,6 +424,14 @@ class WebSocketService {
     _outboxRetryTimer?.cancel();
     _awaitingPong.clear();
     _inFlight.clear();
+    // Обнуляем мёртвый канал: connect-watchdog нового поколения гейтится по
+    // `_channel != null` как признаку «connect уже успел» — залипший здесь
+    // старый канал делал watchdog вечным no-op на каждом реконнекте после
+    // пассивного разрыва (зависший connect не отбрасывался).
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
+    _channel = null;
 
     if (!_isDisconnectingIntentional) {
       final delay = isAuthFailed ? _maxReconnectDelay : _getReconnectDelay();
@@ -608,6 +616,13 @@ class WebSocketService {
         await _failOutboxMessage(msg);
         continue;
       }
+      if (msg.payload.length > _maxChatPayloadBytes) {
+        // Страховка для строк, попавших в очередь мимо sendChatMessage (импорт
+        // legacy prefs-очереди): сервер молча режет кадры >1МБ, fence этого
+        // не видит — честный failed вместо ложного sent.
+        await _failOutboxMessage(msg);
+        continue;
+      }
       if (_inFlight.containsKey(msg.messageId)) continue; // ждёт подтверждения
       try {
         // Свой подписанный enc-ключ inline, чтобы получатель (в т.ч. незнакомец)
@@ -631,12 +646,23 @@ class WebSocketService {
     await DatabaseService.instance.bumpOutboxAttempts(written);
     DebugLogger.info('OUTBOX',
         '📤 В сокет: ${written.length} (подтверждение: ${_serverAcksChat ? "chat-ack" : "pong-fence"})');
-    _sendFencePing(written);
+    _sendFencePing(gen, written);
   }
 
   /// Fence-ping вслед за пачкой: pong с номером >= номера этого пинга значит,
   /// что сервер обработал все кадры пачки (live-доставка или offline-очередь).
-  void _sendFencePing(List<String> ids) {
+  ///
+  /// [gen] — поколение сокета, в который ПИСАЛИСЬ кадры пачки: между записью и
+  /// этим вызовом есть await (bumpOutboxAttempts), за время которого мог
+  /// произойти реконнект. Fence-ping в ДРУГОЙ сокет доказывал бы обработку
+  /// кадров, которые в него не писались — при смене поколения пинг не шлём:
+  /// сообщения останутся in-flight, новый pop-ok сбросит их и дошлёт заново.
+  void _sendFencePing(int gen, List<String> ids) {
+    if (gen != _connectionGeneration ||
+        _channel == null ||
+        _statusController.value != ConnectionStatus.Connected) {
+      return;
+    }
     try {
       _channel!.sink.add(json.encode({"type": "ping"}));
     } catch (e) {
@@ -645,7 +671,11 @@ class WebSocketService {
     }
     _pingSeq++;
     _awaitingPong.add(_FenceBatch(_pingSeq, ids));
-    _armPongWatchdog(_connectionGeneration);
+    // Не продлеваем уже взведённый дедлайн: активная переписка чаще раза в
+    // 10с иначе откладывала бы детекцию полумёртвого сокета бесконечно.
+    if (!(_pongWatchdog?.isActive ?? false)) {
+      _armPongWatchdog(gen);
+    }
   }
 
   void _onPong(int gen) {
@@ -667,6 +697,10 @@ class WebSocketService {
       // от «молча съедено»); pong здесь лишь снимает watchdog.
       return;
     }
+    // ИЗВЕСТНОЕ ОГРАНИЧЕНИЕ fence-режима (сервер без chat-ack): pong доказывает
+    // «кадр прочитан сервером», а не «принят» — кадр, молча съеденный
+    // лицензионным гейтом, будет ложно подтверждён. Закрывается деплоем
+    // сервера с caps=['chat-ack'] (там подтверждает только явный ack).
     _confirmDelivered(due, via: 'pong-fence');
   }
 
@@ -707,10 +741,15 @@ class WebSocketService {
   }
 
   Future<void> _failOutboxMessage(OutboxMessage msg) async {
+    // «Захват» удалением: 0 строк = параллельный chat-ack успел подтвердить —
+    // не перекрашиваем доставленное в failed. Порядок delete->status безопасен:
+    // крэш между ними оставит sending, reconcile переведёт в failed.
+    final claimed =
+        await DatabaseService.instance.removeFromOutbox([msg.messageId]);
+    _inFlight.remove(msg.messageId);
+    if (claimed == 0) return;
     await DatabaseService.instance.updateMessageStatusByMessageId(
         msg.recipientKey, msg.messageId, MessageStatus.failed);
-    await DatabaseService.instance.removeFromOutbox([msg.messageId]);
-    _inFlight.remove(msg.messageId);
     _messageStatusController.add(OutgoingStatusEvent(
         msg.recipientKey, msg.messageId, MessageStatus.failed));
     DebugLogger.warn('OUTBOX',

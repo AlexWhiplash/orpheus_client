@@ -289,11 +289,15 @@ void main() {
   group('Reconcile', () {
     test('sending без outbox-строки -> failed; с outbox-строкой — не трогаем',
         () async {
+      // Timestamp старше 2-минутного фильтра: свежие sending reconcile не
+      // трогает (окно живой отправки между addMessage и enqueueOutbox).
+      final old = DateTime.now().subtract(const Duration(minutes: 5));
       await DatabaseService.instance.addMessage(
         ChatMessage(
             messageId: 'mid-orphan',
             text: 'потерян при крэше',
             isSentByMe: true,
+            timestamp: old,
             status: MessageStatus.sending),
         'RECIPIENT',
       );
@@ -301,6 +305,16 @@ void main() {
         ChatMessage(
             messageId: 'mid-queued',
             text: 'ждёт отправки',
+            isSentByMe: true,
+            timestamp: old,
+            status: MessageStatus.sending),
+        'RECIPIENT',
+      );
+      // Свежая живая отправка (окно до enqueueOutbox) — трогать нельзя.
+      await DatabaseService.instance.addMessage(
+        ChatMessage(
+            messageId: 'mid-fresh',
+            text: 'отправляется прямо сейчас',
             isSentByMe: true,
             status: MessageStatus.sending),
         'RECIPIENT',
@@ -319,6 +333,9 @@ void main() {
           MessageStatus.failed);
       expect(
           msgs.firstWhere((m) => m.messageId == 'mid-queued').status,
+          MessageStatus.sending);
+      expect(
+          msgs.firstWhere((m) => m.messageId == 'mid-fresh').status,
           MessageStatus.sending);
     });
   });

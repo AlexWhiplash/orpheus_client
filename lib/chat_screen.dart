@@ -254,8 +254,13 @@ class _ChatScreenState extends State<ChatScreen>
     } catch (e) {
       // Ошибка шифрования/ключа/персиста — честный failed с ручным повтором.
       DebugLogger.error('CHAT', 'Ошибка отправки сообщения: $e');
-      await DatabaseService.instance.updateMessageStatusByMessageId(
-          widget.contact.publicKey, messageId, MessageStatus.failed);
+      try {
+        await DatabaseService.instance.updateMessageStatusByMessageId(
+            widget.contact.publicKey, messageId, MessageStatus.failed);
+      } catch (_) {
+        // БД может быть уже недоступна (wipe в процессе) — не даём второму
+        // исключению покинуть catch необработанным.
+      }
     }
 
     _messageController.clear();
@@ -607,12 +612,13 @@ class _ChatScreenState extends State<ChatScreen>
 
         final showDateDivider = nextMessage == null ||
             !_isSameDay(message.timestamp, nextMessage.timestamp);
-        // failed никогда не прячем в склейке: без строки статуса неотправленное
-        // сообщение выглядело бы обычным.
+        // Неподтверждённые статусы (sending/failed) никогда не прячем в
+        // склейке: без строки статуса неотправленное выглядело бы обычным.
         final hideTime = prevMessage != null &&
             _isSameMinute(message.timestamp, prevMessage.timestamp) &&
             message.isSentByMe == prevMessage.isSentByMe &&
-            message.status != MessageStatus.failed;
+            message.status != MessageStatus.failed &&
+            message.status != MessageStatus.sending;
 
         return Column(
           children: [
@@ -807,9 +813,13 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
               ),
               const SizedBox(height: AppSpacing.lg),
+              // Записи звонков не пересылаем: их messageId = call_id совпадает
+              // с локальной записью, а текст здесь — НАШЕ направление
+              // («Outgoing call»), тогда как собеседнику шлётся перевёрнутое.
               if (message.isSentByMe &&
                   message.status == MessageStatus.failed &&
-                  message.messageId != null)
+                  message.messageId != null &&
+                  !ChatMessage.isCallEvent(message.text))
                 ListTile(
                   leading: const Icon(Icons.refresh, color: AppColors.action),
                   title: Text(l10n.resendMessage),
@@ -913,8 +923,12 @@ class _ChatScreenState extends State<ChatScreen>
           messageId: messageId);
     } catch (e) {
       DebugLogger.error('CHAT', 'Ошибка повторной отправки: $e');
-      await DatabaseService.instance.updateMessageStatusByMessageId(
-          contactKey, messageId, MessageStatus.failed);
+      try {
+        await DatabaseService.instance.updateMessageStatusByMessageId(
+            contactKey, messageId, MessageStatus.failed);
+      } catch (_) {
+        // БД недоступна (wipe) — не роняем второе исключение из catch.
+      }
       if (mounted) {
         final i = _chatHistory.indexWhere((m) => m.messageId == messageId);
         if (i >= 0) {

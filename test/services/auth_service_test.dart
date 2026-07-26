@@ -174,9 +174,11 @@ void main() {
       expect(await auth.setDuressCode('123456', '654321'), isTrue);
 
       auth.lock();
-      DebugLogger.clear();
       expect(await auth.verifyPin('654321'), equals(PinVerifyResult.duress));
 
+      // Трассу берём ЦЕЛИКОМ, без предварительного clear(): слово не должно
+      // всплывать ни при настройке кода, ни при входе — экран логов доступен
+      // наблюдателю из duress-сессии.
       final trace = DebugLogger.logs
           .map((e) => '${e.tag} ${e.message}')
           .join('\n')

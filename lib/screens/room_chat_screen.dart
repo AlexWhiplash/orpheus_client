@@ -107,7 +107,12 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
   @override
   void dispose() {
     // Everything shown up to now is seen; stop treating this room as active.
-    RoomUnreadService.instance.markSeen(widget.room.id);
+    // Skipped when the identity is gone: after a wipe this dispose runs once the
+    // routes are dropped, i.e. AFTER prefs.clear(), and markSeen would persist a
+    // fresh room id into the just-cleared preferences.
+    if (cryptoService.addressBase64 != null) {
+      RoomUnreadService.instance.markSeen(widget.room.id);
+    }
     if (RoomUnreadService.instance.activeRoomId == widget.room.id) {
       RoomUnreadService.instance.activeRoomId = null;
     }

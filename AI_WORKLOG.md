@@ -112,6 +112,55 @@ setInactivityLockSeconds / setMessageRetention), НЕ в `_saveConfig`.
 в тестах бросает MissingPluginException и путь схлопывается в тот же app-PIN и без duress —
 тест не различал бы ветки. Проверять на устройстве.
 
+**АДВЕРСАРИАЛЬНОЕ РЕВЮ СВОИХ ЖЕ ТРЁХ КОММИТОВ (18 агентов: 4 линзы + опровержение каждой
+находки). 32 кандидата, проверено 14, 8 подтверждено / 6 опровергнуто.** Четвёртый коммит — фиксы
+по ревью:
+
+- **F2 (high) — РЕГРЕССИЯ, внесённая 259f9bd.** `dropRoutesAboveHome()` в `onWipeCompleted`
+  снимает маршруты, а `performWipe` зовёт этот колбэк ПОСЛЕДНИМ шагом — после `deleteAccount`,
+  `deleteDatabaseFile`, `secureStorage.deleteAll` и `prefs.clear()`. Значит `CallScreen.dispose`
+  (call_screen.dart:1243) выполняется уже по стёртому: `_writeCallLog()` → `addMessage` (запись НЕ
+  гейтится) → геттер `database` открывает базу заново, ключа в storage нет, `allowDbKeyGeneration`
+  в main-изоляте true → **создаётся НОВАЯ SQLCipher-БД с новым ключом в Keystore и строкой «с кем и
+  когда был звонок»**; плюс hang-up уходит HTTP-fallback'ом от стёртой личности (`_currentPublicKey`
+  и `_signalToken` живут в RAM, `disconnect()` их не чистит). Гард `_isWiping` не спасает — он
+  снимается в `finally` внутри `deleteDatabaseFile`. Фикс: `if (!_messagesSent && cryptoService.addressBase64 != null)`
+  (после `deleteAccount` адрес null) + такой же гард на `markSeen` в `room_chat_screen.dispose`
+  (писал в уже очищенные prefs). Переносить сброс раньше деструктивных шагов бесполезно — dispose
+  всё равно позже (SDK: `_entryWaitingForSubTreeDisposal`).
+- **DUR-02 (medium):** `main.dart:347` писал `duress=${config.isDuressEnabled}` в буфер, видимый с
+  экрана логов ИЗ duress-сессии — то есть отменял и лог-гигиену 259f9bd, и сокрытие секции 908771d.
+  Убрано; `setDuressCode` → 'Security code updated'; сырой `print("AUTH: Duress code disabled")`
+  удалён (был последним с этим словом). Тест гигиены больше не делает `clear()` перед `verifyPin` —
+  проверяет трассу целиком.
+- **DUR-05 (medium):** гейт F5 был неполным — тумблер «имя звонящего на локскрине» пишет в
+  SharedPreferences, а не в БД, и в duress сохранялся необратимо. Гейт поставлен в ЭКРАНЕ, не в
+  `DeviceSettingsService`: сервис статический и его читает push-изолят, где свой AuthService с
+  duress == false. (Часть той же находки опровергнута: `onNotifications` и язык настроек не пишут
+  приватных данных, `setOrpheusOfficialEnabled` из UI недостижим.)
+- **DUR-04 (low):** мёртвые переключатели сопровождались положительными подтверждениями («политика
+  применена», «биометрия включена») — ложь хуже отскока. Теперь снекбар только если конфиг реально
+  изменился.
+- **DUR-T1/T2 (тесты):** ревю справедливо поймало, что виджет-тесты гоняют КОПИЮ структуры MyApp,
+  поэтому удаление вызова из `main.dart` их не ломает (доказано мутацией), а тест «wipe сбрасывает
+  стек» был тавтологией (звал функцию напрямую). Добавлен ГАРД ОБВЯЗКИ: тест читает `lib/main.dart`
+  и требует `navigatorObservers: appNavigatorObservers` плюс `dropRoutesAboveHome()` в телах
+  `_onDuressMode`, `_onUnlocked` и колбэка `onWipeCompleted`. Проверено мутацией: удаление вызова из
+  `_onDuressMode` роняет именно этот тест. Wipe-тест переписан на РЕАЛЬНЫЙ путь локскрина
+  (3 неверных PIN → `PinVerifyResult.autoWipe` → `widget.onWipe`).
+
+**НЕ взято в этот коммит (предсуществующее, крупнее, отдельными задачами):** F1 (high) — **код
+удаления с локскрина не работает вообще**: `showDialog` из `MaterialApp.builder` не имеет Navigator
+в предках (SDK: `app.dart:1693-1727` — builder оборачивает Navigator СВЕРХУ), проверено probe-тестом
+ревьюера, летит FlutterError, `onWipe(wipeCode)` недостижим; авто-wipe работает. ВАЖНО: наивный фикс
+«через navigatorKey» НЕВЕРЕН — диалог уедет в root Navigator, т.е. ПОД непрозрачный оверлей лока, и
+станет невидимым и некликабельным; лечить слоем внутри самого LockScreen. DUR-07 (medium) —
+уведомления о новых сообщениях и комнатах в duress по-прежнему показываются (я погасил только точку
+на таб-баре).
+
+**Статус после ревю:** analyze 566 (на 1 МЕНЬШЕ базы — удалён лишний print), 0 errors;
+test **426 passed**.
+
 **Бухгалтерия этого же дня:** серверный `wl/dev` смержен в `master` (PR #21, CI зелёный) —
 прод и так крутился из `wl/dev`, это гигиена истории; наш клиентский `master` подтянут
 fast-forward'ом с 1.1.7+15 до 414fdf3 (отставал на 61 коммит). Схема сменилась: клиент

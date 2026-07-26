@@ -344,7 +344,10 @@ Future<void> _initializeApp() async {
   // 5. Сервис авторизации (PIN, duress)
   DebugLogger.info('APP', 'Инициализация AuthService...');
   await authService.init();
-  DebugLogger.info('APP', 'AuthService: PIN=${authService.config.isPinEnabled}, duress=${authService.config.isDuressEnabled}');
+  // Флаг duress в диагностике НЕ пишем: этот буфер виден с экрана логов, который
+  // достижим и из duress-сессии, а «duress=true» выдаёт наблюдателю ровно то, что
+  // прячет экран «Безопасность». Состояние гейта и так видно по поведению БД.
+  DebugLogger.info('APP', 'AuthService: PIN=${authService.config.isPinEnabled}');
 
   // 5.5. Сервис автоочистки сообщений (зависит от AuthService)
   DebugLogger.info('APP', 'Инициализация MessageCleanupService...');

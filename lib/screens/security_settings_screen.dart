@@ -120,7 +120,15 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     
     // Применяем новую политику
     await _auth.setMessageRetention(newPolicy);
-    
+
+    // Сеттер — no-op под duress. Сверяемся с конфигом, а не с фактом вызова: иначе
+    // экран бодро сообщает «политика применена», хотя ничего не применилось, и это
+    // подсказка похуже, чем просто не сдвинувшийся выбор.
+    if (_auth.messageRetention != newPolicy) {
+      if (mounted) _refresh();
+      return;
+    }
+
     // Запускаем очистку по новой политике
     final result = await MessageCleanupService.instance.onRetentionPolicyChanged(newPolicy);
     
@@ -159,9 +167,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
 
         // Реально сохраняем флаг: теперь lock_screen предложит вход по биометрии.
         await _auth.setBiometricEnabled(true);
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.biometryEnabled)),
-        );
+        // Подтверждение — только если флаг действительно сохранился (под duress
+        // сеттер no-op, и «биометрия включена» было бы ложью и подсказкой).
+        if (_auth.config.isBiometricEnabled) {
+          messenger.showSnackBar(
+            SnackBar(content: Text(l10n.biometryEnabled)),
+          );
+        }
       } catch (e) {
         messenger.showSnackBar(
           SnackBar(content: Text(l10n.biometryFailed)),
@@ -284,6 +296,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
               subtitle: l10n.callerNameOnLockDesc,
               value: _showCallerNameOnLock,
               onChanged: (v) async {
+                // Этот тумблер пишет в SharedPreferences, а не в гейтированную БД,
+                // поэтому под duress держатель кода принуждения необратимо включал
+                // бы жертве показ имени звонящего на локскрине. Гейт стоит здесь, а
+                // не в DeviceSettingsService: сервис статический и его читает
+                // push-изолят, где свой AuthService с duress == false.
+                if (duressActive) return;
                 await DeviceSettingsService.setShowCallerNameWhenLocked(v);
                 if (mounted) setState(() => _showCallerNameOnLock = v);
               },

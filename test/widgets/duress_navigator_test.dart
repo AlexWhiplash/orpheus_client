@@ -6,6 +6,8 @@
 // State и уже расшифрованными данными. Здесь проверяется прод-механизм сброса:
 // dropRoutesAboveHome() + pushedRouteTracker из main.dart.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:orpheus_project/chat_screen.dart';
@@ -345,12 +347,17 @@ void main() {
       expect(find.text(fakeSeed), findsNothing);
     });
 
-    testWidgets('wipe тоже сбрасывает стек (лок уходит вместе с PIN)',
+    testWidgets('auto-wipe с локскрина тоже сбрасывает стек (лок уходит с PIN)',
         (tester) async {
+      // Идём РЕАЛЬНЫМ путём LockScreen: неверный PIN -> PinVerifyResult.autoWipe ->
+      // widget.onWipe(...). Прямой вызов dropRoutesAboveHome() здесь был бы
+      // тавтологией и не проверял бы, что сброс висит на wipe-колбэке.
+      await auth.setAutoWipe(true, attempts: 3);
       await openChatThenLock(tester);
-      // Тот же путь сброса, что зовётся из AuthService.onWipeCompleted.
-      dropRoutesAboveHome();
-      locked.value = false;
+
+      for (var i = 0; i < 3; i++) {
+        await _enterPin(tester, '000000');
+      }
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatScreen), findsNothing);
@@ -367,6 +374,33 @@ void main() {
       dropRoutesAboveHome();
       await tester.pumpAndSettle();
       expect(find.text('HOME-STUB'), findsOneWidget);
+    });
+
+    // Гард обвязки. Тесты выше поднимают КОПИЮ структуры MyApp (запампить сам MyApp
+    // нельзя — initState тянет плагины), поэтому они проверяют механизм, но НЕ то,
+    // что прод его зовёт: удалить вызов из main.dart и они останутся зелёными
+    // (проверено мутацией). Читаем исходник и держим четыре точки подключения.
+    test('main.dart подключает сброс во всех четырёх точках', () {
+      final source = File('lib/main.dart').readAsStringSync();
+
+      // Обсервер зарегистрирован — без него трекер пуст и сбрасывать нечего.
+      expect(source, contains('navigatorObservers: appNavigatorObservers'));
+
+      for (final anchor in <String>[
+        'void _onDuressMode()',
+        'void _onUnlocked()',
+        'AuthService.onWipeCompleted =',
+      ]) {
+        final start = source.indexOf(anchor);
+        expect(start, greaterThan(-1), reason: 'не найден якорь: $anchor');
+        // Тело метода/колбэка: до конца следующего блока верхнего уровня хватает
+        // окна в ~2500 символов — все три сейчас существенно короче.
+        final body = source.substring(
+            start, (start + 2500).clamp(0, source.length));
+        expect(body, contains('dropRoutesAboveHome()'),
+            reason: 'в $anchor потерялся сброс стека — утечка реальной сессии '
+                'вернётся, а виджет-тесты этого не заметят');
+      }
     });
 
     testWidgets('PushedRouteTracker отпускает маршруты (иначе сам станет утечкой)',

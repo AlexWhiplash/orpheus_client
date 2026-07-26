@@ -1240,7 +1240,14 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     incomingCallBuffer.takeAll(widget.contactPublicKey);
 
     // 3. Отправляем HangUp если закрыли свайпом (не через кнопку)
-    if (!_messagesSent) {
+    //
+    // Гард по личности: после wipe этот dispose приходит уже ПОСЛЕ стирания
+    // (performWipe зовёт onWipeCompleted последним шагом, а тот снимает маршруты).
+    // Без гарда _writeCallLog пересоздал бы SQLCipher-базу с НОВЫМ ключом в
+    // Keystore и записью «с кем и когда был звонок», а hang-up ушёл бы по
+    // HTTP-fallback от стёртой личности. Нет личности — некому звонить и нечей
+    // журнал вести.
+    if (!_messagesSent && cryptoService.addressBase64 != null) {
       final finalState = _callState;
       print("📞 Dispose: отправка hang-up (state=$finalState, everConnected=$_everConnected)");
 

@@ -407,7 +407,9 @@ class AuthService {
     );
     
     await _saveConfig();
-    DebugLogger.info('AUTH', 'Duress code set');
+    // Нейтрально: строка живёт в буфере, который виден с экрана логов, доступного
+    // из duress-сессии.
+    DebugLogger.info('AUTH', 'Security code updated');
     return true;
   }
 
@@ -425,7 +427,6 @@ class AuthService {
     
     await _saveConfig();
     _setDuressMode(false);
-    print("AUTH: Duress code disabled");
     return true;
   }
 

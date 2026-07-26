@@ -179,8 +179,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     final l10n = L10n.of(context);
     final config = _auth.config;
     final isPinEnabled = config.isPinEnabled;
-    final isDuressEnabled = config.isDuressEnabled;
-    final isWipeCodeEnabled = config.isWipeCodeEnabled;
+    // Under duress this screen must not admit that a duress or a wipe code exists:
+    // "duress code is set (N digits)" plus a button to disable it explains the whole
+    // scheme to the observer. Both sections stay VISIBLE and show their "not
+    // configured" branch — a missing section would be a tell of its own, and that
+    // branch only leads to PinSetupScreen, which verifies the MAIN pin first
+    // (pin_setup_screen.dart _processSetDuress, step 0 requires
+    // PinVerifyResult.success), so it cannot be used to overwrite anything.
+    final duressActive = _auth.isDuressMode;
+    final isDuressEnabled = !duressActive && config.isDuressEnabled;
+    final isWipeCodeEnabled = !duressActive && config.isWipeCodeEnabled;
     final inactivityOptions = <int, String>{
       30: l10n.inactivity30s,
       60: l10n.inactivity1m,

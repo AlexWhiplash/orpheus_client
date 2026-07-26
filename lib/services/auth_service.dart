@@ -473,6 +473,7 @@ class AuthService {
   // === PANIC GESTURE (3x уход в фон) ===
 
   Future<void> setPanicGestureEnabled(bool enabled) async {
+    if (_isDuressMode) return; // см. setAutoWipe
     _config = _config.copyWith(isPanicGestureEnabled: enabled);
     await _saveConfig();
     print("AUTH: Panic gesture ${enabled ? 'enabled' : 'disabled'}");
@@ -481,6 +482,7 @@ class AuthService {
   // === БИОМЕТРИЯ (вход по отпечатку/лицу) ===
 
   Future<void> setBiometricEnabled(bool enabled) async {
+    if (_isDuressMode) return; // см. setAutoWipe
     _config = _config.copyWith(isBiometricEnabled: enabled);
     await _saveConfig();
     print("AUTH: Biometric ${enabled ? 'enabled' : 'disabled'}");
@@ -491,6 +493,7 @@ class AuthService {
   int get inactivityLockSeconds => _config.inactivityLockSeconds;
 
   Future<void> setInactivityLockSeconds(int seconds) async {
+    if (_isDuressMode) return; // см. setAutoWipe
     _config = _config.copyWith(inactivityLockSeconds: seconds);
     await _saveConfig();
     print("AUTH: Inactivity lock timeout = ${seconds}s");
@@ -506,6 +509,7 @@ class AuthService {
 
   /// Установить политику хранения сообщений
   Future<void> setMessageRetention(MessageRetentionPolicy policy) async {
+    if (_isDuressMode) return; // см. setAutoWipe
     _config = _config.copyWith(messageRetention: policy);
     await _saveConfig();
     print("AUTH: Message retention set to: ${policy.displayName}");
@@ -569,7 +573,18 @@ class AuthService {
   // === AUTO-WIPE ===
 
   /// Включить/выключить auto-wipe
+  ///
+  /// No-op в duress: иначе наблюдатель без основного PIN персистентно снимает
+  /// защиты жертвы (auto-wipe, panic-жест) прямо с экрана «Безопасность». Гейт
+  /// стоит в КАЖДОМ сеттере, а НЕ в [_saveConfig]: `disableDuressCode` зовёт
+  /// `_saveConfig` ДО `_setDuressMode(false)`, и общий гейт потерял бы эту запись.
+  ///
+  /// Косметика: экран перечитывает конфиг после вызова, поэтому переключатель
+  /// визуально отскакивает назад. Иллюзию «настройка применилась» сознательно НЕ
+  /// делаем — она либо требует локального состояния экрана, либо правки конфига в
+  /// памяти (протекла бы в настоящую сессию). Решение по отскоку — за владельцем.
   Future<void> setAutoWipe(bool enabled, {int attempts = 10}) async {
+    if (_isDuressMode) return;
     _config = _config.copyWith(
       isAutoWipeEnabled: enabled,
       autoWipeAttempts: attempts,

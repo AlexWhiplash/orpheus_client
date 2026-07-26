@@ -130,13 +130,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _exportAccount() async {
     final l10n = L10n.of(context);
 
+    // Under duress the system gate must be skipped entirely: with
+    // biometricOnly: false it accepts the DEVICE passcode, which a coercing
+    // observer normally has — and what is exported is the 32-byte root seed, the
+    // whole identity. Only the app PIN proves the real owner is asking, and
+    // _verifyWithAppPin accepts nothing but PinVerifyResult.success (the duress
+    // code returns PinVerifyResult.duress and is rejected).
+    final requireAppPin = authService.isDuressMode;
+
     // Try system authentication (biometric + device credentials)
     bool authenticated = false;
     bool systemAuthAvailable = false;
     try {
       final LocalAuthentication auth = LocalAuthentication();
-      systemAuthAvailable =
-          await auth.canCheckBiometrics || await auth.isDeviceSupported();
+      systemAuthAvailable = !requireAppPin &&
+          (await auth.canCheckBiometrics || await auth.isDeviceSupported());
 
       if (systemAuthAvailable) {
         authenticated = await auth.authenticate(

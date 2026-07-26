@@ -95,6 +95,60 @@ void main() {
       expect(find.text('КОД УДАЛЕНИЯ'), findsOneWidget);
       expect(find.text('Установить код удаления'), findsOneWidget);
     });
+
+    testWidgets(
+        'Вне duress экран честно сообщает, что коды принуждения/удаления настроены',
+        (tester) async {
+      await auth.setPin('123456');
+      expect(await auth.setDuressCode('123456', '654321'), isTrue);
+      expect(await auth.setWipeCode('123456', '999999'), isTrue);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: const Locale('ru'),
+          home: SecuritySettingsScreen(auth: auth),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Код принуждения установлен (6 цифр).'), findsOneWidget);
+      expect(find.text('Отключить код принуждения'), findsOneWidget);
+      expect(find.text('Код удаления установлен (6 цифр).'), findsOneWidget);
+    });
+
+    testWidgets(
+        'В duress экран НЕ признаётся, что код принуждения настроен (главный tell)',
+        (tester) async {
+      await auth.setPin('123456');
+      expect(await auth.setDuressCode('123456', '654321'), isTrue);
+      expect(await auth.setWipeCode('123456', '999999'), isTrue);
+      auth.debugSetDuressMode(true);
+      addTearDown(() => auth.debugSetDuressMode(false));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: const Locale('ru'),
+          home: SecuritySettingsScreen(auth: auth),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Код принуждения установлен (6 цифр).'), findsNothing);
+      expect(find.text('Отключить код принуждения'), findsNothing);
+      expect(find.text('Код удаления установлен (6 цифр).'), findsNothing);
+      expect(find.text('Отключить код удаления'), findsNothing);
+
+      // Секции остаются на месте в состоянии «не настроено»: их исчезновение само
+      // было бы tell'ом, а вход в настройку требует ОСНОВНОГО PIN.
+      expect(find.text('КОД ПРИНУЖДЕНИЯ'), findsOneWidget);
+      expect(find.text('Установить код принуждения'), findsOneWidget);
+      expect(find.text('КОД УДАЛЕНИЯ'), findsOneWidget);
+      expect(find.text('Установить код удаления'), findsOneWidget);
+    });
   });
 }
 

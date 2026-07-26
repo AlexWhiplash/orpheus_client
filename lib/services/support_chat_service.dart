@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/models/support_message.dart';
 import 'package:orpheus_project/main.dart' show cryptoService;
+import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 
 class SupportChatService {
@@ -38,8 +39,12 @@ class SupportChatService {
   String? _error;
   String? get error => _error;
 
-  /// Получить pubkey пользователя (из глобального cryptoService)
-  String? get _pubkey => cryptoService.addressBase64;
+  /// Получить pubkey пользователя (из глобального cryptoService).
+  /// Null in duress mode: the correspondence with the developer lives on the
+  /// server, so otherwise the "empty profile" would keep fetching the victim's
+  /// real support history (and let the observer write as them).
+  String? get _pubkey =>
+      AuthService.instance.isDuressMode ? null : cryptoService.addressBase64;
 
   /// HTTP заголовки с pubkey
   Map<String, String> get _headers => {
@@ -49,6 +54,15 @@ class SupportChatService {
 
   /// Загрузить историю сообщений
   Future<void> loadMessages({int limit = 100}) async {
+    // Duress: empty history and explicitly NO error. Falling through to the
+    // null-pubkey branch below would set an error, and the screen renders that as
+    // a red banner with the message text — a tell. It also has to clear the cache:
+    // this is a singleton, so messages fetched by the real session are still in
+    // _messages when the duress session builds the screen.
+    if (AuthService.instance.isDuressMode) {
+      clear();
+      return;
+    }
     if (_pubkey == null) {
       _error = 'Account not initialized';
       return;
@@ -201,6 +215,8 @@ class SupportChatService {
 
   /// Обработка входящего сообщения от поддержки (через WebSocket)
   void handleIncomingReply(Map<String, dynamic> data) {
+    // A live reply arriving during a duress session must not appear on screen.
+    if (AuthService.instance.isDuressMode) return;
     final text = data['text'] as String?;
     final createdAt = data['created_at'] as String?;
     

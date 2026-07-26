@@ -5,13 +5,24 @@ import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/main.dart' show cryptoService;
 import 'package:orpheus_project/models/room_message_model.dart';
 import 'package:orpheus_project/models/room_model.dart';
+import 'package:orpheus_project/services/auth_service.dart';
 
 class RoomsService {
   RoomsService({http.Client? httpClient}) : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
 
-  String? get _pubkey => cryptoService.addressBase64;
+  /// Null in duress mode. Rooms live on the server, not in the gated local
+  /// database, so without this the "empty profile" would still fetch the real
+  /// rooms, their previews and their whole history — and let the observer post,
+  /// rotate invites or delete rooms as the victim.
+  ///
+  /// Every method below already treats a null pubkey as "no account": reads
+  /// return empty (prefs return safe defaults) and mutations throw, which the UI
+  /// reports as its generic connection error — indistinguishable from the server
+  /// being unreachable, so this adds no tell.
+  String? get _pubkey =>
+      AuthService.instance.isDuressMode ? null : cryptoService.addressBase64;
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',

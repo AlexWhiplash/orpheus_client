@@ -34,6 +34,13 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<String>? _msgSub;
   StreamSubscription<void>? _badgeSub;
 
+  /// Room unread lives in a service cache, not in the gated database, so in duress
+  /// the dot would still report the real activity. Gated here rather than by
+  /// mutating the service: clearing the service would leave the dot dark for the
+  /// real session too, until the next sync.
+  bool get _hasRoomUnread =>
+      !authService.isDuressMode && RoomUnreadService.instance.hasUnread.value;
+
   @override
   void initState() {
     super.initState();
@@ -359,10 +366,8 @@ class _HomeScreenState extends State<HomeScreen> {
             label: l10n.contacts,
           ),
           NavigationDestination(
-            icon: _tabIcon(
-                Icons.forum_outlined, RoomUnreadService.instance.hasUnread.value),
-            selectedIcon:
-                _tabIcon(Icons.forum, RoomUnreadService.instance.hasUnread.value),
+            icon: _tabIcon(Icons.forum_outlined, _hasRoomUnread),
+            selectedIcon: _tabIcon(Icons.forum, _hasRoomUnread),
             label: l10n.rooms,
           ),
           NavigationDestination(

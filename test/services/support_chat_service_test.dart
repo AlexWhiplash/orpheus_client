@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:orpheus_project/models/support_message.dart';
+import 'package:orpheus_project/services/auth_service.dart';
+import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/support_chat_service.dart';
 
 void main() {
@@ -198,6 +200,97 @@ void main() {
   group('MessageDirection enum', () {
     test('user и admin различаются', () {
       expect(MessageDirection.user, isNot(equals(MessageDirection.admin)));
+    });
+  });
+
+  // Переписка с разработчиком лежит на СЕРВЕРЕ, поэтому под принуждением её надо
+  // гасить отдельно от гейта БД. Ставится последней группой: deriveFromSeedForTest
+  // задаёт адрес на синглтоне CryptoService, а тесты выше рассчитаны на его
+  // отсутствие.
+  group('SupportChatService - duress mode', () {
+    late List<Uri> requested;
+    late SupportChatService service;
+
+    setUp(() async {
+      await CryptoService.instance
+          .deriveFromSeedForTest(List<int>.filled(32, 9));
+      expect(CryptoService.instance.addressBase64, isNotNull,
+          reason: 'без адреса тест был бы пустым');
+      requested = <Uri>[];
+      service = SupportChatService(httpClient: MockClient((request) async {
+        requested.add(request.url);
+        return http.Response(
+          jsonEncode({
+            'messages': [
+              {
+                'id': 1,
+                'direction': 'user',
+                'message': 'REAL-SUPPORT-HISTORY',
+                'is_read': true,
+                'created_at': '2025-01-04T12:00:00Z',
+              },
+            ],
+          }),
+          200,
+        );
+      }));
+    });
+
+    tearDown(() {
+      AuthService.instance.debugSetDuressMode(false);
+      service.dispose();
+    });
+
+    test('вне duress история грузится с сервера', () async {
+      await service.loadMessages();
+
+      expect(service.messages.single.message, equals('REAL-SUPPORT-HISTORY'));
+      expect(requested, isNotEmpty);
+    });
+
+    test('в duress история пуста, на сервер не ходим и НЕТ ошибки на экране',
+        () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      await service.loadMessages();
+
+      expect(service.messages, isEmpty);
+      expect(requested, isEmpty);
+      // error != null отрисовался бы красной плашкой с текстом — это сам по себе
+      // tell, поэтому duress-ветка обязана оставить error пустым.
+      expect(service.error, isNull);
+    });
+
+    test('в duress уже загруженная реальная история вычищается из кеша',
+        () async {
+      await service.loadMessages();
+      expect(service.messages, isNotEmpty);
+
+      AuthService.instance.debugSetDuressMode(true);
+      await service.loadMessages();
+
+      expect(service.messages, isEmpty,
+          reason: 'сервис — синглтон: кеш реальной сессии виден в duress');
+      expect(service.error, isNull);
+    });
+
+    test('в duress живой ответ поддержки не появляется на экране', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      service.handleIncomingReply({
+        'text': 'LIVE-ADMIN-REPLY',
+        'created_at': '2025-01-04T12:05:00Z',
+      });
+
+      expect(service.messages, isEmpty);
+      expect(service.unreadCount, equals(0));
+    });
+
+    test('в duress отправка от лица жертвы не уходит', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      expect(await service.sendMessage('written by the observer'), isFalse);
+      expect(requested, isEmpty);
     });
   });
 }

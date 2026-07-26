@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:orpheus_project/services/auth_service.dart';
+import 'package:orpheus_project/services/crypto_service.dart';
 import 'package:orpheus_project/services/rooms_service.dart';
 
 // Mock HTTP Client
@@ -485,6 +487,69 @@ void main() {
       } catch (e) {
         expect(e, isA<Exception>());
       }
+    });
+  });
+
+  // Комнаты живут на СЕРВЕРЕ, а не в гейтированной локальной БД, поэтому под
+  // принуждением «пустой профиль» без этой защиты всё равно вытянул бы реальные
+  // комнаты, превью и историю. Ставится последней группой: deriveFromSeedForTest
+  // задаёт адрес на синглтоне CryptoService, а тесты выше рассчитаны на его
+  // отсутствие.
+  group('RoomsService - duress mode', () {
+    setUp(() async {
+      await CryptoService.instance
+          .deriveFromSeedForTest(List<int>.filled(32, 7));
+      expect(CryptoService.instance.addressBase64, isNotNull,
+          reason: 'без адреса тест был бы пустым: пусто и так, без duress');
+    });
+
+    tearDown(() => AuthService.instance.debugSetDuressMode(false));
+
+    test('вне duress запрос уходит и несёт настоящий X-Pubkey', () async {
+      mockClient.mockResponse(statusCode: 200, body: {
+        'rooms': [
+          {'id': 1, 'name': 'Real Room', 'is_owner': true, 'members_count': 2}
+        ]
+      });
+
+      final rooms = await service.loadRooms();
+
+      expect(rooms.single.name, equals('Real Room'));
+      expect(mockClient.capturedRequests.single.headers['X-Pubkey'],
+          equals(CryptoService.instance.addressBase64));
+    });
+
+    test('в duress loadRooms не ходит на сервер и отдаёт пусто', () async {
+      AuthService.instance.debugSetDuressMode(true);
+      mockClient.mockResponse(statusCode: 200, body: {
+        'rooms': [
+          {'id': 1, 'name': 'Real Room', 'is_owner': true, 'members_count': 2}
+        ]
+      });
+
+      expect(await service.loadRooms(), isEmpty);
+      expect(mockClient.capturedRequests, isEmpty,
+          reason: 'настоящий pubkey не должен уходить на сервер под принуждением');
+    });
+
+    test('в duress мутации не уходят на сервер', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      await expectLater(service.createRoom('X'), throwsA(isA<Exception>()));
+      await expectLater(service.deleteRoom('1'), throwsA(isA<Exception>()));
+      await expectLater(service.panicClear('1'), throwsA(isA<Exception>()));
+      await expectLater(service.rotateInvite('1'), throwsA(isA<Exception>()));
+      expect(mockClient.capturedRequests, isEmpty);
+    });
+
+    test('в duress история сообщений комнаты пуста', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      final page = await service.loadMessages('1');
+
+      expect(page.messages, isEmpty);
+      expect(page.hasMore, isFalse);
+      expect(mockClient.capturedRequests, isEmpty);
     });
   });
 }

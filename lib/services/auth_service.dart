@@ -10,7 +10,7 @@ import 'package:orpheus_project/services/secure_storage_options.dart';
 import 'package:orpheus_project/services/monotonic_clock.dart';
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart' as kdf;
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, visibleForTesting;
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/models/message_retention_policy.dart';
 import 'package:orpheus_project/services/database_service.dart';
@@ -113,6 +113,12 @@ class AuthService {
   /// DatabaseService (разрыв цикла auth↔database, ARCH-1): раньше БД сама читала
   /// `AuthService.instance.isDuressMode`. Все переходы duress идут через этот
   /// метод, чтобы БД всегда фильтровала данные согласованно с режимом входа.
+  /// Только для тестов: включить duress без ввода PIN. Прод-код читает флаг с
+  /// синглтона (`AuthService.instance`), а у синглтона secure storage — плагин,
+  /// недоступный в unit-тестах, поэтому дойти сюда через verifyPin нельзя.
+  @visibleForTesting
+  void debugSetDuressMode(bool value) => _setDuressMode(value);
+
   void _setDuressMode(bool value) {
     _isDuressMode = value;
     DatabaseService.instance.setDuressMode(value);

@@ -292,7 +292,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 context,
                 MaterialPageRoute(
                     builder: (context) => SecuritySettingsScreen()),
-              ).then((_) => setState(() {})),
+              // mounted-guarded: a duress unlock drops this route and completes the
+              // future after Settings itself has been disposed.
+              ).then((_) {
+                if (mounted) setState(() {});
+              }),
               onSupport: () => Navigator.push(
                 context,
                 MaterialPageRoute(

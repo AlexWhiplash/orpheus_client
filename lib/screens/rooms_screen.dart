@@ -63,6 +63,10 @@ class _RoomsScreenState extends State<RoomsScreen> {
   }
 
   void _refreshRooms() {
+    // Called from `await Navigator.push(...)` continuations. A duress unlock drops
+    // pushed routes, which completes those futures while this State is already
+    // disposed (the tabs go away with home under the lock).
+    if (!mounted) return;
     setState(() {
       _roomsFuture = _loadAndSyncUnread();
     });

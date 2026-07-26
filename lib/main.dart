@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
@@ -61,6 +61,81 @@ final messageCleanupService = MessageCleanupService.instance;
 IncomingMessageHandler? incomingMessageHandler;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+/// Tracks the routes pushed above home. A duress unlock has to drop them: the
+/// lock is only an overlay (see MaterialApp.builder below), so every route that
+/// was open before the lock stays mounted, and its State still holds data that
+/// was decrypted for the REAL session (e.g. _ChatScreenState._chatHistory). Such
+/// a route never re-queries the now-gated database, so without this the duress
+/// observer is handed the real conversation.
+///
+/// Only the root Navigator is observed. There are no nested Navigators today
+/// (HomeScreen switches tabs with an AnimatedSwitcher); if one is ever added,
+/// its routes will NOT be dropped by [dropRoutesAboveHome].
+class PushedRouteTracker extends NavigatorObserver {
+  final List<Route<dynamic>> _pushed = <Route<dynamic>>[];
+
+  /// Snapshot, top route first: removeRoute mutates [_pushed] through didRemove
+  /// while the caller iterates.
+  List<Route<dynamic>> topDown() => _pushed.reversed.toList(growable: false);
+
+  /// The tracker is a global, so tests must not leak routes into the next case.
+  @visibleForTesting
+  void debugClear() => _pushed.clear();
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    // previousRoute == null means this IS the home route — never tracked.
+    if (previousRoute != null) _pushed.add(route);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _pushed.remove(route);
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _pushed.remove(route);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final index = oldRoute == null ? -1 : _pushed.indexOf(oldRoute);
+    if (index < 0) return;
+    if (newRoute == null) {
+      _pushed.removeAt(index);
+    } else {
+      _pushed[index] = newRoute;
+    }
+  }
+}
+
+final PushedRouteTracker pushedRouteTracker = PushedRouteTracker();
+
+/// Stable list identity on purpose: NavigatorState.didUpdateWidget compares the
+/// observer list by identity and would detach/reattach the observer on every
+/// MyApp rebuild if this were a literal inside build().
+final List<NavigatorObserver> appNavigatorObservers = <NavigatorObserver>[
+  pushedRouteTracker,
+];
+
+/// Removes every route above home immediately and WITHOUT a pop transition, so
+/// the routes leave the Overlay in the same frame the lock overlay stops being
+/// painted. MUST be called while the lock is still up, and never from a build
+/// phase (Navigator.removeRoute asserts it is not re-entered).
+///
+/// popUntil is deliberately not used: it pops with animation, so the real chat
+/// would stay painted for the duration of the exit transition after the lock is
+/// gone.
+void dropRoutesAboveHome() {
+  final nav = navigatorKey.currentState;
+  if (nav == null) return; // no frames rendered yet
+  for (final route in pushedRouteTracker.topDown()) {
+    // isActive guards the history lookup inside removeRoute for routes that are
+    // already gone or mid-pop.
+    if (route.isFirst || !route.isActive) continue;
+    nav.removeRoute(route);
+  }
+}
 
 // Потоки для обновлений UI
 final StreamController<String> messageUpdateController = StreamController.broadcast();
@@ -681,6 +756,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // active/pending (call UI must stay reachable without PIN). Re-armed in
   // _onCallActiveChanged when the call ends and in the resumed backstop.
   bool _lockPendedByCall = false;
+  // The session currently on screen was entered with the DURESS code.
+  // authService.lock() clears the duress flag itself, so after a re-lock main can
+  // no longer ask AuthService whether the previous session was under duress.
+  bool _duressUiActive = false;
   Timer? _inactivityTimer;
   DateTime _lastUserActivity = DateTime.now();
   StreamSubscription<String>? _licenseSubscription;
@@ -732,6 +811,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       try {
         websocketService.disconnect();
       } catch (_) {}
+      // performWipe promises exactly this ("чтобы навигация сбросилась"), but the
+      // state reset below only swaps home: a route pushed above it stays mounted,
+      // and since the lock overlay disappears together with the PIN, after a wipe
+      // a pushed ChatScreen would keep showing its history from RAM.
+      dropRoutesAboveHome();
+      _duressUiActive = false;
       if (mounted) {
         setState(() {
           _keysExist = false;
@@ -843,6 +928,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void _onUnlocked() {
     DebugLogger.info('APP', '🔓 App unlocked');
     _lockPendedByCall = false;
+    // Routes opened inside a duress session must not travel into the real one: the
+    // DB gate is about to be lifted under screens that were built while it was on.
+    // Only when the previous session really was duress — after a plain auto-lock the
+    // real PIN must still return the user to the screen they were on.
+    if (_duressUiActive) {
+      _duressUiActive = false;
+      dropRoutesAboveHome();
+    }
     setState(() => _isLocked = false);
     _registerUserActivity('unlock');
 
@@ -869,8 +962,25 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _onDuressMode() {
-    DebugLogger.warn('APP', '🔓 App unlocked in DURESS MODE');
+    // Neutral wording on purpose: the in-app log viewer is reachable from a duress
+    // session (secret taps in Settings), and a line naming duress is the single
+    // most damaging tell there is.
+    DebugLogger.info('APP', '🔓 App unlocked');
     _lockPendedByCall = false;
+    _duressUiActive = true;
+    // Duress must not hand over the session that was open before the lock: pushed
+    // routes keep decrypted data in their State and never re-read the gated DB.
+    // Synchronous and without a pop animation, while the opaque lock is still up —
+    // so no frame exists where a real chat is visible without the lock over it.
+    dropRoutesAboveHome();
+    // A real pending/ringing call must not survive into the duress session: the
+    // resumed branch would open CallScreen for a real contact, and answering from
+    // the CallKit UI would do the same.
+    _pendingCall = null;
+    PendingCallStorage.instance.clear();
+    try {
+      FlutterCallkitIncoming.endAllCalls();
+    } catch (_) {}
     setState(() => _isLocked = false);
     // В duress mode приложение работает, но показывает пустой профиль
   }
@@ -1011,12 +1121,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Если пользователь принял звонок через CallKit, но Navigator был ещё не готов,
       // звонок сохранился в _pendingCall. Обрабатываем его сейчас.
       // Задержка даёт время Flutter engine полностью восстановить UI.
-      if (_pendingCall != null && _pendingCall!.isValid && !_isLocked) {
+      // !_isLocked is not enough for duress: there the lock IS off, and a call
+      // accepted through CallKit inside the duress session would open CallScreen
+      // for a real contact.
+      if (_pendingCall != null &&
+          _pendingCall!.isValid &&
+          !_isLocked &&
+          !authService.isDuressMode) {
         DebugLogger.info('LIFECYCLE', '📞 Найден pending call при resumed, обрабатываю');
         Future.delayed(const Duration(milliseconds: 300), () {
           processPendingCallAfterUnlock();
         });
-      } else if (!_isLocked && !CallStateService.instance.isCallActive.value) {
+      } else if (!_isLocked &&
+          !CallStateService.instance.isCallActive.value &&
+          !authService.isDuressMode) {
         // Fallback: проверяем активные CallKit звонки
         // На случай если pending call был null, но пользователь принял звонок через CallKit
         // и приложение развернулось, но _handleCallKitAccept ещё не успел сработать
@@ -1075,6 +1193,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       theme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark,
       navigatorKey: navigatorKey,
+      navigatorObservers: appNavigatorObservers,
       debugShowCheckedModeBanner: false,
       
       // Локализация. ВАЖНО: отдаём effectiveLocale (всегда конкретная локаль), а НЕ

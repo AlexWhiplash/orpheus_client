@@ -312,7 +312,10 @@ class AuthService {
         _setDuressMode(true);
         await _maybeUpgradeLegacyHash(pin, _config.duressSalt, _config.duressHash,
             (h) => _config.copyWith(duressHash: h));
-        DebugLogger.warn('AUTH', 'Duress code entered, empty profile activated');
+        // Deliberately indistinguishable from the success branch above: the log
+        // viewer is reachable from a duress session, and both the RAM buffer and
+        // the on-disk log would otherwise name the mode outright.
+        DebugLogger.info('AUTH', 'PIN correct, unlocked');
         return PinVerifyResult.duress;
       }
     }

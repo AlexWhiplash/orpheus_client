@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
+import 'package:orpheus_project/services/debug_logger_service.dart';
 
 class _InMemoryAuthStorage implements AuthSecureStorage {
   final Map<String, String> _kv = {};
@@ -109,6 +110,26 @@ void main() {
       expect(r, equals(PinVerifyResult.duress));
       expect(auth.isUnlocked, isTrue);
       expect(auth.isDuressMode, isTrue);
+    });
+
+    test('duress: вход не оставляет следа в логе — экран логов доступен наблюдателю',
+        () async {
+      final storage = _InMemoryAuthStorage();
+      final auth = AuthService.createForTesting(secureStorage: storage);
+      await auth.init();
+      await auth.setPin('123456');
+      expect(await auth.setDuressCode('123456', '654321'), isTrue);
+
+      auth.lock();
+      DebugLogger.clear();
+      expect(await auth.verifyPin('654321'), equals(PinVerifyResult.duress));
+
+      final trace = DebugLogger.logs
+          .map((e) => '${e.tag} ${e.message}')
+          .join('\n')
+          .toLowerCase();
+      expect(trace.contains('duress'), isFalse,
+          reason: 'запись про duress в логе — самый разрушительный tell: $trace');
     });
 
     test('wipeCode: возвращает wipeCode и НЕ инкрементит failedAttempts', () async {

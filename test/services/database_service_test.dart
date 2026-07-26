@@ -193,5 +193,26 @@ void main() {
       final contactsAfter = await DatabaseService.instance.getContacts();
       expect(contactsAfter.any((c) => c.publicKey == "DELETE_KEY"), isFalse);
     });
+
+    test('duress: очистка истории чата НЕ трогает реальную переписку', () async {
+      await DatabaseService.instance
+          .addContact(Contact(name: "Alice", publicKey: "KEEP_KEY"));
+      await DatabaseService.instance.addMessage(
+        ChatMessage(text: "REAL-MESSAGE", isSentByMe: false),
+        "KEEP_KEY",
+      );
+
+      DatabaseService.instance.setDuressMode(true);
+      addTearDown(() => DatabaseService.instance.setDuressMode(false));
+
+      await DatabaseService.instance.clearChatHistory("KEEP_KEY");
+
+      // Читаем уже вне duress — иначе гейт чтения вернул бы пусто в любом случае
+      // и тест прошёл бы вакуумно.
+      DatabaseService.instance.setDuressMode(false);
+      final messages =
+          await DatabaseService.instance.getMessagesForContact("KEEP_KEY");
+      expect(messages.map((m) => m.text), contains("REAL-MESSAGE"));
+    });
   });
 }

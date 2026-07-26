@@ -52,10 +52,7 @@
 - В release `DebugLogger` **не пишет в системный logcat** (`kDebugMode`), а чувствительные события безопасности убраны из логов — `QUAL-1/OPS-6`.
 
 ### 6) Duress / wipe — открытые дефекты (высокий приоритет)
-- **Код удаления (wipe code) с локскрина не работает вообще**: `showDialog` из виджета без Navigator в предках (`lib/screens/lock_screen.dart:242` внутри `MaterialApp.builder`, `lib/main.dart:1247-1256`) — до `performWipe` дело не доходит. Работают только авто‑wipe по неудачным попыткам и panic‑жест. Функцию не обещать в UI и документации до фикса.
 - **Уведомления не гейтятся duress**: комнаты (`lib/main.dart:541`) и ответы поддержки (`lib/services/incoming_message_handler.dart:113-116`) всплывают в duress‑сессии. Содержимое обезличено, но сам факт выдаёт наличие скрытого аккаунта.
-- **Экран отладочных логов достижим из duress** (5 секретных тапов, `lib/screens/settings_screen.dart:119-126`), включая «поделиться» файлом лога.
-- **`clearChatHistory` без duress‑гейта** (`lib/services/database_service.dart:1066`) — единственный путь удаления, стирающий РЕАЛЬНЫЕ сообщения из duress‑сессии.
 - **Входящие личные сообщения во время duress теряются навсегда**: `isContact` в duress → `false` (`lib/services/database_service.dart:489`), строгий mutual‑add дропает кадр до записи (`lib/services/incoming_message_handler.dart:128`).
 - **Косметический tell**: сеттеры настроек — no‑op, поэтому в duress переключатель визуально отскакивает назад (осознанный fail‑closed).
 

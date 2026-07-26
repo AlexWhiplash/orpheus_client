@@ -137,10 +137,9 @@
 - HTTP fallback для критичных сигналов (call-offer, call-answer, hang-up)
 
 ## Известные открытые дефекты (НЕ заявляй как работающие)
-- Код wipe с экрана лока не срабатывает вообще: `showDialog` (lock_screen.dart:242) вызывается из виджета внутри `MaterialApp.builder` (main.dart:1247-1256), у которого нет Navigator-предка. Авто-wipe (lock_screen.dart:226-227) и panic-жест работают. ВАЖНО: фикс «через navigatorKey» неверен — диалог уедет ПОД непрозрачный оверлей лока; лечить слоем внутри самого LockScreen.
+- ~~Код wipe с экрана лока не срабатывает~~ ПОЧИНЕНО 26.07.2026: подтверждение рисуется СЛОЕМ внутри `LockScreen` (`Completer<bool> _wipeConfirm` + `Positioned.fill` в его `Stack`), а не через `showDialog` — у виджета внутри `MaterialApp.builder` нет Navigator-предка. **Инвариант: из `LockScreen` нельзя дергать Navigator вообще** (ни `showDialog`, ни `navigatorKey` — во втором случае диалог уедет ПОД непрозрачный оверлей лока). Тесты держат это в группе «LockScreen как оверлей (структура прода)» — она поднимает лок в `builder`, как в проде; старая группа с `home:` баг не ловила.
 - Duress не гейтит уведомления: всплывают уведомления комнат (main.dart:541) и ответов поддержки (incoming_message_handler.dart:113-116). Содержимое обезличено (`l10n.newMessage`, notification_service.dart:645), но сам факт уведомления доказывает наблюдателю наличие скрытого аккаунта.
-- Экран отладочных логов достижим из duress-сессии (5 тапов, settings_screen.dart:119-126): RAM-лог плюс шаринг файла с диска.
-- `DatabaseService.clearChatHistory` (database_service.dart:1066) — единственный путь удаления без duress-гейта.
+- ~~Экран отладочных логов достижим из duress~~ и ~~`clearChatHistory` без гейта~~ — ПОЧИНЕНО 26.07.2026 (секретный тап no-op под duress; гейт в `clearChatHistory`).
 - Входящие личные сообщения во время duress теряются безвозвратно: `isContact` под duress отдаёт `false` (database_service.dart:489), и строгий mutual-add дропает кадр до сохранения (incoming_message_handler.dart:128), а сервер уже считает его доставленным.
 - `verifyPin(основной PIN)` внутри duress-сессии зовёт `_setDuressMode(false)` — гейт БД снимается, а UI остаётся duress-сессией (рассогласованное состояние). Тот же корень, что неиспользуемый `exitDuressMode`.
 

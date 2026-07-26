@@ -108,6 +108,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _handleSecretTap() {
+    // Под duress экран логов недоступен: в нём лежит RAM-лог реальной сессии, а
+    // кнопка «Поделиться» отдаёт файл лога с диска (его DebugLogger.clear() не
+    // трогает). Молча ничего не делаем — жест и так секретный, отсутствие реакции
+    // ничего не выдаёт.
+    if (authService.isDuressMode) return;
     final now = DateTime.now();
 
     if (_lastTapTime != null && now.difference(_lastTapTime!).inSeconds > 2) {

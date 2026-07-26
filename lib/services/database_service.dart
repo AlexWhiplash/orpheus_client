@@ -1064,6 +1064,10 @@ class DatabaseService {
   }
 
   Future<void> clearChatHistory(String contactKey) async {
+    // Единственный путь удаления, который раньше не был гейтирован (в отличие от
+    // deleteMessagesByTimestamps/ByMessageIds): через удержанный чат он сносил
+    // реальную переписку безвозвратно прямо из duress-сессии.
+    if (_isDuressMode) return;
     final db = await instance.database;
     await db.delete('messages', where: 'contactPublicKey = ?', whereArgs: [contactKey]);
     // Удалённое пользователем не должно быть дослано из очереди после реконнекта.

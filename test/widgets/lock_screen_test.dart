@@ -202,6 +202,128 @@ void main() {
       expect(find.text('Неверный PIN'), findsOneWidget);
     });
   });
+
+  // Группа поднимает лок ТАК ЖЕ, КАК В ПРОДЕ — оверлеем в `MaterialApp.builder`
+  // поверх Navigator, а не через `home:`. Разница принципиальна: у контекста внутри
+  // builder нет Navigator в предках (MaterialApp создаёт Navigator и лишь ПОТОМ
+  // заворачивает его в builder), поэтому всё, что дергает Navigator из LockScreen,
+  // в проде падает, а в тестах с `home:` — работает. Именно так и было пропущено,
+  // что код удаления с локскрина не срабатывает никогда.
+  group('LockScreen как оверлей (структура прода)', () {
+    late AuthService auth;
+
+    setUp(() async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      auth = AuthService.createForTesting(
+          secureStorage: _MemSecureStorage(),
+          fastHash: true,
+          monotonicNow: () async => 0);
+      await auth.init();
+    });
+
+    Future<int> pumpLockOverlay(
+      WidgetTester tester, {
+      required List<WipeReason> wipes,
+    }) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: const Locale('ru'),
+          builder: (context, child) => Stack(
+            children: [
+              child ?? const SizedBox.shrink(),
+              Positioned.fill(
+                child: LockScreen.forTesting(
+                  auth: auth,
+                  onUnlocked: () {},
+                  onDuressMode: () {},
+                  onWipe: (reason) async => wipes.add(reason),
+                ),
+              ),
+            ],
+          ),
+          home: const Scaffold(backgroundColor: Colors.black),
+        ),
+      );
+      await tester.pump();
+      return 0;
+    }
+
+    testWidgets('код удаления открывает подтверждение и удержание запускает wipe',
+        (tester) async {
+      await auth.setPin('123456');
+      expect(await auth.setWipeCode('123456', '333333'), isTrue);
+
+      final wipes = <WipeReason>[];
+      await pumpLockOverlay(tester, wipes: wipes);
+
+      await _enterPin(tester, '333333');
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // Подтверждение должно ПОЯВИТЬСЯ: раньше здесь летел FlutterError
+      // «Navigator operation requested with a context that does not include a
+      // Navigator», и до onWipe дело не доходило никогда.
+      expect(find.text('УДАЛИТЬ ВСЕ ДАННЫЕ?'), findsOneWidget);
+      expect(wipes, isEmpty, reason: 'без удержания стирать нельзя');
+
+      // Удержание 2 секунды -> wipe.
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.text('УДЕРЖИВАТЬ')));
+      await tester.pump(const Duration(milliseconds: 600)); // порог long-press
+      expect(wipes, isEmpty, reason: 'полсекунды удержания ещё не стирают');
+
+      for (var i = 0; i < 45; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await gesture.up();
+      await tester.pump();
+
+      expect(wipes, equals([WipeReason.wipeCode]));
+    });
+
+    testWidgets('отмена в подтверждении не стирает и убирает окно',
+        (tester) async {
+      await auth.setPin('123456');
+      expect(await auth.setWipeCode('123456', '333333'), isTrue);
+
+      final wipes = <WipeReason>[];
+      await pumpLockOverlay(tester, wipes: wipes);
+
+      await _enterPin(tester, '333333');
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('УДАЛИТЬ ВСЕ ДАННЫЕ?'), findsOneWidget);
+
+      await tester.tap(find.text('Отмена'));
+      await tester.pump();
+
+      expect(wipes, isEmpty);
+      expect(find.text('УДАЛИТЬ ВСЕ ДАННЫЕ?'), findsNothing);
+      // Пин-пад снова доступен — пользователь может ввести настоящий PIN.
+      expect(find.text('1'), findsOneWidget);
+    });
+
+    testWidgets('авто-wipe с оверлея работает (регресс-страховка)',
+        (tester) async {
+      await auth.setPin('123456');
+      await auth.setAutoWipe(true, attempts: 3);
+
+      final wipes = <WipeReason>[];
+      await pumpLockOverlay(tester, wipes: wipes);
+
+      for (var i = 0; i < 3; i++) {
+        await _enterPin(tester, '000000');
+        await tester.pump(const Duration(milliseconds: 350));
+      }
+
+      expect(wipes, equals([WipeReason.autoWipe]));
+    });
+  });
 }
 
 

@@ -4,6 +4,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/screens/settings_screen.dart';
 import 'package:sqflite_common/sqlite_api.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/database_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -143,6 +144,32 @@ void main() {
 
       await tester.pumpAndSettle();
       expect(find.text('DEBUG LOGS'), findsOneWidget);
+    });
+
+    testWidgets('В duress секретные тапы НЕ открывают экран логов', (tester) async {
+      AuthService.instance.debugSetDuressMode(true);
+      addTearDown(() => AuthService.instance.debugSetDuressMode(false));
+
+      await tester.runAsync(() async {
+        await tester.pumpWidget(const MaterialApp(
+          localizationsDelegates: L10n.localizationsDelegates,
+          supportedLocales: L10n.supportedLocales,
+          locale: Locale('ru'),
+          home: SettingsScreen(),
+        ));
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      });
+      await tester.pump();
+
+      for (var i = 0; i < 5; i++) {
+        await tester.tap(find.text('Профиль'));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await tester.pumpAndSettle();
+
+      // В логе — RAM реальной сессии, а «Поделиться» отдаёт файл с диска.
+      expect(find.text('DEBUG LOGS'), findsNothing);
     });
   });
 }

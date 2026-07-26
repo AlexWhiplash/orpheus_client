@@ -47,6 +47,15 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   bool _isLoading = false;
   String? _errorMessage;
   Timer? _lockoutTimer;
+
+  /// Подтверждение кода удаления. Рисуется СЛОЕМ внутри этого экрана, а не через
+  /// showDialog: в проде LockScreen живёт оверлеем в `MaterialApp.builder`
+  /// (main.dart), у которого нет Navigator в предках — showDialog оттуда бросает
+  /// «Navigator operation requested with a context that does not include a
+  /// Navigator», и код удаления не срабатывал НИКОГДА. Пуш через navigatorKey тоже
+  /// не годится: диалог ушёл бы в корневой Navigator, то есть ПОД этот непрозрачный
+  /// оверлей — невидимый и некликабельный.
+  Completer<bool>? _wipeConfirm;
   
   // Анимации
   late AnimationController _shakeController;
@@ -91,6 +100,8 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     _pulseController.dispose();
     _revealController.dispose();
     _lockoutTimer?.cancel();
+    // Экран снят, пока висело подтверждение — не оставляем висеть await.
+    _resolveWipeConfirm(false);
     super.dispose();
   }
 
@@ -235,19 +246,21 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       _enteredPin = '';
       _isError = false;
       _errorMessage = null;
+      _wipeConfirm = Completer<bool>();
     });
 
-    if (!mounted) return;
+    final confirmed = await _wipeConfirm!.future;
+    if (mounted) setState(() => _wipeConfirm = null);
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const _HoldToWipeDialog(),
-    );
-
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       await widget.onWipe(WipeReason.wipeCode);
     }
+  }
+
+  void _resolveWipeConfirm(bool confirmed) {
+    final completer = _wipeConfirm;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(confirmed);
   }
 
   void _showError() {
@@ -386,6 +399,19 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+
+          // Подтверждение кода удаления — слоем поверх пин-пада, без Navigator.
+          if (_wipeConfirm != null)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.7),
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: _HoldToWipeDialog(onResult: _resolveWipeConfirm),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -602,7 +628,11 @@ enum WipeReason {
 }
 
 class _HoldToWipeDialog extends StatefulWidget {
-  const _HoldToWipeDialog();
+  const _HoldToWipeDialog({required this.onResult});
+
+  /// Результат отдаём колбэком, а не `Navigator.pop`: диалог рисуется слоем внутри
+  /// LockScreen, у которого в проде нет Navigator в предках.
+  final ValueChanged<bool> onResult;
 
   @override
   State<_HoldToWipeDialog> createState() => _HoldToWipeDialogState();
@@ -610,7 +640,14 @@ class _HoldToWipeDialog extends StatefulWidget {
 
 class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
   static const _holdDuration = Duration(seconds: 2);
+  static const _tick = Duration(milliseconds: 50);
   Timer? _timer;
+  // Считаем по тикам таймера, а не по DateTime.now(): иначе путь «удержал → стёрло»
+  // не проверить виджет-тестом (там время фейковое, а стенные часы стоят), а это
+  // единственный путь экстренного стирания с локскрина. Под нагрузкой тик может
+  // прийти позже — удержание просто окажется чуть длиннее, то есть ошибка в
+  // безопасную сторону.
+  int _elapsedMs = 0;
   double _progress = 0;
   bool _isHolding = false;
 
@@ -625,17 +662,20 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
     setState(() {
       _isHolding = true;
       _progress = 0;
+      _elapsedMs = 0;
     });
 
-    final start = DateTime.now();
-    _timer = Timer.periodic(const Duration(milliseconds: 50), (t) {
-      final elapsed = DateTime.now().difference(start);
-      final p = (elapsed.inMilliseconds / _holdDuration.inMilliseconds).clamp(0.0, 1.0);
-      if (!mounted) return;
+    _timer = Timer.periodic(_tick, (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      _elapsedMs += _tick.inMilliseconds;
+      final p = (_elapsedMs / _holdDuration.inMilliseconds).clamp(0.0, 1.0);
       setState(() => _progress = p);
       if (p >= 1.0) {
         t.cancel();
-        Navigator.of(context).pop(true);
+        widget.onResult(true);
       }
     });
   }
@@ -645,6 +685,7 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
     setState(() {
       _isHolding = false;
       _progress = 0;
+      _elapsedMs = 0;
     });
   }
 
@@ -713,7 +754,7 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
           children: [
             Expanded(
               child: TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
+                onPressed: () => widget.onResult(false),
                 child: Text(l10n.cancel, style: const TextStyle(color: Colors.grey)),
               ),
             ),

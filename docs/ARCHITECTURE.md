@@ -187,10 +187,11 @@ ICE кандидаты:
 - Panic wipe реализован как “3 события ухода в фон” (ограничение Flutter; по умолчанию выключено).
 
 **Известные ограничения (НЕ считать работающим):**
-- **Код удаления с локскрина не срабатывает**: `_showWipeConfirmDialog` зовёт `showDialog`
-  (`lock_screen.dart:242`) из виджета внутри `MaterialApp.builder` — Navigator-предка нет.
-  Auto-wipe по числу неудачных попыток (`lock_screen.dart:226-227`) и panic-жест
-  (`panic_wipe_service.dart`) работают.
+- Инвариант `LockScreen`: **из него нельзя дергать Navigator** — у виджета внутри
+  `MaterialApp.builder` нет Navigator-предка, а пуш через `navigatorKey` уехал бы ПОД
+  непрозрачный оверлей лока. Поэтому подтверждение кода удаления рисуется слоем внутри
+  самого экрана (`Completer<bool> _wipeConfirm` + `Positioned.fill` в его `Stack`).
+  До 26.07.2026 здесь стоял `showDialog`, и код удаления не срабатывал НИКОГДА.
 - Duress не гейтит уведомления: всплывают уведомления комнат (`main.dart:541`) и ответов поддержки
   (`incoming_message_handler.dart:113-116`). Тела обезличены (`notification_service.dart:645`), но
   сам факт уведомления — подсказка.

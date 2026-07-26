@@ -191,16 +191,18 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     final l10n = L10n.of(context);
     final config = _auth.config;
     final isPinEnabled = config.isPinEnabled;
-    // Under duress this screen must not admit that a duress or a wipe code exists:
-    // "duress code is set (N digits)" plus a button to disable it explains the whole
-    // scheme to the observer. Both sections stay VISIBLE and show their "not
-    // configured" branch — a missing section would be a tell of its own, and that
-    // branch only leads to PinSetupScreen, which verifies the MAIN pin first
-    // (pin_setup_screen.dart _processSetDuress, step 0 requires
-    // PinVerifyResult.success), so it cannot be used to overwrite anything.
+    // Под duress с этого экрана убрано ВСЁ, что требует ввести текущий PIN, и обе
+    // секции кодов целиком (см. места использования duressActive ниже).
+    //
+    // Почему так, а не «показать секции в состоянии „не настроено“», как было
+    // сделано сначала: любая ветка настройки ведёт в PinSetupScreen, который на
+    // первом шаге просит текущий PIN и принимает только настоящий. Наблюдатель,
+    // видевший, как приложение открыли кодом принуждения, вводит этот код и получает
+    // «неверный PIN» — доказуемое противоречие, которое проверяется за десять секунд
+    // (найдено на device-тесте 26.07.2026). Отсутствие кнопки ему сравнить не с чем.
     final duressActive = _auth.isDuressMode;
-    final isDuressEnabled = !duressActive && config.isDuressEnabled;
-    final isWipeCodeEnabled = !duressActive && config.isWipeCodeEnabled;
+    final isDuressEnabled = config.isDuressEnabled;
+    final isWipeCodeEnabled = config.isWipeCodeEnabled;
     final inactivityOptions = <int, String>{
       30: l10n.inactivity30s,
       60: l10n.inactivity1m,
@@ -257,20 +259,27 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   _refresh();
                 },
               ),
-              const SizedBox(height: 12),
-              _buildActionButton(
-                icon: Icons.edit,
-                title: l10n.changePinCode,
-                subtitle: l10n.digitCode(config.pinLength),
-                onTap: () => _openPinSetup(PinSetupMode.changePin),
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                icon: Icons.lock_open,
-                title: l10n.disablePinCode,
-                isDestructive: true,
-                onTap: () => _openPinSetup(PinSetupMode.disablePin),
-              ),
+              // Под duress эти действия скрыты: каждое начинается с «введите
+              // текущий PIN», а текущим для наблюдателя выглядит код принуждения —
+              // и получает «неверный PIN» от кода, которым только что открыли
+              // приложение. Это ДОКАЗУЕМОЕ противоречие. Отсутствие кнопки
+              // наблюдателю проверить не с чем, поэтому убираем кнопки.
+              if (!duressActive) ...[
+                const SizedBox(height: 12),
+                _buildActionButton(
+                  icon: Icons.edit,
+                  title: l10n.changePinCode,
+                  subtitle: l10n.digitCode(config.pinLength),
+                  onTap: () => _openPinSetup(PinSetupMode.changePin),
+                ),
+                const SizedBox(height: 8),
+                _buildActionButton(
+                  icon: Icons.lock_open,
+                  title: l10n.disablePinCode,
+                  isDestructive: true,
+                  onTap: () => _openPinSetup(PinSetupMode.disablePin),
+                ),
+              ],
             ],
             
             const SizedBox(height: 32),
@@ -308,8 +317,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             ),
             const SizedBox(height: 32),
 
-            // Секция кода принуждения (только если PIN включен)
-            if (isPinEnabled) ...[
+            // Секция кода принуждения (только если PIN включен).
+            // Под duress секции кодов скрыты целиком. Оставить их без кнопок было бы
+            // хуже: пустая секция сама рассказывает наблюдателю, что в приложении
+            // ЕСТЬ код принуждения — то самое понятие, о котором ему знать незачем.
+            if (isPinEnabled && !duressActive) ...[
               _buildSectionHeader(l10n.duressCodeSection, Icons.shield_outlined),
               const SizedBox(height: 12),
               
@@ -347,8 +359,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
               const SizedBox(height: 32),
             ],
 
-            // Секция кода удаления (только если PIN включен)
-            if (isPinEnabled) ...[
+            // Секция кода удаления (только если PIN включен). Под duress — скрыта,
+            // по той же причине, что и секция кода принуждения.
+            if (isPinEnabled && !duressActive) ...[
               _buildSectionHeader(l10n.wipeCodeSection, Icons.delete_forever),
               const SizedBox(height: 12),
 

@@ -119,7 +119,7 @@ void main() {
     });
 
     testWidgets(
-        'В duress экран НЕ признаётся, что код принуждения настроен (главный tell)',
+        'В duress нет ни секций кодов, ни действий, требующих текущий PIN',
         (tester) async {
       await auth.setPin('123456');
       expect(await auth.setDuressCode('123456', '654321'), isTrue);
@@ -137,17 +137,27 @@ void main() {
       );
       await tester.pump();
 
+      // Ни слова о том, что коды настроены.
       expect(find.text('Код принуждения установлен (6 цифр).'), findsNothing);
       expect(find.text('Отключить код принуждения'), findsNothing);
       expect(find.text('Код удаления установлен (6 цифр).'), findsNothing);
       expect(find.text('Отключить код удаления'), findsNothing);
 
-      // Секции остаются на месте в состоянии «не настроено»: их исчезновение само
-      // было бы tell'ом, а вход в настройку требует ОСНОВНОГО PIN.
-      expect(find.text('КОД ПРИНУЖДЕНИЯ'), findsOneWidget);
-      expect(find.text('Установить код принуждения'), findsOneWidget);
-      expect(find.text('КОД УДАЛЕНИЯ'), findsOneWidget);
-      expect(find.text('Установить код удаления'), findsOneWidget);
+      // Секции кодов скрыты целиком: пустая секция сама рассказала бы наблюдателю
+      // про существование режима принуждения.
+      expect(find.text('КОД ПРИНУЖДЕНИЯ'), findsNothing);
+      expect(find.text('Установить код принуждения'), findsNothing);
+      expect(find.text('КОД УДАЛЕНИЯ'), findsNothing);
+      expect(find.text('Установить код удаления'), findsNothing);
+
+      // И ни одного действия, которое спросит «введите текущий PIN»: наблюдатель
+      // ввёл бы код принуждения и получил «неверный PIN» от кода, которым только
+      // что открыл приложение (найдено на device-тесте 26.07.2026).
+      expect(find.text('Изменить PIN-код'), findsNothing);
+      expect(find.text('Отключить PIN-код'), findsNothing);
+
+      // При этом экран не выглядит обрубком: статус PIN и безопасные настройки на месте.
+      expect(find.text('ЗАЩИТА ОТ ПОДБОРА'), findsOneWidget);
     });
   });
 }

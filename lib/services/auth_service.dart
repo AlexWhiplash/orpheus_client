@@ -113,6 +113,23 @@ class AuthService {
   /// DatabaseService (разрыв цикла auth↔database, ARCH-1): раньше БД сама читала
   /// `AuthService.instance.isDuressMode`. Все переходы duress идут через этот
   /// метод, чтобы БД всегда фильтровала данные согласованно с режимом входа.
+  /// Подтвердить ОСНОВНОЙ PIN для чувствительного действия ВНУТРИ уже открытой
+  /// сессии, не меняя её режим.
+  ///
+  /// Обычный [verifyPin] на успехе зовёт `_setDuressMode(false)` — то есть проверка
+  /// PIN внутри duress-сессии молча снимала бы гейт БД, оставляя на экране пустой
+  /// профиль над разгейченными данными. Жертва подтверждает ОДНО действие, а не
+  /// выходит из режима: выход — только через полную блокировку и вход основным PIN.
+  ///
+  /// Duress- и wipe-код здесь не проходят (у них свои результаты), а вся логика
+  /// счётчика попыток и локаута остаётся от [verifyPin].
+  Future<bool> confirmMainPin(String pin) async {
+    final wasDuress = _isDuressMode;
+    final result = await verifyPin(pin);
+    if (wasDuress) _setDuressMode(true);
+    return result == PinVerifyResult.success;
+  }
+
   /// Только для тестов: включить duress без ввода PIN. Прод-код читает флаг с
   /// синглтона (`AuthService.instance`), а у синглтона secure storage — плагин,
   /// недоступный в unit-тестах, поэтому дойти сюда через verifyPin нельзя.

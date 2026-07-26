@@ -136,12 +136,16 @@
 - Single host: api.orpheus.click (legacy twc1 domain removed for privacy)
 - HTTP fallback для критичных сигналов (call-offer, call-answer, hang-up)
 
-## Известные открытые дефекты (НЕ заявляй как работающие)
-- ~~Код wipe с экрана лока не срабатывает~~ ПОЧИНЕНО 26.07.2026: подтверждение рисуется СЛОЕМ внутри `LockScreen` (`Completer<bool> _wipeConfirm` + `Positioned.fill` в его `Stack`), а не через `showDialog` — у виджета внутри `MaterialApp.builder` нет Navigator-предка. **Инвариант: из `LockScreen` нельзя дергать Navigator вообще** (ни `showDialog`, ни `navigatorKey` — во втором случае диалог уедет ПОД непрозрачный оверлей лока). Тесты держат это в группе «LockScreen как оверлей (структура прода)» — она поднимает лок в `builder`, как в проде; старая группа с `home:` баг не ловила.
-- Duress не гейтит уведомления: всплывают уведомления комнат (main.dart:541) и ответов поддержки (incoming_message_handler.dart:113-116). Содержимое обезличено (`l10n.newMessage`, notification_service.dart:645), но сам факт уведомления доказывает наблюдателю наличие скрытого аккаунта.
-- ~~Экран отладочных логов достижим из duress~~ и ~~`clearChatHistory` без гейта~~ — ПОЧИНЕНО 26.07.2026 (секретный тап no-op под duress; гейт в `clearChatHistory`).
-- Входящие личные сообщения во время duress теряются безвозвратно: `isContact` под duress отдаёт `false` (database_service.dart:489), и строгий mutual-add дропает кадр до сохранения (incoming_message_handler.dart:128), а сервер уже считает его доставленным.
-- `verifyPin(основной PIN)` внутри duress-сессии зовёт `_setDuressMode(false)` — гейт БД снимается, а UI остаётся duress-сессией (рассогласованное состояние). Тот же корень, что неиспользуемый `exitDuressMode`.
+## Duress/wipe: что закрыто и чем это держится (26.07.2026)
+Весь список дефектов режима принуждения закрыт в этот день. Инварианты, которые надо СОХРАНЯТЬ:
+- **Из `LockScreen` нельзя дергать Navigator вообще.** Он рисуется оверлеем в `MaterialApp.builder`, где Navigator не предок; `showDialog` оттуда падает, а `navigatorKey` увёл бы диалог ПОД непрозрачный оверлей лока. Подтверждение кода удаления — слой внутри самого экрана (`Completer<bool> _wipeConfirm`). Тесты: группа «LockScreen как оверлей (структура прода)»; ставить лок в `home:` нельзя — так дефект не ловится.
+- **Смена личности сессии обязана звать `dropRoutesAboveHome()`** (duress-вход, wipe, настоящий PIN после duress).
+- **Гейт duress нужен на трёх уровнях** — БД, серверные сервисы, UI/навигация (см. раздел «Безопасность»).
+- **Уведомления под duress не поднимаются** (`_IncomingNotificationsAdapter`, `_handleRoomEventForBadge`): тела и так обезличены, но сам факт уведомления на пустом профиле выдавал скрытый аккаунт.
+- **Входящий личный `chat` под duress откладывается**, а не дропается: `parkPersonalChatUntilRealSession` кладёт конверт в `PendingInboxStorage`, `_drainPendingInbox` под duress не запускается и разбирает очередь после входа настоящим PIN. Без этого кадр терялся навсегда (строгий mutual-add спрашивает `isContact`, а тот под duress `false`), при том что сервер считал его доставленным.
+- **Для подтверждения действия внутри открытой сессии — `AuthService.confirmMainPin`**, а не `verifyPin`: обычный `verifyPin` на успехе снимает duress-гейт, и на экране остался бы пустой профиль над реальными данными.
+
+Открытым остаётся одно: **push-изолят к duress слеп** (статики пер-изолятны, у него свой `AuthService` с `_isDuressMode == false`). Сегодня безвредно — изолят работает только когда main мёртв, а duress живёт лишь в живой сессии; но любое изменение этой координации откроет обход.
 
 ## Важные файлы
 - [main.dart](lib/main.dart) - точка входа; здесь же навигационная часть безопасности: лок-оверлей (main.dart:1247-1256), `PushedRouteTracker` (main.dart:75) и `dropRoutesAboveHome()` (main.dart:129) с тремя вызовами (main.dart:821/940/978)

@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:orpheus_project/main.dart' show parkPersonalChatUntilRealSession;
+import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/pending_inbox_storage.dart';
 
 // Очередь конвертов, доставленных push-изолятом при убитом приложении (сервер их
@@ -96,5 +100,42 @@ void main() {
   test('пустая очередь -> пустой список без ошибок', () async {
     expect(await PendingInboxStorage.instance.peekAll(), isEmpty);
     await PendingInboxStorage.instance.removeProcessed({}); // no-op, без ошибок
+  });
+
+  // Личное сообщение, пришедшее в duress-сессию, раньше терялось НАВСЕГДА: строгий
+  // mutual-add спрашивает isContact, а тот под duress отвечает false, и кадр дропался
+  // до записи — при том что сервер уже считал его доставленным.
+  group('duress: входящее откладывается, а не теряется', () {
+    tearDown(() => AuthService.instance.debugSetDuressMode(false));
+
+    test('личный chat уходит в очередь и НЕ обрабатывается сейчас', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      final parked = await parkPersonalChatUntilRealSession(
+          json.encode(env('m1', sender: 'REAL_CONTACT')));
+
+      expect(parked, isTrue, reason: 'обработку надо остановить, кадр отложен');
+      final items = await PendingInboxStorage.instance.peekAll();
+      expect(items.single.envelope['message_id'], 'm1');
+      expect(items.single.envelope['payload'], 'ciphertext-m1',
+          reason: 'кладём конверт как есть, шифртекст не трогаем');
+    });
+
+    test('не-chat кадры не откладываются (звонки, служебное)', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      for (final type in ['call-offer', 'hang-up', 'room-message', 'pong']) {
+        final parked = await parkPersonalChatUntilRealSession(
+            json.encode({'type': type, 'sender_pubkey': 'X'}));
+        expect(parked, isFalse, reason: '$type откладывать нельзя');
+      }
+      expect(await PendingInboxStorage.instance.peekAll(), isEmpty);
+    });
+
+    test('битый JSON не роняет обработку входящих', () async {
+      AuthService.instance.debugSetDuressMode(true);
+      expect(await parkPersonalChatUntilRealSession('{не json'), isFalse);
+      expect(await parkPersonalChatUntilRealSession('[]'), isFalse);
+    });
   });
 }

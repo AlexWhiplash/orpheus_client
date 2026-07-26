@@ -165,6 +165,42 @@ void main() {
       expect(auth.config.inactivityLockSeconds, equals(600));
     });
 
+    test('confirmMainPin внутри duress подтверждает, но НЕ снимает режим', () async {
+      final storage = _InMemoryAuthStorage();
+      final auth = AuthService.createForTesting(secureStorage: storage);
+      await auth.init();
+      await auth.setPin('123456');
+      expect(await auth.setDuressCode('123456', '654321'), isTrue);
+
+      auth.lock();
+      expect(await auth.verifyPin('654321'), equals(PinVerifyResult.duress));
+      expect(auth.isDuressMode, isTrue);
+
+      // Жертву заставили подтвердить чувствительное действие основным PIN.
+      expect(await auth.confirmMainPin('123456'), isTrue);
+      // Подтвердили ОДНО действие, а не вышли из режима: иначе на экране остался бы
+      // пустой профиль над разгейченной базой.
+      expect(auth.isDuressMode, isTrue,
+          reason: 'подтверждение PIN не должно снимать duress-гейт');
+
+      // Duress-код и мусор как подтверждение не проходят.
+      expect(await auth.confirmMainPin('654321'), isFalse);
+      expect(auth.isDuressMode, isTrue);
+      expect(await auth.confirmMainPin('000000'), isFalse);
+      expect(auth.isDuressMode, isTrue);
+    });
+
+    test('confirmMainPin вне duress работает как обычная проверка', () async {
+      final storage = _InMemoryAuthStorage();
+      final auth = AuthService.createForTesting(secureStorage: storage);
+      await auth.init();
+      await auth.setPin('123456');
+
+      expect(await auth.confirmMainPin('123456'), isTrue);
+      expect(auth.isDuressMode, isFalse);
+      expect(await auth.confirmMainPin('999999'), isFalse);
+    });
+
     test('duress: вход не оставляет следа в логе — экран логов доступен наблюдателю',
         () async {
       final storage = _InMemoryAuthStorage();

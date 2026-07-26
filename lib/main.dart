@@ -508,6 +508,10 @@ void _listenForMessages() {
 
   websocketService.stream.listen((messageJson) async {
     try {
+      if (authService.isDuressMode &&
+          await parkPersonalChatUntilRealSession(messageJson)) {
+        return;
+      }
       _handleRoomEventForBadge(messageJson);
       await handler.handleRawMessage(messageJson);
     } catch (e, stackTrace) {
@@ -516,6 +520,32 @@ void _listenForMessages() {
       Sentry.captureException(e, stackTrace: stackTrace);
     }
   });
+}
+
+/// Личное сообщение, пришедшее пока активен duress, нельзя отдавать обработчику:
+/// строгий mutual-add спрашивает `isContact`, а тот под duress отвечает `false`, и
+/// кадр дропается ДО записи — при том что сервер уже считает его доставленным. Это
+/// ровно та же безвозвратная потеря, что в инциденте «лифт», только со стороны
+/// получателя.
+///
+/// Поэтому конверт кладётся в ту же очередь, куда пишет push-изолят при убитом
+/// приложении. [_drainPendingInbox] под duress не запускается и разберёт её после
+/// входа НАСТОЯЩИМ PIN; дедуп по `message_id` гасит возможный повтор.
+///
+/// Возвращает true, если конверт отложен и его не надо обрабатывать сейчас.
+/// Комнаты и поддержку не откладываем: их история живёт на сервере и перечитается.
+Future<bool> parkPersonalChatUntilRealSession(String messageJson) async {
+  try {
+    final decoded = json.decode(messageJson);
+    if (decoded is! Map<String, dynamic>) return false;
+    if (decoded['type'] != 'chat') return false;
+    await PendingInboxStorage.instance.append(decoded);
+    DebugLogger.info('PENDING_INBOX', 'Входящее сохранено в очередь');
+    return true;
+  } catch (e) {
+    DebugLogger.error('PENDING_INBOX', 'Не удалось отложить входящее: $e');
+    return false;
+  }
 }
 
 /// Rooms have no local storage and the strict mutual-add handler drops room frames
@@ -537,7 +567,10 @@ void _handleRoomEventForBadge(String messageJson) {
     if (senderKey != null && senderKey == cryptoService.addressBase64) return;
     RoomUnreadService.instance.noteIncoming(roomId);
     // Neutral alert only when backgrounded; in foreground the tab badge is enough.
-    if (!isAppInForeground) {
+    // Never under duress: the tab dot is already hidden there, and a notification
+    // would prove a hidden account exists (the badge state itself is kept — it is
+    // invisible under duress and correct again after a real unlock).
+    if (!isAppInForeground && !authService.isDuressMode) {
       NotificationService.showRoomMessageNotification();
     }
   } catch (_) {}
@@ -713,6 +746,11 @@ class _IncomingNotificationsAdapter implements IncomingMessageNotifications {
 
   @override
   Future<void> showMessageNotification() {
+    // Под duress уведомления не поднимаем. Тело и так обезличено, но САМ ФАКТ
+    // уведомления на пустом профиле доказывает наблюдателю, что за ним стоит
+    // настоящий аккаунт. Пустому профилю писать некому — тишина здесь и есть
+    // правдоподобное поведение.
+    if (authService.isDuressMode) return Future<void>.value();
     return NotificationService.showMessageNotification();
   }
 }

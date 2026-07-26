@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:orpheus_project/config.dart';
-import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart';
 import 'package:orpheus_project/screens/debug_logs_screen.dart';
@@ -139,8 +138,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // biometricOnly: false it accepts the DEVICE passcode, which a coercing
     // observer normally has — and what is exported is the 32-byte root seed, the
     // whole identity. Only the app PIN proves the real owner is asking, and
-    // _verifyWithAppPin accepts nothing but PinVerifyResult.success (the duress
-    // code returns PinVerifyResult.duress and is rejected).
+    // _verifyWithAppPin goes through confirmMainPin, which accepts the main PIN
+    // only (the duress code is rejected) and does NOT lift the duress gate.
     final requireAppPin = authService.isDuressMode;
 
     // Try system authentication (biometric + device credentials)
@@ -206,8 +205,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (pin == null || !mounted) return false;
 
-    final result = await authService.verifyPin(pin);
-    if (result == PinVerifyResult.success) return true;
+    // confirmMainPin, а не verifyPin: внутри duress-сессии обычная проверка сняла бы
+    // гейт БД и оставила пустой профиль над реальными данными.
+    if (await authService.confirmMainPin(pin)) return true;
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

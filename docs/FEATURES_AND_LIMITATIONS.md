@@ -52,7 +52,6 @@
 - В release `DebugLogger` **не пишет в системный logcat** (`kDebugMode`), а чувствительные события безопасности убраны из логов — `QUAL-1/OPS-6`.
 
 ### 6) Duress / wipe — открытые дефекты (высокий приоритет)
-- **Уведомления не гейтятся duress**: комнаты (`lib/main.dart:541`) и ответы поддержки (`lib/services/incoming_message_handler.dart:113-116`) всплывают в duress‑сессии. Содержимое обезличено, но сам факт выдаёт наличие скрытого аккаунта.
 - **Входящие личные сообщения во время duress теряются навсегда**: `isContact` в duress → `false` (`lib/services/database_service.dart:489`), строгий mutual‑add дропает кадр до записи (`lib/services/incoming_message_handler.dart:128`).
 - **Косметический tell**: сеттеры настроек — no‑op, поэтому в duress переключатель визуально отскакивает назад (осознанный fail‑closed).
 

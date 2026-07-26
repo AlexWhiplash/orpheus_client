@@ -36,7 +36,8 @@
 - PushConnectionService - постоянный foreground-сервис (specialUse) с WebSocket в отдельном isolate; заменяет FCM для доставки при убитом приложении
 - CallStateService - WebRTC звонки
 - AiAssistantService - Oracle of Orpheus AI
-- RoomsService - групповые чаты
+- RoomsService - групповые чаты; данные НА СЕРВЕРЕ, duress-гейт через `_pubkey == null` (rooms_service.dart:25), а не через БД
+- SupportChatService - чат с разработчиком; данные тоже на сервере, тот же гейт + своя duress-ветка в `loadMessages` (support_chat_service.dart:47/62)
 - TelemetryService - полное логирование жизненного цикла
 
 ## Безопасность (КРИТИЧНО!)
@@ -45,7 +46,12 @@
 - Проверяй на SQL injection и XSS
 - Используй compute() для криптографических операций
 - Не добавляй screenshot capability без явного запроса
-- Duress mode должен возвращать пустые данные, не null
+- Duress mode: гейт нужен на ТРЁХ уровнях, гейта в БД НЕДОСТАТОЧНО
+  - Локальная БД (`DatabaseService`): чтения возвращают пусто (`[]`/`{}`/`0`), не null; деструктивные методы — no-op
+  - Серверные сервисы (`RoomsService`, `SupportChatService`): под duress `_pubkey` возвращает **null**, чтобы запрос вообще не ушёл на сервер от имени жертвы (rooms_service.dart:25, support_chat_service.dart:47); у поддержки своя duress-ветка в `loadMessages` — пусто и `error == null` (support_chat_service.dart:62), иначе красный баннер ошибки сам стал бы подсказкой
+  - UI/навигация: лок рисуется ОВЕРЛЕЕМ поверх Navigator (main.dart:1247-1256), поэтому маршруты, открытые до лока, остаются смонтированными с расшифрованными данными в `State` и не перечитывают гейтнутую БД. Любая смена личности сессии обязана звать `dropRoutesAboveHome()` (main.dart:129; вызовы — main.dart:821/940/978)
+  - Настройки под duress не меняются: пять сеттеров `AuthService` — no-op (auth_service.dart:477/486/497/513/588) плюс тумблер имени звонящего (security_settings_screen.dart:304); экран безопасности не признаёт, что duress/wipe-код настроен (security_settings_screen.dart:201-203); экспорт аккаунта требует PIN приложения, а не системный код устройства (settings_screen.dart:139)
+  - Логи не называют режим: ни `DebugLogger`, ни `print` не пишут «duress»/«wipe» — экран логов достижим из duress-сессии
 - Panic wipe - безвозвратное удаление, проверяй дважды
 
 ## Тестирование
@@ -89,6 +95,7 @@
 - [ ] Нет утечек личных данных: grep по коду на имена, домены, ключи, пароли
 - [ ] Локализация: все новые строки есть в EN и RU (app_en.arb + app_ru.arb)
 - [ ] Нет hardcoded строк в UI — всё через L10n
+- [ ] Если менялся любой экран/сервис, читающий или пишущий данные: проверено поведение под duress (пусто из БД, ни одного запроса на сервер, `dropRoutesAboveHome()` на переходах режима, никаких «настройка сохранена», никаких упоминаний duress в логах)
 
 ### Фаза 3: Git
 - [ ] `git status` — нет забытых unstaged изменений
@@ -98,6 +105,7 @@
 ### Фаза 4: Версионирование
 - [ ] `pubspec.yaml`: version обновлена (и version name, и build number)
 - [ ] `config.dart`: appVersion обновлена
+- [ ] `config.dart`: `debugFileLogging = false` для публичного релиза (сейчас в репозитории `true` — тест-сборка, config.dart:10; при `true` пишется файловый лог и снимается защита от скриншотов). Для тест-сборок флаг оставлять `true` и бампить только build number
 - [ ] Коммит с бампом версии создан
 
 ### Фаза 5: Changelog
@@ -128,8 +136,17 @@
 - Single host: api.orpheus.click (legacy twc1 domain removed for privacy)
 - HTTP fallback для критичных сигналов (call-offer, call-answer, hang-up)
 
+## Известные открытые дефекты (НЕ заявляй как работающие)
+- Код wipe с экрана лока не срабатывает вообще: `showDialog` (lock_screen.dart:242) вызывается из виджета внутри `MaterialApp.builder` (main.dart:1247-1256), у которого нет Navigator-предка. Авто-wipe (lock_screen.dart:226-227) и panic-жест работают. ВАЖНО: фикс «через navigatorKey» неверен — диалог уедет ПОД непрозрачный оверлей лока; лечить слоем внутри самого LockScreen.
+- Duress не гейтит уведомления: всплывают уведомления комнат (main.dart:541) и ответов поддержки (incoming_message_handler.dart:113-116). Содержимое обезличено (`l10n.newMessage`, notification_service.dart:645), но сам факт уведомления доказывает наблюдателю наличие скрытого аккаунта.
+- Экран отладочных логов достижим из duress-сессии (5 тапов, settings_screen.dart:119-126): RAM-лог плюс шаринг файла с диска.
+- `DatabaseService.clearChatHistory` (database_service.dart:1066) — единственный путь удаления без duress-гейта.
+- Входящие личные сообщения во время duress теряются безвозвратно: `isContact` под duress отдаёт `false` (database_service.dart:489), и строгий mutual-add дропает кадр до сохранения (incoming_message_handler.dart:128), а сервер уже считает его доставленным.
+- `verifyPin(основной PIN)` внутри duress-сессии зовёт `_setDuressMode(false)` — гейт БД снимается, а UI остаётся duress-сессией (рассогласованное состояние). Тот же корень, что неиспользуемый `exitDuressMode`.
+
 ## Важные файлы
-- [main.dart](lib/main.dart) - точка входа
+- [main.dart](lib/main.dart) - точка входа; здесь же навигационная часть безопасности: лок-оверлей (main.dart:1247-1256), `PushedRouteTracker` (main.dart:75) и `dropRoutesAboveHome()` (main.dart:129) с тремя вызовами (main.dart:821/940/978)
+- [security_settings_screen.dart](lib/screens/security_settings_screen.dart) - настройки безопасности и маскировка duress/wipe-кода под duress (security_settings_screen.dart:201-203)
 - [config.dart](lib/config.dart) - конфигурация приложения
 - [crypto_service.dart](lib/services/crypto_service.dart) - все операции шифрования
 - [websocket_service.dart](lib/services/websocket_service.dart) - real-time логика

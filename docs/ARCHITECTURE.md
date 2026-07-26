@@ -17,8 +17,9 @@
   - Буфер входящих ICE: `lib/services/incoming_call_buffer.dart`
   - Глобальный флаг “звонок активен”: `lib/services/call_state_service.dart`
   - Foreground service на время звонка: `lib/services/background_call_service.dart`
-- **Уведомления** (FCM + локальные): `lib/services/notification_service.dart`
+- **Уведомления** (только локальные, без Google/FCM): `lib/services/notification_service.dart`
 - **Безопасность входа/duress/wipe**: `lib/services/auth_service.dart`, ADR: `docs/DECISIONS/0003-security-system.md`
+- **Навигационная часть безопасности** (лок‑оверлей поверх Navigator, `PushedRouteTracker`, `dropRoutesAboveHome`): `lib/main.dart:75-140`, `lib/main.dart:1247-1256`
 - **Presence (онлайн‑статусы)**: `lib/services/presence_service.dart`
 - **Обновления** (check-update + fallback по хостам): `lib/services/update_service.dart`
 - **Лицензия/промо‑активация**: `lib/license_screen.dart`
@@ -47,6 +48,27 @@
 9. `PushConnectionService.start()` + heartbeat (постоянный foreground-сервис доставки
    пушей при убитом приложении — замена FCM; только если есть ключи)
 
+## Лок как оверлей и сброс маршрутов (инвариант duress/wipe)
+`LockScreen` рисуется НЕ как `home`, а оверлеем поверх Navigator в `MaterialApp.builder`
+(`lib/main.dart:1247-1256`): иначе любой запушенный маршрут (чат, звонок) перекрывал бы лок и
+PIN обходился. Следствие: маршруты, открытые ДО лока, остаются смонтированными, и их `State`
+держит уже расшифрованные данные (например историю чата в RAM), которые не перечитываются из
+гейтнутой БД. Поэтому введён инвариант: **при смене личности сессии маршруты выше home снимаются**.
+- `PushedRouteTracker` (`NavigatorObserver`, `lib/main.dart:75`) ведёт список маршрутов выше home;
+  подключён через `navigatorObservers: appNavigatorObservers` (`lib/main.dart:1199`). Наблюдается
+  только корневой Navigator — вложенных сегодня нет; появится вложенный, механизм его не покроет.
+- `dropRoutesAboveHome()` (`lib/main.dart:129`) снимает маршруты через `NavigatorState.removeRoute`
+  синхронно и БЕЗ pop-анимации, пока лок ещё нарисован, — чтобы не было кадра, где настоящий чат
+  виден без лока сверху. `popUntil` не используется намеренно (анимация выхода ~300 мс).
+- Три точки вызова: вход по коду принуждения (`main.dart:978`), завершение wipe (`main.dart:821`),
+  вход настоящим PIN после duress-сессии (`main.dart:940`, по флагу `_duressUiActive`). После
+  обычного автолока маршруты НЕ снимаются — пользователь должен вернуться на свой экран.
+- Контракт для новых экранов: продолжение `await Navigator.push(...)` может выполниться уже после
+  dispose — нужен guard по `mounted` (`rooms_screen.dart`).
+- Контракт для `dispose()`: после wipe маршруты снимаются уже ПОСЛЕ стирания, поэтому любая запись
+  из `dispose` идёт под гардом «личность ещё есть» (`call_screen.dart:1250`,
+  `room_chat_screen.dart:112`) — иначе пересоздаётся SQLCipher-база с новым ключом.
+
 ## Пуши без Google
 Вместо Firebase Cloud Messaging входящие при убитом приложении будит собственный постоянный
 foreground-сервис `PushConnectionService` (`flutter_background_service`, тип Android `specialUse`).
@@ -65,7 +87,7 @@ foreground-сервис `PushConnectionService` (`flutter_background_service`, �
   - `pubkey`, `call_id` (если есть)
   - `app_version`, `os`
   - `network`, `app_state`
-- Фоновый FCM handler не отправляет ключи: телеметрия санитизирована (`recipient_pubkey` убран).
+- Фоновый обработчик доставки (push-изолят `PushConnectionService`) не отправляет ключи: телеметрия санитизирована (`recipient_pubkey` убран).
 
 ### Сервер (серверный репозиторий — вне этого репозитория)
 - Таблица: `telemetry_logs`
@@ -92,7 +114,15 @@ foreground-сервис `PushConnectionService` (`flutter_background_service`, �
 1. UI пишет текст → сохраняем в SQLite через `DatabaseService.addMessage`.
 2. Шифруем через `CryptoService.encrypt(recipientPubKey, text)` (в isolate).
 3. Отправляем по WS: `{type:"chat", recipient_pubkey, payload}`.
-4. Если WS не подключен — payload кладётся в очередь `PendingActionsService` и отправляется позже при реконнекте.
+
+- Доставка идёт через **персистентный outbox** (таблица `outbox`, SQLCipher, схема v10): сообщение
+  попадает в очередь ДО первой записи в сокет и удаляется ТОЛЬКО по подтверждению сервера — явный
+  `chat-ack` (сервер с `caps=['chat-ack']`) либо pong-fence на серверах без caps
+  (`websocket_service.dart`). До подтверждения статус — `sending` («часики»).
+- Смерть сокета или процесса даёт ресенд, а не потерю; дубль у получателя гасится дедупом по
+  `messageId` (уникальный индекс `idx_unique_message_id`).
+- Ретраи: таймер каждые 30 с, слив после PoP-аутентификации, `_reconcileOutbox` при старте.
+  Старая prefs-очередь `PendingActionsService` — только разовый импорт legacy-строк (`main.dart`).
 
 **Входящее сообщение** (`WebSocketService.stream` → `IncomingMessageHandler`):
 1. Получаем `{type:"chat", sender_pubkey, payload}`.
@@ -121,8 +151,11 @@ ICE кандидаты:
 
 ### 4) Уведомления
 `NotificationService`:
-- FCM init, получение token и обновления.
-- Background handler показывает **локальные уведомления только для data-only** сообщений (чтобы не ломать звук/поведение системного notification payload).
+- Только локальные уведомления (`flutter_local_notifications`) + CallKit для звонков. Google/FCM в
+  проекте нет: при убитом приложении соединение держит собственный `PushConnectionService`.
+- Уведомления о сообщениях поднимает main-изолят (`IncomingMessageHandler` →
+  `NotificationService.showMessageNotification`). Push-изолят держит только своё постоянное
+  уведомление foreground-сервиса (`push_connection_service.dart`, id 887, `showBadge: false`).
 - Приватность: push по сообщениям не содержит текста сообщения (на стороне клиента показывается “Новое сообщение”).
 
 ### 5) Домены и fallback (устойчивость)
@@ -133,8 +166,37 @@ ICE кандидаты:
 ### 6) Безопасность приложения (PIN / duress / wipe)
 Подробно: `docs/DECISIONS/0003-security-system.md`.
 - PIN/duress/wipe code и lockout ladder — `AuthService` + `SecurityConfig`.
-- Duress mode влияет на выдачу данных из `DatabaseService` (контакты/сообщения/статистика возвращаются пустыми), при этом входящие сообщения **сохраняются**, чтобы не терять данные.
+- Duress — сквозной режим, а не только фильтр БД. Гейты стоят на всех источниках данных:
+  - локальная БД: чтения возвращают пустое (`DatabaseService`), деструктивные методы — no-op;
+  - серверные данные: `RoomsService._pubkey` и `SupportChatService._pubkey` → `null`
+    (`rooms_service.dart:25`, `support_chat_service.dart:47`), `loadMessages` под duress отдаёт
+    ПУСТО и `error == null` (`support_chat_service.dart:62`) — иначе красный баннер ошибки сам был
+    бы подсказкой; живой ответ по WS игнорируется (`support_chat_service.dart:219`);
+  - навигация: см. § «Лок как оверлей и сброс маршрутов»;
+  - UI-подсказки: точка непрочитанного комнат гасится (`home_screen.dart:41-42`), экран
+    «Безопасность» не признаёт наличие кода принуждения и кода удаления — оба раздела остаются
+    видимыми в состоянии «не настроено» (`security_settings_screen.dart:201-203`);
+  - необратимые действия: экспорт аккаунта под duress требует PIN приложения вместо системного кода
+    устройства (`settings_screen.dart:139`), пять сеттеров конфига (auto-wipe, panic-жест,
+    биометрия, автолок, retention) и тумблер «имя звонящего на локскрине» — no-op
+    (`auth_service.dart:477,486,497,513,588`, `security_settings_screen.dart:304`);
+  - диагностика: лог не называет режим (`main.dart:970`).
+- **Входящие в duress не сохраняются, а теряются**: `isContact` под duress → `false`
+  (`database_service.dart:489`), строгий mutual-add дропает кадр до записи в БД
+  (`incoming_message_handler.dart:128`), а сервер уже считает сообщение доставленным.
 - Panic wipe реализован как “3 события ухода в фон” (ограничение Flutter; по умолчанию выключено).
+
+**Известные ограничения (НЕ считать работающим):**
+- **Код удаления с локскрина не срабатывает**: `_showWipeConfirmDialog` зовёт `showDialog`
+  (`lock_screen.dart:242`) из виджета внутри `MaterialApp.builder` — Navigator-предка нет.
+  Auto-wipe по числу неудачных попыток (`lock_screen.dart:226-227`) и panic-жест
+  (`panic_wipe_service.dart`) работают.
+- Duress не гейтит уведомления: всплывают уведомления комнат (`main.dart:541`) и ответов поддержки
+  (`incoming_message_handler.dart:113-116`). Тела обезличены (`notification_service.dart:645`), но
+  сам факт уведомления — подсказка.
+- Экран отладочных логов достижим из duress-сессии (`settings_screen.dart:119-126`).
+- `DatabaseService.clearChatHistory` (`database_service.dart:1066`) — единственный путь удаления
+  БЕЗ duress-гейта.
 
 ### 7) Oracle of Orpheus (AI‑ассистент)
 - **Сервис**: `lib/services/ai_assistant_service.dart`
@@ -159,6 +221,11 @@ ICE кандидаты:
 - **Инвайт**: присоединение по invite‑коду, ротация кода через `rotate-invite`
 - **Panic clear**: безвозвратное удаление всей истории комнаты
 - **Orpheus Room**: официальная комната (скрыта до релиза); `asOrpheus` флаг для официальных сообщений
+- **Duress**: `RoomsService._pubkey` возвращает `null` (`rooms_service.dart:25`) — комнаты живут на
+  СЕРВЕРЕ, гейт БД их не покрывает. Все методы трактуют `null` как «нет аккаунта»: чтения пустые,
+  prefs отдают дефолты, мутации бросают, а UI показывает свою обычную ошибку соединения
+  (неотличимо от недоступного сервера). Точка непрочитанного в табах гасится отдельно
+  (`home_screen.dart:41-42`), т.к. живёт в кеше сервиса, а не в БД.
 
 ### 10) Desktop Link — УДАЛЁН из клиента
 Паринг телефон↔десктоп по LAN удалён (недостижимый мёртвый код + небезопасный

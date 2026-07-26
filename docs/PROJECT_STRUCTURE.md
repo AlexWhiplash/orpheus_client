@@ -14,7 +14,7 @@
 ## 2) `lib/` — карта ответственности
 
 ### 2.1 Точки входа и “склейка” приложения
-- **`lib/main.dart`**: главный entrypoint; инициализация Firebase/уведомлений/крипто/авторизации/мониторинга сети; подключение WebSocket; подписка на входящие сообщения через `IncomingMessageHandler`; запуск `MyApp`.
+- **`lib/main.dart`**: главный entrypoint; инициализация локализации/уведомлений (без Firebase)/крипто/авторизации/мониторинга сети; подключение WebSocket; подписка на входящие через `IncomingMessageHandler`; reconcile входящих и outbox; запуск `MyApp`. Здесь же **навигационная часть безопасности**: `LockScreen` рисуется оверлеем поверх Navigator в `MaterialApp.builder` (строки 1247-1256), а `PushedRouteTracker` (строка 75) + `dropRoutesAboveHome()` (строка 129) снимают маршруты выше home при duress‑входе, завершении wipe и настоящем PIN после duress‑сессии (строки 978/821/940).
 - **`lib/main_test.dart`**: вспомогательный entry для тестов (если используется; не точка входа прод‑сборки).
 - **`lib/config.dart`**: `AppConfig` — версия приложения, список хостов (primary + legacy fallback), генерация URL, legacy fallback для changelog.
 
@@ -34,8 +34,8 @@
 - **`lib/screens/notes_vault_screen.dart`**: UI зашифрованных заметок (Notes Vault): CRUD, tracking источника, сортировка по дате.
 - **`lib/screens/status_screen.dart`**: системный монитор/статусы (сеть/WS/диагностика).
 - **`lib/screens/settings_screen.dart`**: настройки приложения и навигация в разделы (безопасность, поддержка и т.п.).
-- **`lib/screens/security_settings_screen.dart`**: UI управления PIN/duress/wipe/auto‑wipe/panic gesture/auto‑lock.
-- **`lib/screens/lock_screen.dart`**: экран блокировки (PIN/duress/wipe code сценарии).
+- **`lib/screens/security_settings_screen.dart`**: UI управления PIN/duress/wipe/auto‑wipe/panic gesture/auto‑lock. Под duress экран НЕ признаёт, что код принуждения или код удаления настроены: оба раздела остаются видимыми в ветке «не настроено» (строки 201-203; исчезновение раздела было бы подсказкой), а тумблер «имя звонящего на локскрине» не пишет prefs (строка 304).
+- **`lib/screens/lock_screen.dart`**: экран блокировки (PIN/duress/wipe code сценарии). Монтируется **оверлеем** в `MaterialApp.builder` (`main.dart:1247-1256`), а не как `home`, — иначе запушенные маршруты перекрывали бы лок. Следствие: у экрана нет Navigator‑предка, поэтому диалог подтверждения кода удаления (`showDialog`, строка 242) не открывается — известное ограничение; auto‑wipe при этом работает (строки 226-227).
 - **`lib/screens/pin_setup_screen.dart`**: настройка/смена PIN.
 - **`lib/screens/support_chat_screen.dart`**: UI чата поддержки (клиент ↔ админ/разработчик).
 - **`lib/screens/debug_logs_screen.dart`**: просмотр/экспорт debug‑логов (для диагностики).
@@ -45,10 +45,10 @@
 Ключевой принцип: сервисы не должны зависеть от UI напрямую; UI вызывает сервисы и подписывается на их потоки.
 
 #### Безопасность и данные
-- **`lib/services/auth_service.dart`**: PIN/duress/wipe code, lockout ladder, auto‑wipe; управление `SecurityConfig`; выполнение wipe (крипто + БД + конфиг).
+- **`lib/services/auth_service.dart`**: PIN/duress/wipe code, lockout ladder, auto‑wipe; управление `SecurityConfig`; выполнение wipe (крипто + БД + конфиг). Под duress сеттеры конфигурации — **no-op** (auto‑wipe, panic‑жест, биометрия, автолок, retention: строки 477, 486, 497, 513, 588); гейт стоит в КАЖДОМ сеттере, а не в `_saveConfig`, потому что `disableDuressCode` пишет конфиг до снятия флага.
 - **`lib/services/panic_wipe_service.dart`**: panic wipe по “3 ухода в фон” (ограничение Flutter), best‑effort.
 - **`lib/services/crypto_service.dart`**: ключи X25519, E2E encrypt/decrypt (через `compute`/isolate), хранение ключей в secure storage.
-- **`lib/services/database_service.dart`**: SQLite (контакты/сообщения/статистика); поведение в duress mode (пустые выдачи).
+- **`lib/services/database_service.dart`**: SQLite через SQLCipher, схема **v10** (`version: 10`, строка 102); таблицы `contacts`, `messages`, `ai_messages`, `ai_context`, `notes`, `outbox`; персистентная очередь исходящих `outbox` с удалением только по подтверждению сервера; поведение в duress mode (пустые выдачи, деструктивные методы no-op). Исключение: `clearChatHistory` (строка 1066) — единственный путь удаления без duress‑гейта.
 
 #### Сеть и протокол
 - **`lib/services/websocket_service.dart`**: WebSocket подключение, реконнект/backoff, ping/pong, смена хоста (fallback), отправка сообщений и сигналов; HTTP fallback для критичных сигналов.
@@ -68,7 +68,7 @@
 
 #### AI, заметки и комнаты
 - **`lib/services/ai_assistant_service.dart`**: Oracle of Orpheus AI ассистент; HTTP API `/api/public/ai/call`; память до 20 сообщений в SQLite; контекст через `parent_message_id`.
-- **`lib/services/rooms_service.dart`**: групповые чаты (Rooms); HTTP‑клиент без локального хранения; создание/присоединение/сообщения/настройки/panic clear.
+- **`lib/services/rooms_service.dart`**: групповые чаты (Rooms); HTTP‑клиент без локального хранения; создание/присоединение/сообщения/настройки/panic clear. **Duress**: `_pubkey` возвращает `null` (строка 25) — чтения пустые, мутации бросают, UI показывает обычную ошибку соединения.
 - **`lib/services/notification_prefs_service.dart`**: локальные настройки уведомлений (Orpheus Official toggle) через SharedPreferences.
 - **`lib/services/message_cleanup_service.dart`**: автоматическая очистка старых сообщений по политике (retention policy); триггеры: запуск, таймер, смена политики.
 
@@ -88,9 +88,9 @@
 - **`lib/services/notification_service.dart`**: FCM init/token, обработка background сообщений, локальные уведомления (privacy‑safe), каналы.
 - **`lib/services/update_service.dart`**: проверка обновлений `/api/check-update` с fallback по хостам; открытие download URL.
 - **`lib/services/release_notes_service.dart`**: загрузка/кеширование release notes (по текущей реализации).
-- **`lib/services/support_chat_service.dart`**: API поддержки (messages/send/logs/unread), экспорт логов и device info.
+- **`lib/services/support_chat_service.dart`**: API поддержки (messages/send/logs/unread), экспорт логов и device info. **Duress**: `_pubkey` → `null` (строка 47), `loadMessages` отдаёт ПУСТО и `error == null` с очисткой кеша синглтона (строка 62), входящий ответ по WS игнорируется (строка 219).
 - **`lib/services/debug_logger_service.dart`**: in‑app логирование и экспорт логов.
-- **`lib/services/pending_actions_service.dart`**: очередь offline‑действий (pending messages/rejections) в `SharedPreferences`.
+- **`lib/services/pending_actions_service.dart`**: **legacy** prefs‑очередь. Для личного chat не используется (доставка — через таблицу `outbox`); читается один раз при старте, чтобы импортировать застрявшие legacy‑строки. Остаётся актуальной только для отложенных rejection‑действий.
 - **`lib/services/device_settings_service.dart`**: локальные настройки устройства/приложения (по текущей реализации).
 - **`lib/services/sound_service.dart`**: звуки (best‑effort).
 - **`lib/services/badge_service.dart`**: загрузка/кеш бейджей пользователей с fallback по хостам.

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Сервис для работы с настройками устройства.
@@ -140,6 +141,34 @@ class DeviceSettingsService {
     }
   }
 
+  /// Разрешены ли ПОЛНОЭКРАННЫЕ оповещения (Android 14+).
+  ///
+  /// Инцидент 27.07.2026: без этого разрешения входящий звонок НЕ разворачивается
+  /// поверх заблокированного экрана — собеседница видела чёрный экран, а нажатие на
+  /// трубку открывало системную страницу настроек вместо звонка (плагин делает это
+  /// сам в CallkitIncomingActivity.onCreate). Звонок при этом доставлен: ломается
+  /// только показ. На Android 13 и ниже разрешение выдаётся автоматически.
+  static Future<bool> canUseFullScreenIntent() async {
+    final forced = debugForceAndroid;
+    if (forced != true && !Platform.isAndroid) return true;
+    try {
+      return await FlutterCallkitIncoming.canUseFullScreenIntent();
+    } catch (e) {
+      // Плагин недоступен/старый Android — не пугаем пользователя ложной проблемой.
+      return true;
+    }
+  }
+
+  /// Открыть системную страницу «Полноэкранные оповещения» для нашего приложения.
+  static Future<void> requestFullScreenIntent() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await FlutterCallkitIncoming.requestFullIntentPermission();
+    } catch (e) {
+      print("DeviceSettings: full-screen intent request error: $e");
+    }
+  }
+
   /// Запросить отключение оптимизации батареи
   static Future<void> requestBatteryOptimization() async {
     if (!Platform.isAndroid) return;
@@ -261,7 +290,11 @@ class DeviceSettingsService {
       'oneplus'
     ].any((brand) => manufacturer.contains(brand));
 
-    return isChineseOem || batteryOptimized;
+    // Полноэкранные оповещения важнее OEM-специфики: без них входящий звонок не
+    // покажется поверх локскрина ни на одном Android 14+, независимо от вендора.
+    final noFullScreen = !(await canUseFullScreenIntent());
+
+    return isChineseOem || batteryOptimized || noFullScreen;
   }
 
   /// Получить человекочитаемое название производителя
@@ -291,6 +324,7 @@ class DeviceSettingsService {
     final manufacturer = await getDeviceManufacturer();
     final displayName = getManufacturerDisplayName(manufacturer);
     final batteryDisabled = await isBatteryOptimizationDisabled();
+    final fullScreenOk = await canUseFullScreenIntent();
 
     if (!context.mounted) return;
 
@@ -361,6 +395,27 @@ class DeviceSettingsService {
                         await requestBatteryOptimization();
                       },
               ),
+
+              // Шаг про полноэкранные оповещения. Без него входящий звонок не
+              // разворачивается поверх заблокированного экрана: пользователь видит
+              // чёрный экран, а нажатие на трубку открывает системные настройки
+              // вместо звонка (инцидент 27.07.2026). Показываем ТОЛЬКО когда
+              // разрешения нет — на Android 13 и ниже оно выдаётся автоматически.
+              if (!fullScreenOk) ...[
+                const SizedBox(height: 12),
+                _buildSetupStep(
+                  number: 2,
+                  title: isRu
+                      ? 'Разрешите полноэкранные оповещения'
+                      : 'Allow full-screen notifications',
+                  description: isRu
+                      ? 'Без этого входящий звонок не появится на заблокированном экране'
+                      : 'Without it an incoming call will not appear on the lock screen',
+                  onTap: () async {
+                    await requestFullScreenIntent();
+                  },
+                ),
+              ],
 
               // Шаг 2: Автозапуск (для китайских OEM)
               if (_isChineseOem(manufacturer)) ...[

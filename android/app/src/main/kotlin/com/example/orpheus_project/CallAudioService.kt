@@ -29,12 +29,20 @@ import androidx.core.app.NotificationCompat
 class CallAudioService : Service() {
     companion object {
         const val TAG = "CallAudioService"
-        // v2 (_min): канал пересоздан с IMPORTANCE_MIN — во время звонка уже висит
-        // основное уведомление сервиса доставки («<имя> / длительность»), и второе
-        // заметное «In call» читалось как задвоение (device-скрин 18.07). Каналы
-        // Android неизменяемы, поэтому новый id.
-        const val CHANNEL_ID = "orpheus_call_audio_min"
-        const val NOTIFICATION_ID = 889
+        // v3: ОБЩИЕ id и канал с сервисом доставки. История: 18.07 канал сделали
+        // IMPORTANCE_MIN, чтобы второе уведомление не было заметным, а 19.07 текст
+        // обезличили до «Orpheus / In call» (утечка префикса ключа в шторку). В сумме
+        // это сделало два уведомления НЕОТЛИЧИМЫМИ — и на device-тесте 27.07 они снова
+        // прочитались как задвоение, теперь буквальное: одинаковый заголовок, текст и
+        // иконка, разные только id.
+        //
+        // Тихость проблему не решает — решает то, что уведомление должно быть ОДНО.
+        // Android держит уведомление, пока его удерживает хотя бы один сервис, а id и
+        // канал общеприложенческие, а не «свои у каждого сервиса». Поэтому микрофонный
+        // сервис переиспользует id/канал сервиса доставки: в шторке одна строка,
+        // которую сервис доставки через ≤1 с перепишет на «<имя> / длительность».
+        const val CHANNEL_ID = "orpheus_connection_v3"
+        const val NOTIFICATION_ID = 887
         const val ACTION_STOP = "com.example.orpheus_project.CALL_AUDIO_STOP"
         const val EXTRA_TITLE = "title"
     }
@@ -110,7 +118,9 @@ class CallAudioService : Service() {
     private fun stopForegroundCompat() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                // DETACH, а не REMOVE: уведомление 887 общее с постоянным сервисом
+                // доставки, и REMOVE снёс бы то, что тот обязан держать дальше.
+                stopForeground(STOP_FOREGROUND_DETACH)
             } else {
                 @Suppress("DEPRECATION")
                 stopForeground(true)

@@ -82,6 +82,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   static const int _maxReconnectAttempts = CallSessionController.maxReconnectAttempts;
 
   String _displayName = "Anonymous";
+  /// Имя контакта РЕАЛЬНО найдено в БД. До этого _displayName — префикс публичного
+  /// ключа, и в шторку его отдавать нельзя (утечка личности собеседника тому, кто
+  /// смотрит на экран блокировки).
+  bool _nameResolved = false;
   String _durationText = "00:00";
   late final String _callId;
 
@@ -411,6 +415,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       if (found.toString() != 'null' && mounted) {
         setState(() {
           _displayName = found.name;
+          _nameResolved = true;
         });
       }
     } catch (_) {}
@@ -763,8 +768,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       final sec = (elapsed.inSeconds % 60).toString().padLeft(2, '0');
       setState(() => _durationText = "$min:$sec");
       
-      // Обновляем уведомление foreground service
-      BackgroundCallService.updateCallDuration(_durationText, _displayName);
+      // Обновляем уведомление foreground service. Имя — ТОЛЬКО если контакт реально
+      // нашёлся в БД: иначе _displayName это префикс публичного ключа, и он уезжал в
+      // шторку («e_wfH1Zr / 00:07»). Обезличивание 19.07 закрыло эту утечку на
+      // микрофонном уведомлении, а здесь она осталась.
+      BackgroundCallService.updateCallDuration(
+          _durationText, _nameResolved ? _displayName : 'Orpheus');
     });
   }
 

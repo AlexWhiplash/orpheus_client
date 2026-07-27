@@ -113,7 +113,13 @@
 - [ ] Changelog загружен в админку (через API или вручную)
 
 ### Фаза 6: Сборка и публикация
-- [ ] APK собран: `flutter build apk --release`
+- [ ] APK собран: **`flutter build apk --release --target-platform android-arm,android-arm64`**
+      (125.9 -> 101.4 МБ, минус 19%: нативные библиотеки это 119 МБ из 126, и треть веса —
+      `x86_64`, нужный ТОЛЬКО эмуляторам; `arm64-v8a` и `armeabi-v7a` остаются оба, реальные
+      телефоны не затронуты). Флаг обязателен КАЖДЫЙ раз: в gradle это НЕ выносится —
+      `ndk.abiFilters` не управляет библиотеками движка Flutter, проверено и в `buildTypes`,
+      и в `defaultConfig`, размер не менялся ни на байт. Для установки релиза на
+      x86_64-эмулятор собирать отдельно с `--target-platform android-x64`.
 - [ ] APK загружен на сервер через админку
 - [ ] Версия зарегистрирована в admin panel (version_code, version_name, download_url, changelog)
 - [ ] Проверка: `curl https://api.orpheus.click/api/check-update?current_version_code=N` возвращает новую версию

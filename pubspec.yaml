@@ -1,7 +1,7 @@
 name: orpheus_project
 description: "Secure Messaging"
 publish_to: 'none'
-version: 1.1.8+48
+version: 1.1.8+49
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -92,8 +92,19 @@ flutter:
   uses-material-design: true
   generate: true
   assets:
+    # Все четыре звука используются (dialing/ringtone/connected/disconnected) —
+    # директорией.
     - assets/sounds/
-    - assets/images/
+    # Картинки — ПОФАЙЛОВО: в рантайме нужен только знак. logo.png (исходник для
+    # flutter_launcher_icons и flutter_native_splash — они читают его С ДИСКА на
+    # сборке, не из бандла) и logo.svg (в коде не используется, форма перерисована
+    # в статусбар-иконку вручную) лежали в APK без дела — это 132 КБ.
+    #
+    # ВАЖНО, чтобы не поправили «обратно как было»: объявление директории во Flutter
+    # НЕ рекурсивно. Подпапки assets/images/android и ios (5.2 МБ, выход генератора
+    # иконок) в бандл не попадали и при `- assets/images/` — проверено распаковкой
+    # APK b48. Так что переход на пофайловый список экономит именно 132 КБ, не больше.
+    - assets/images/logo_mark.png
 
   # Inter забандлен локально (OFL), без рантайм-загрузки с серверов Google
   fonts:

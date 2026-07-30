@@ -326,6 +326,16 @@ class DeviceSettingsService {
     final batteryDisabled = await isBatteryOptimizationDisabled();
     final fullScreenOk = await canUseFullScreenIntent();
 
+    // Два шага из четырёх условные, поэтому номера считаются здесь, а не пишутся
+    // в каждом вызове: иначе на Android 14+ без разрешения список нумеруется
+    // 1, 2, 2 (и 1, 2, 2, 3 на китайском OEM).
+    final needsFullScreenStep = !fullScreenOk;
+    final isChineseOem = _isChineseOem(manufacturer);
+    const fullScreenStepNumber = 2;
+    final autoStartStepNumber = needsFullScreenStep ? 3 : 2;
+    final notificationStepNumber =
+        2 + (needsFullScreenStep ? 1 : 0) + (isChineseOem ? 1 : 0);
+
     if (!context.mounted) return;
 
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
@@ -401,10 +411,10 @@ class DeviceSettingsService {
               // чёрный экран, а нажатие на трубку открывает системные настройки
               // вместо звонка (инцидент 27.07.2026). Показываем ТОЛЬКО когда
               // разрешения нет — на Android 13 и ниже оно выдаётся автоматически.
-              if (!fullScreenOk) ...[
+              if (needsFullScreenStep) ...[
                 const SizedBox(height: 12),
                 _buildSetupStep(
-                  number: 2,
+                  number: fullScreenStepNumber,
                   title: isRu
                       ? 'Разрешите полноэкранные оповещения'
                       : 'Allow full-screen notifications',
@@ -418,10 +428,10 @@ class DeviceSettingsService {
               ],
 
               // Шаг 2: Автозапуск (для китайских OEM)
-              if (_isChineseOem(manufacturer)) ...[
+              if (isChineseOem) ...[
                 const SizedBox(height: 12),
                 _buildSetupStep(
-                  number: 2,
+                  number: autoStartStepNumber,
                   title: isRu ? 'Включите автозапуск' : 'Enable autostart',
                   description: isRu
                       ? 'Разрешите приложению запускаться автоматически'
@@ -435,7 +445,7 @@ class DeviceSettingsService {
               // Шаг 3: Уведомления
               const SizedBox(height: 12),
               _buildSetupStep(
-                number: _isChineseOem(manufacturer) ? 3 : 2,
+                number: notificationStepNumber,
                 title: isRu
                     ? 'Проверьте настройки уведомлений'
                     : 'Check notification settings',

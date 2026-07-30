@@ -100,13 +100,48 @@ class IncomingMessageHandler {
   // звонок всегда можно закрыть быстро (иначе — zombie-call до ICE-таймаута).
   static const _callTeardownTypes = <String>{'hang-up', 'call-rejected'};
 
+  /// СИНТЕТИЧЕСКИЙ тип, которого нет в протоколе: маркер пропущенного звонка,
+  /// который main-изолят кладёт в `PendingInboxStorage` вместо звонка, пришедшего
+  /// в duress-сессию (сам `call-offer` откладывать бессмысленно — SDP протухает за
+  /// минуту). Разбирается только из очереди (`fromPendingQueue`), из сети такой кадр
+  /// игнорируется: иначе кто угодно дописывал бы записи в чужую историю звонков.
+  static const String missedCallType = 'missed-call';
+
+  /// Построить маркер пропущенного звонка из кадра `call-offer`. Возвращает null,
+  /// если кадр не звонок. SDP/ICE в маркер НЕ попадают — на диск ложатся только
+  /// адрес звонившего и время, то есть ровно то, что потом окажется в переписке.
+  static Map<String, dynamic>? missedCallMarkerFrom(Map<String, dynamic> frame) {
+    if (frame['type'] != 'call-offer') return null;
+    final senderKey = frame['sender_pubkey']?.toString();
+    if (senderKey == null || senderKey.isEmpty) return null;
+    final data = frame['data'];
+    final callId = CallIdStorage.extractCallId(
+        data is Map<String, dynamic> ? data : const <String, dynamic>{}, senderKey);
+    final dynamic tsRaw = frame['server_ts_ms'] ??
+        (data is Map<String, dynamic> ? data['server_ts_ms'] : null);
+    final int ts = tsRaw is int
+        ? tsRaw
+        : int.tryParse(tsRaw?.toString() ?? '') ??
+            DateTime.now().millisecondsSinceEpoch;
+    return <String, dynamic>{
+      'type': missedCallType,
+      'sender_pubkey': senderKey,
+      // message_id даёт дедуп на ДВУХ уровнях: очередь (append) и запись в БД.
+      'message_id': 'missed-$callId',
+      'server_ts_ms': ts,
+    };
+  }
+
   Future<void> handleRawMessage(String messageJson) async {
     final dynamic decoded = json.decode(messageJson);
     if (decoded is! Map<String, dynamic>) return;
     await handleDecoded(decoded);
   }
 
-  Future<void> handleDecoded(Map<String, dynamic> messageData) async {
+  /// [fromPendingQueue] — кадр пришёл из отложенной очереди, а не из сети. Нужен
+  /// только маркеру пропущенного звонка (см. [missedCallType]).
+  Future<void> handleDecoded(Map<String, dynamic> messageData,
+      {bool fromPendingQueue = false}) async {
     final type = messageData['type'] as String?;
     final senderKey = messageData['sender_pubkey'] as String?;
 
@@ -127,6 +162,36 @@ class IncomingMessageHandler {
     // фильтруется по пиру в CallScreen). Комнаты/Оракул сюда не приходят (свои пути).
     if (!_callTeardownTypes.contains(type) && !await _db.isContact(senderKey)) {
       DebugLogger.info('SECURITY', 'Дроп $type от не-контакта (строгий mutual-add)');
+      return;
+    }
+
+    // Маркер пропущенного звонка из очереди: звонок пришёл в duress-сессию, там он
+    // намеренно не поднимался (строгий mutual-add: под duress контактов «нет»), и
+    // без этой записи он терялся бы навсегда — жертва не узнала бы, что ей звонили.
+    // Гейт mutual-add выше уже отсеял чужих: маркер от не-контакта сюда не дойдёт.
+    if (type == missedCallType) {
+      if (!fromPendingQueue) return; // из сети такой кадр не принимаем
+      final msgId = messageData['message_id']?.toString();
+      if (msgId == null || msgId.isEmpty) return;
+      if (await _db.messageExistsByMessageId(senderKey, msgId)) return;
+      final dynamic tsRaw = messageData['server_ts_ms'];
+      final int ts = tsRaw is int
+          ? tsRaw
+          : int.tryParse(tsRaw?.toString() ?? '') ??
+              _nowMs();
+      await _db.addMessage(
+        ChatMessage(
+          messageId: msgId,
+          // Тот же текст-маркер, что пишет CallScreen: chat_screen рисует его
+          // иконкой пропущенного, а статистика профиля не считает за сообщение.
+          text: 'Missed call',
+          isSentByMe: false,
+          timestamp: DateTime.fromMillisecondsSinceEpoch(ts),
+          isRead: false,
+        ),
+        senderKey,
+      );
+      _emitChatUpdate(senderKey);
       return;
     }
 

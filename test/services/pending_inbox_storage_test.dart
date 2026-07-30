@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:orpheus_project/main.dart' show parkPersonalChatUntilRealSession;
+import 'package:orpheus_project/main.dart' show parkIncomingUntilRealSession;
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/pending_inbox_storage.dart';
 
@@ -111,7 +111,7 @@ void main() {
     test('личный chat уходит в очередь и НЕ обрабатывается сейчас', () async {
       AuthService.instance.debugSetDuressMode(true);
 
-      final parked = await parkPersonalChatUntilRealSession(
+      final parked = await parkIncomingUntilRealSession(
           json.encode(env('m1', sender: 'REAL_CONTACT')));
 
       expect(parked, isTrue, reason: 'обработку надо остановить, кадр отложен');
@@ -121,11 +121,48 @@ void main() {
           reason: 'кладём конверт как есть, шифртекст не трогаем');
     });
 
-    test('не-chat кадры не откладываются (звонки, служебное)', () async {
+    test('звонок откладывается МАРКЕРОМ, без SDP и ICE', () async {
       AuthService.instance.debugSetDuressMode(true);
 
-      for (final type in ['call-offer', 'hang-up', 'room-message', 'pong']) {
-        final parked = await parkPersonalChatUntilRealSession(
+      final parked = await parkIncomingUntilRealSession(json.encode({
+        'type': 'call-offer',
+        'sender_pubkey': 'REAL_CONTACT',
+        'server_ts_ms': 1700000000000,
+        'data': {'call_id': 'c-42', 'sdp': 'v=0 ...длинный SDP...'},
+      }));
+
+      expect(parked, isTrue, reason: 'звонок в duress не поднимаем, но и не теряем');
+      final env = (await PendingInboxStorage.instance.peekAll()).single.envelope;
+      expect(env['type'], 'missed-call');
+      expect(env['sender_pubkey'], 'REAL_CONTACT');
+      expect(env['message_id'], 'missed-c-42');
+      expect(env['server_ts_ms'], 1700000000000,
+          reason: 'время самого звонка, а не время разблокировки');
+      // На диск не должен попасть ни SDP, ни что-либо ещё из offer'а.
+      expect(env.keys.toSet(),
+          {'type', 'sender_pubkey', 'message_id', 'server_ts_ms'});
+      expect(json.encode(env).contains('sdp'), isFalse);
+    });
+
+    test('повторная доставка того же звонка не копит маркеры', () async {
+      AuthService.instance.debugSetDuressMode(true);
+      final frame = json.encode({
+        'type': 'call-offer',
+        'sender_pubkey': 'REAL_CONTACT',
+        'data': {'call_id': 'c-42'},
+      });
+
+      await parkIncomingUntilRealSession(frame);
+      await parkIncomingUntilRealSession(frame);
+
+      expect((await PendingInboxStorage.instance.peekAll()).length, 1);
+    });
+
+    test('остальные не-chat кадры не откладываются (служебное, комнаты, teardown)', () async {
+      AuthService.instance.debugSetDuressMode(true);
+
+      for (final type in ['hang-up', 'call-rejected', 'room-message', 'pong']) {
+        final parked = await parkIncomingUntilRealSession(
             json.encode({'type': type, 'sender_pubkey': 'X'}));
         expect(parked, isFalse, reason: '$type откладывать нельзя');
       }
@@ -134,8 +171,8 @@ void main() {
 
     test('битый JSON не роняет обработку входящих', () async {
       AuthService.instance.debugSetDuressMode(true);
-      expect(await parkPersonalChatUntilRealSession('{не json'), isFalse);
-      expect(await parkPersonalChatUntilRealSession('[]'), isFalse);
+      expect(await parkIncomingUntilRealSession('{не json'), isFalse);
+      expect(await parkIncomingUntilRealSession('[]'), isFalse);
     });
   });
 }

@@ -214,5 +214,28 @@ void main() {
           await DatabaseService.instance.getMessagesForContact("KEEP_KEY");
       expect(messages.map((m) => m.text), contains("REAL-MESSAGE"));
     });
+
+    // Эта одна строка (`isContact` -> false под duress) единственная, чем держится
+    // тишина входящего ЗВОНКА в режиме принуждения: строгий mutual-add в
+    // IncomingMessageHandler спрашивает ровно её, и на false кадр `call-offer`
+    // дропается ДО резолва имени и до показа CallKit. Свойство неочевидное и
+    // побочное, поэтому закреплено тестом: иначе «починка» mutual-add молча
+    // поднимет звонок от реального контакта на пустом профиле наблюдателя.
+    test('duress: isContact отвечает false даже для существующего контакта', () async {
+      await DatabaseService.instance
+          .addContact(Contact(name: "Bob", publicKey: "CALLER_KEY"));
+
+      // Контроль: вне duress контакт виден — иначе тест ниже вакуумен.
+      expect(await DatabaseService.instance.isContact("CALLER_KEY"), isTrue);
+
+      DatabaseService.instance.setDuressMode(true);
+      addTearDown(() => DatabaseService.instance.setDuressMode(false));
+
+      expect(await DatabaseService.instance.isContact("CALLER_KEY"), isFalse);
+
+      // И контакт при этом НЕ удалён: после возврата настоящим PIN всё на месте.
+      DatabaseService.instance.setDuressMode(false);
+      expect(await DatabaseService.instance.isContact("CALLER_KEY"), isTrue);
+    });
   });
 }

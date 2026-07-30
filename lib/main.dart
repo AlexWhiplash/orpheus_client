@@ -509,7 +509,7 @@ void _listenForMessages() {
   websocketService.stream.listen((messageJson) async {
     try {
       if (authService.isDuressMode &&
-          await parkPersonalChatUntilRealSession(messageJson)) {
+          await parkIncomingUntilRealSession(messageJson)) {
         return;
       }
       _handleRoomEventForBadge(messageJson);
@@ -532,16 +532,35 @@ void _listenForMessages() {
 /// приложении. [_drainPendingInbox] под duress не запускается и разберёт её после
 /// входа НАСТОЯЩИМ PIN; дедуп по `message_id` гасит возможный повтор.
 ///
+/// Со ЗВОНКОМ то же самое, но откладывается не он, а маркер: поднимать входящий в
+/// duress-сессии нельзя (наблюдатель увидел бы реального контакта на пустом
+/// профиле), а протухший через минуту SDP после разблокировки бесполезен. Поэтому в
+/// очередь идёт `missed-call` — из него появится запись «пропущенный звонок» с
+/// временем самого звонка. Иначе звонок исчезал бы бесследно: жертва не узнала бы,
+/// что ей звонили, а звонивший видел лишь «не ответили».
+///
 /// Возвращает true, если конверт отложен и его не надо обрабатывать сейчас.
 /// Комнаты и поддержку не откладываем: их история живёт на сервере и перечитается.
-Future<bool> parkPersonalChatUntilRealSession(String messageJson) async {
+Future<bool> parkIncomingUntilRealSession(String messageJson) async {
   try {
     final decoded = json.decode(messageJson);
     if (decoded is! Map<String, dynamic>) return false;
-    if (decoded['type'] != 'chat') return false;
-    await PendingInboxStorage.instance.append(decoded);
-    DebugLogger.info('PENDING_INBOX', 'Входящее сохранено в очередь');
-    return true;
+    if (decoded['type'] == 'chat') {
+      await PendingInboxStorage.instance.append(decoded);
+      DebugLogger.info('PENDING_INBOX', 'Входящее сохранено в очередь');
+      return true;
+    }
+    // Звонок: сам offer откладывать бессмысленно (SDP живёт минуту), поэтому в
+    // очередь идёт МАРКЕР — из него после входа настоящим PIN появится запись
+    // «пропущенный звонок». Иначе звонок исчезал бы совсем: поднять его в
+    // duress-сессии нельзя, а следа не оставалось никакого.
+    final marker = IncomingMessageHandler.missedCallMarkerFrom(decoded);
+    if (marker != null) {
+      await PendingInboxStorage.instance.append(marker);
+      DebugLogger.info('PENDING_INBOX', 'Входящее сохранено в очередь');
+      return true;
+    }
+    return false;
   } catch (e) {
     DebugLogger.error('PENDING_INBOX', 'Не удалось отложить входящее: $e');
     return false;
@@ -653,7 +672,7 @@ Future<void> _drainPendingInbox() async {
       // необработанное остаётся в очереди для нормального режима.
       if (authService.isDuressMode) break;
       try {
-        await handler.handleDecoded(item.envelope);
+        await handler.handleDecoded(item.envelope, fromPendingQueue: true);
         processed.add(item.raw); // помечаем обработанным только при успехе
       } catch (e) {
         DebugLogger.error('PENDING_INBOX', 'Ошибка обработки конверта: $e');

@@ -226,6 +226,94 @@ void main() {
       expect(db.nameLookups, ['CALLER_PUBKEY_BASE64_AA']);
     });
 
+    // Маркер пропущенного звонка: его кладёт в очередь main-изолят, когда звонок
+    // пришёл в duress-сессию (сам offer протухает за минуту, поднимать его нельзя).
+    // После входа настоящим PIN из маркера появляется запись в переписке.
+    group('маркер пропущенного звонка из очереди', () {
+      ({
+        IncomingMessageHandler handler,
+        _FakeDb db,
+        _FakeNotif notif,
+        List<String> chatUpdates,
+      }) build({bool allowAll = true}) {
+        final db = _FakeDb()..contactsAllowAll = allowAll;
+        final notif = _FakeNotif();
+        final chatUpdates = <String>[];
+        return (
+          handler: IncomingMessageHandler(
+            crypto: _FakeCrypto((_, payload) async => payload),
+            database: db,
+            notifications: notif,
+            callBuffer: IncomingCallBuffer.instance,
+            openCallScreen: ({required contactPublicKey, required offer, callId}) {
+              fail('маркер не должен открывать экран звонка');
+            },
+            emitSignaling: (_) {},
+            emitChatUpdate: chatUpdates.add,
+            isAppInForeground: () => true,
+          ),
+          db: db,
+          notif: notif,
+          chatUpdates: chatUpdates,
+        );
+      }
+
+      Map<String, dynamic> marker({String id = 'missed-c1', int ts = 1700000000000}) => {
+            'type': IncomingMessageHandler.missedCallType,
+            'sender_pubkey': 'CALLER_PUBKEY_BASE64_AA',
+            'message_id': id,
+            'server_ts_ms': ts,
+          };
+
+      test('пишет непрочитанную запись «Missed call» со временем звонка', () async {
+        final t = build();
+
+        await t.handler.handleDecoded(marker(), fromPendingQueue: true);
+
+        expect(t.db.saved.length, 1);
+        final (message, contactKey) = t.db.saved.single;
+        expect(contactKey, 'CALLER_PUBKEY_BASE64_AA');
+        expect(message.text, 'Missed call');
+        expect(message.isSentByMe, isFalse);
+        // Непрочитанное: иначе жертва не заметит, что звонок был.
+        expect(message.isRead, isFalse);
+        expect(message.timestamp.millisecondsSinceEpoch, 1700000000000);
+        // Текст-маркер должен попадать в набор системных записей звонка, иначе
+        // статистика профиля посчитает его перепиской.
+        expect(ChatMessage.isCallEvent(message.text), isTrue);
+        // Экран чата/список обновляются, уведомление НЕ показываем (разбор идёт
+        // сразу после входа настоящим PIN — человек уже в приложении).
+        expect(t.chatUpdates, ['CALLER_PUBKEY_BASE64_AA']);
+        expect(t.notif.calls, isEmpty);
+      });
+
+      test('повторный разбор той же очереди не двоит запись', () async {
+        final t = build();
+
+        await t.handler.handleDecoded(marker(), fromPendingQueue: true);
+        await t.handler.handleDecoded(marker(), fromPendingQueue: true);
+
+        expect(t.db.saved.length, 1);
+      });
+
+      test('из СЕТИ такой кадр игнорируется (нельзя дописывать чужую историю)', () async {
+        final t = build();
+
+        await t.handler.handleDecoded(marker()); // fromPendingQueue: false
+
+        expect(t.db.saved, isEmpty);
+        expect(t.chatUpdates, isEmpty);
+      });
+
+      test('маркер от не-контакта отсекает строгий mutual-add', () async {
+        final t = build(allowAll: false);
+
+        await t.handler.handleDecoded(marker(), fromPendingQueue: true);
+
+        expect(t.db.saved, isEmpty);
+      });
+    });
+
     test('строгий mutual-add: teardown (hang-up/call-rejected) от не-контакта НЕ дропается', () async {
       final buffer = IncomingCallBuffer.instance;
       final db = _FakeDb()..contactsAllowAll = false; // в контактах никого нет

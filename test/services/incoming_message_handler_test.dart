@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/services/incoming_call_buffer.dart';
 import 'package:orpheus_project/services/incoming_message_handler.dart';
@@ -50,8 +51,13 @@ class _FakeDb implements IncomingMessageDatabase {
     return contactEncKeys[publicKey] ?? 'fake-enc';
   }
 
+  /// Запросы имени: под duress-гейтом их быть не должно вообще (имя резолвится
+  /// только ПОСЛЕ строгого mutual-add).
+  final List<String> nameLookups = [];
+
   @override
   Future<String?> getContactName(String publicKey) async {
+    nameLookups.add(publicKey);
     return contactNames[publicKey];
   }
 
@@ -164,6 +170,60 @@ void main() {
           {'type': 'chat', 'sender_pubkey': 'FRIEND', 'payload': 'yo', 'message_id': 'm2'});
       expect(db.saved.length, 1);
       expect(chatUpdates, ['FRIEND']);
+    });
+
+    // Режим принуждения: `DatabaseService.isContact` под duress отвечает false для
+    // ЛЮБОГО адреса (закреплено в database_service_test), поэтому входящий звонок от
+    // РЕАЛЬНОГО контакта обязан умереть в том же гейте — до резолва имени, до буфера
+    // и до показа CallKit. Проверяем обе ветки показа: foreground (CallScreen) и
+    // background (нативный CallKit). Фоновая ветка тут ещё и сама себе детектор: если
+    // гейт пропустит кадр, вызов плагина в тестах бросит MissingPluginException.
+    test('duress: входящий звонок от реального контакта не поднимает ни экран, ни CallKit',
+        () async {
+      // Контрольная ветка доходит до CallIdStorage (дедуп по call_id живёт в
+      // SharedPreferences — это IPC с push-изолятом), поэтому нужен мок хранилища.
+      SharedPreferences.setMockInitialValues({});
+      final buffer = IncomingCallBuffer.instance;
+      // Ровно то, что видит хендлер под duress: контактов «нет».
+      final db = _FakeDb()..contactsAllowAll = false;
+      final notif = _FakeNotif();
+      final signaling = <Map<String, dynamic>>[];
+      var openedCall = false;
+      var foreground = true;
+
+      final handler = IncomingMessageHandler(
+        crypto: _FakeCrypto((_, payload) async => payload),
+        database: db,
+        notifications: notif,
+        callBuffer: buffer,
+        openCallScreen: ({required contactPublicKey, required offer, callId}) {
+          openedCall = true;
+        },
+        emitSignaling: signaling.add,
+        emitChatUpdate: (_) {},
+        isAppInForeground: () => foreground,
+      );
+
+      const offer = {'type': 'call-offer', 'sender_pubkey': 'CALLER_PUBKEY_BASE64_AA', 'data': {'call_id': 'c1'}};
+
+      await handler.handleDecoded(offer);
+      foreground = false;
+      await handler.handleDecoded({...offer, 'data': {'call_id': 'c2'}});
+
+      expect(openedCall, isFalse);
+      expect(notif.calls, isEmpty);
+      // Имя не резолвилось: наблюдатель не увидит его ни на экране, ни в шторке.
+      expect(db.nameLookups, isEmpty);
+      // Буфер сигналинга по этому пиру не создан — ICE-кандидатам некуда лечь.
+      expect(buffer.takeAll('CALLER_PUBKEY_BASE64_AA'), isEmpty);
+      expect(signaling, isEmpty);
+
+      // КОНТРОЛЬ: вне duress тот же кадр звонок поднимает (иначе тест вакуумен).
+      db.contactsAllowAll = true;
+      foreground = true;
+      await handler.handleDecoded({...offer, 'data': {'call_id': 'c3'}});
+      expect(openedCall, isTrue);
+      expect(db.nameLookups, ['CALLER_PUBKEY_BASE64_AA']);
     });
 
     test('строгий mutual-add: teardown (hang-up/call-rejected) от не-контакта НЕ дропается', () async {

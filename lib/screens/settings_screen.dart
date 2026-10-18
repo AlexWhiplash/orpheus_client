@@ -446,7 +446,7 @@ class _IdCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontFamily: 'monospace',
+                            fontFamily: AppTypography.monoFamily,
                             color: AppColors.textPrimary,
                           ),
                     ),
@@ -542,7 +542,7 @@ class _StatsCard extends StatelessWidget {
             Text(
               '$value',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontFamily: 'monospace',
+                    fontFamily: AppTypography.monoFamily,
                     fontWeight: FontWeight.w700,
                   ),
             ),
@@ -764,7 +764,7 @@ class _ExportKeyDialog extends StatelessWidget {
             child: SelectableText(
               privateKey,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontFamily: 'monospace',
+                    fontFamily: AppTypography.monoFamily,
                     color: AppColors.danger,
                   ),
             ),

@@ -23,6 +23,7 @@ import 'package:orpheus_project/widgets/call/background_painters.dart';
 import 'package:orpheus_project/widgets/call/control_panel.dart';
 import 'package:orpheus_project/widgets/badge_widget.dart';
 import 'package:orpheus_project/services/call_session_controller.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 // CallState и логика звонка (машина состояний, реконнект) вынесены в
 // CallSessionController (аудит ARCH-3 / вариант #1). Здесь остаётся UI-виджет,
@@ -1211,7 +1212,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
-                        fontFamily: 'monospace',
+                        fontFamily: AppTypography.monoFamily,
                       ),
                     ),
                   );

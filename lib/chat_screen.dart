@@ -451,7 +451,7 @@ class _ChatScreenState extends State<ChatScreen>
               const SizedBox(height: 6),
               SelectableText(
                 widget.contact.publicKey,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                style: const TextStyle(fontFamily: AppTypography.monoFamily, fontSize: 13),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(

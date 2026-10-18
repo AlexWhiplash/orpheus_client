@@ -714,7 +714,7 @@ class _MessageBubble extends StatelessWidget {
           ),
       code: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: accentColor,
-            fontFamily: 'monospace',
+            fontFamily: AppTypography.monoFamily,
             backgroundColor: AppColors.surface2,
           ),
       codeblockDecoration: BoxDecoration(

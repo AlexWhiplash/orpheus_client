@@ -492,7 +492,7 @@ class _ConnectionCard extends StatelessWidget {
                         websocketService.currentHost,
                         style: t.labelSmall?.copyWith(
                           color: AppColors.textSecondary,
-                          fontFamily: 'monospace',
+                          fontFamily: AppTypography.monoFamily,
                           fontSize: 11,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -699,7 +699,7 @@ class _SecurityItem extends StatelessWidget {
           value,
           style: t.titleSmall?.copyWith(
             fontWeight: FontWeight.w700,
-            fontFamily: isMono ? 'monospace' : null,
+            fontFamily: isMono ? AppTypography.monoFamily : null,
             letterSpacing: isMono ? 1.5 : null,
           ),
         ),

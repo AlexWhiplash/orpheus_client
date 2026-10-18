@@ -7,6 +7,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/services/debug_logger_service.dart';
 import 'package:orpheus_project/services/telemetry_service.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 class DebugLogsScreen extends StatefulWidget {
   const DebugLogsScreen({super.key});
@@ -109,7 +110,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
         title: const Text(
           'DEBUG LOGS',
           style: TextStyle(
-            fontFamily: 'monospace',
+            fontFamily: AppTypography.monoFamily,
             fontWeight: FontWeight.bold,
             letterSpacing: 2,
           ),
@@ -286,7 +287,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                   style: const TextStyle(
                     color: Colors.grey,
                     fontSize: 11,
-                    fontFamily: 'monospace',
+                    fontFamily: AppTypography.monoFamily,
                   ),
                 ),
                 const Spacer(),
@@ -295,7 +296,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                   style: TextStyle(
                     color: Colors.green.withOpacity(0.7),
                     fontSize: 11,
-                    fontFamily: 'monospace',
+                    fontFamily: AppTypography.monoFamily,
                   ),
                 ),
               ],
@@ -361,7 +362,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                 style: const TextStyle(
                   color: Colors.grey,
                   fontSize: 10,
-                  fontFamily: 'monospace',
+                  fontFamily: AppTypography.monoFamily,
                 ),
               ),
             ),
@@ -378,7 +379,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                   color: tagColor,
                   fontSize: 9,
                   fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace',
+                  fontFamily: AppTypography.monoFamily,
                 ),
               ),
             ),
@@ -390,7 +391,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                 style: TextStyle(
                   color: levelColor == Colors.red ? Colors.red : Colors.white,
                   fontSize: 11,
-                  fontFamily: 'monospace',
+                  fontFamily: AppTypography.monoFamily,
                 ),
               ),
             ),

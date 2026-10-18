@@ -409,7 +409,7 @@ class _ContactActionsSheet extends StatelessWidget {
                           style:
                               Theme.of(context).textTheme.labelSmall?.copyWith(
                                     color: AppColors.textTertiary,
-                                    fontFamily: 'monospace',
+                                    fontFamily: AppTypography.monoFamily,
                                   ),
                         ),
                       ],

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:orpheus_project/config.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/services/release_notes_service.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 class UpdatesScreen extends StatefulWidget {
   const UpdatesScreen({
@@ -315,7 +316,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: Colors.grey.shade500,
-                                    fontFamily: 'monospace',
+                                    fontFamily: AppTypography.monoFamily,
                                   ),
                                 ),
                               ),

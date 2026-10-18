@@ -39,6 +39,12 @@ class AppColors {
   static const Color actionLight = Color(0xFF8ADBA8);
   static const Color actionDark = Color(0xFF4CAF7A);
 
+  /// Тёмная мята: фон своих сообщений и выбранного. Мятный — только у действия,
+  /// поэтому крупные площади получают приглушённый оттенок (визуальная система Orpheus v1).
+  static const Color actionContainer = Color(0xFF1E352A);
+  static const Color onActionContainer = Color(0xFFDCEFE3);
+  static const Color onAction = Color(0xFF0B2A1A);
+
   // ═══════════════════════════════════════════════════════════════
   // ACCENT — серебро для декоративных элементов, иконок
   // ═══════════════════════════════════════════════════════════════
@@ -60,6 +66,15 @@ class AppColors {
   static Color outlineFocus = const Color(0xFF6AD394).withOpacity(0.5);
 }
 
+/// Металлы статусов-табличек: одна стальная форма, статус различается цветом точки и надписи.
+class AppBadgeMetals {
+  static const Color core = AppColors.action; // команда — мята
+  static const Color owner = Color(0xFFE2E8F0); // светлое серебро
+  static const Color patron = Color(0xFFB9C7D6); // серебро
+  static const Color benefactor = Color(0xFFD6B97A); // приглушённое золото
+  static const Color early = Color(0xFF8F9BA8); // сталь
+}
+
 class AppRadii {
   static const BorderRadius sm = BorderRadius.all(Radius.circular(14));
   static const BorderRadius md = BorderRadius.all(Radius.circular(18));
@@ -77,6 +92,23 @@ class AppSpacing {
 }
 
 class AppTypography {
+  /// Моноширинный — для служебного: ключи, отпечатки, время, статус шифрования.
+  static const String monoFamily = 'IBM Plex Mono';
+
+  static TextStyle mono({
+    double fontSize = 13,
+    FontWeight fontWeight = FontWeight.w400,
+    Color color = AppColors.textSecondary,
+    double letterSpacing = 0.2,
+  }) =>
+      TextStyle(
+        fontFamily: monoFamily,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        letterSpacing: letterSpacing,
+      );
+
   static TextTheme textTheme(TextTheme base) {
     final t = base.apply(fontFamily: 'Inter');
     return t.copyWith(
@@ -155,13 +187,19 @@ class AppShadows {
     ];
   }
 
-  /// Свечение для активных элементов.
-  static List<BoxShadow> glow(Color color, {double opacity = 0.25}) {
+  /// Фаска вместо свечения: тень под элементом и еле заметный светлый край сверху.
+  /// Свечение в системе Orpheus запрещено — глубина передаётся ступенями стали.
+  static List<BoxShadow> bevel({double depth = 1}) {
     return [
       BoxShadow(
-        color: color.withOpacity(opacity),
-        blurRadius: 20,
-        spreadRadius: -4,
+        color: Colors.black.withOpacity(0.45),
+        blurRadius: 2 * depth,
+        offset: Offset(0, 1 * depth),
+      ),
+      BoxShadow(
+        color: Colors.white.withOpacity(0.05),
+        blurRadius: 0,
+        offset: Offset(0, -1 * depth),
       ),
     ];
   }

@@ -621,5 +621,6 @@
   "serverApply": "Применить и переподключить",
   "serverResetProd": "Сбросить на прод",
   "serverTestBanner": "ТЕСТОВЫЙ СЕРВЕР",
-  "serverSwitched": "Переключено на {host}"
+  "serverSwitched": "Переключено на {host}",
+  "myQrCodeButton": "Мой QR-код — чтобы добавили в контакты"
 }

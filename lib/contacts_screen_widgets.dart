@@ -31,8 +31,9 @@ class _ContactRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
     final hasUnread = unreadCount > 0;
-    final subtitle = _formatLastTime(
+    final timeLabel = _formatLastTime(
       contact.lastMessageTime,
       Localizations.localeOf(context).languageCode,
     );
@@ -42,155 +43,72 @@ class _ContactRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        borderRadius: AppRadii.md,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: AppRadii.md,
-            border: Border.all(
-                color: hasUnread
-                    ? AppColors.accent.withOpacity(0.22)
-                    : AppColors.outline),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: 11),
           child: Row(
             children: [
-              _Avatar(
-                name: contact.name,
-                isOnline: isOnline,
-              ),
+              MessengerAvatar(name: contact.name, size: 48, radius: 15),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       children: [
-                        Expanded(
+                        Flexible(
                           child: Text(
                             contact.name,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      fontWeight: hasUnread
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                    ),
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                              height: 1.25,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         UserBadge(pubkey: contact.publicKey, compact: true),
                       ],
                     ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: AppTypography.mono(
-                          fontSize: 12,
-                          color: AppColors.textTertiary,
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 4),
+                    PresenceLabel(
+                      isOnline: isOnline,
+                      onlineText: l10n.online,
+                      offlineText: l10n.offline,
+                      fontSize: 12,
+                    ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              if (hasUnread)
-                _UnreadPill(count: unreadCount)
-              else
-                const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (timeLabel.isNotEmpty)
+                    Text(
+                      timeLabel,
+                      style: AppTypography.mono(
+                        fontSize: 11.5,
+                        color: hasUnread
+                            ? AppColors.textSecondary
+                            : AppColors.textTertiary,
+                      ),
+                    ),
+                  if (hasUnread) ...[
+                    const SizedBox(height: 6),
+                    UnreadCountPill(count: unreadCount),
+                  ],
+                ],
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({
-    required this.name,
-    required this.isOnline,
-  });
-
-  final String name;
-  final bool isOnline;
-
-  String get letter => name.isNotEmpty ? name[0].toUpperCase() : '?';
-
-  @override
-  Widget build(BuildContext context) {
-    final gradientColors = AppAvatarColors.gradientFromName(name);
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: gradientColors,
-            ),
-            borderRadius: const BorderRadius.all(Radius.circular(16)),
-            border: Border.all(color: AppColors.outline),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            letter,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ],
-                ),
-          ),
-        ),
-        if (isOnline)
-          Positioned(
-            right: -1,
-            top: -1,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: AppColors.success,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.bg, width: 2),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _UnreadPill extends StatelessWidget {
-  const _UnreadPill({required this.count});
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.accent,
-        borderRadius: const BorderRadius.all(Radius.circular(999)),
-      ),
-      child: Text(
-        '$count',
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: AppColors.bg,
-              fontWeight: FontWeight.w700,
-            ),
       ),
     );
   }
@@ -372,28 +290,7 @@ class _ContactActionsSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: AppAvatarColors.gradientFromName(contact.name),
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      contact.name.isNotEmpty
-                          ? contact.name[0].toUpperCase()
-                          : '?',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                    ),
-                  ),
+                  MessengerAvatar(name: contact.name, size: 40),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -577,19 +474,13 @@ class _OracleContactRowState extends State<_OracleContactRow> {
       color: Colors.transparent,
       child: InkWell(
         onTap: widget.onTap,
-        borderRadius: AppRadii.md,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: AppColors.surface2,
-            borderRadius: AppRadii.md,
-            border: Border.all(color: AppColors.outline),
-            boxShadow: AppShadows.bevel(),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: 11),
           child: Row(
             children: [
               const _OracleAvatar(),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               // Информация
               Expanded(
                 child: Column(
@@ -607,10 +498,13 @@ class _OracleContactRowState extends State<_OracleContactRow> {
                               l10n.aiAssistantName,
                               maxLines: 1,
                               softWrap: false,
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textPrimary,
-                                  ),
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                                height: 1.25,
+                              ),
                             ),
                           ),
                         ),
@@ -620,8 +514,8 @@ class _OracleContactRowState extends State<_OracleContactRow> {
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.outline),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: AppShadows.bevel(),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -648,34 +542,18 @@ class _OracleContactRowState extends State<_OracleContactRow> {
                     ),
                     const SizedBox(height: 4),
                     // Статус "Всегда онлайн"
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AppColors.success,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          l10n.aiAssistantOnline,
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                color: AppColors.success,
-                                fontWeight: FontWeight.w500,
-                              ),
-                        ),
-                      ],
+                    Text(
+                      l10n.aiAssistantOnline.toLowerCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.mono(
+                        fontSize: 12,
+                        color: AppColors.action,
+                        letterSpacing: 0.3,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: AppColors.textTertiary,
-                size: 16,
               ),
             ],
           ),
@@ -692,17 +570,17 @@ class _OracleAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 52,
-      height: 52,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(15),
         color: AppColors.surfaceElevated,
-        border: Border.all(color: AppColors.outline),
+        boxShadow: AppShadows.bevel(),
       ),
       child: const Icon(
         Icons.psychology,
         color: AppColors.primary,
-        size: 28,
+        size: 26,
       ),
     );
   }
@@ -725,26 +603,22 @@ class _AddContactHint extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: AppRadii.md,
+        borderRadius: const BorderRadius.all(Radius.circular(14)),
         child: Container(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+          padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: AppRadii.md,
-            border: Border.all(
-              color: AppColors.outline,
-              style: BorderStyle.solid,
-            ),
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            border: Border.all(color: AppColors.outline),
           ),
           child: Row(
             children: [
               Container(
                 width: 48,
                 height: 48,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.surface2,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.outline),
+                  borderRadius: BorderRadius.all(Radius.circular(15)),
                 ),
                 child: const Icon(
                   Icons.person_add_outlined,
@@ -774,9 +648,9 @@ class _AddContactHint extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.add_circle_outline,
-                color: AppColors.action.withOpacity(0.7),
+                color: AppColors.action,
                 size: 22,
               ),
             ],

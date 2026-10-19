@@ -1746,4 +1746,7 @@ class L10nEn extends L10n {
   String serverSwitched(String host) {
     return 'Switched to $host';
   }
+
+  @override
+  String get myQrCodeButton => 'My QR code — so others can add you';
 }

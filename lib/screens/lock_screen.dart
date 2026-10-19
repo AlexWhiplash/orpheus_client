@@ -11,6 +11,7 @@ import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
+import 'package:orpheus_project/widgets/pin_pad_key.dart';
 
 class LockScreen extends StatefulWidget {
   final VoidCallback onUnlocked;
@@ -321,12 +322,12 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
               opacity: _revealController,
               child: Column(
                 children: [
-                  const Spacer(flex: 2),
+                  const Spacer(flex: 1),
                   
-                  // Логотип
+                  // Знак Orpheus
                   _buildLogo(),
                   
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
                   
                   // Заголовок
                   Text(
@@ -334,10 +335,10 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                         ? (isRu ? 'ЗАБЛОКИРОВАНО' : 'LOCKED') 
                         : (isRu ? 'ВВЕДИТЕ PIN' : 'ENTER PIN'),
                     style: TextStyle(
-                      color: isLockedOut ? AppColors.danger : AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 3,
+                      color: isLockedOut ? AppColors.danger : AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 2,
                     ),
                   ),
                   
@@ -361,25 +362,22 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                         color: AppColors.danger,
                         fontSize: 14,
                       ),
-                    ),
+                    )
+                  else
+                    // Резерв строки под ошибку: точки не прыгают при неверном PIN.
+                    const SizedBox(height: 20),
                   
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 20),
                   
                   // PIN индикаторы
                   _buildPinIndicators(),
                   
-                  const Spacer(flex: 1),
-                  
-                  // PIN-pad
-                  if (!isLockedOut) _buildPinPad(),
-                  
                   const Spacer(flex: 2),
                   
-                  // Биометрия
-                  if (_auth.config.isBiometricEnabled && !isLockedOut)
-                    _buildBiometricButton(l10n),
+                  // PIN-pad (клавиша биометрии — в левом нижнем углу пада)
+                  if (!isLockedOut) _buildPinPad(l10n),
                   
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
@@ -403,26 +401,18 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildLogo() {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.surface2,
-        border: Border.all(color: AppColors.outline, width: 1),
-        boxShadow: AppShadows.bevel(),
-      ),
-      child: ClipOval(
-        child: Image.asset(
-          'assets/images/logo_mark.png',
-          width: 60,
-          height: 60,
-          fit: BoxFit.contain,
-          errorBuilder: (c, e, s) => const Icon(
-            Icons.shield,
-            color: AppColors.primary,
-            size: 40,
-          ),
+    // Знак без подложки и свечения, ~34dp (визуальная система Orpheus v1).
+    return Opacity(
+      opacity: 0.9,
+      child: Image.asset(
+        'assets/images/logo_mark.png',
+        width: 34,
+        height: 34,
+        fit: BoxFit.contain,
+        errorBuilder: (c, e, s) => const Icon(
+          Icons.shield_outlined,
+          color: AppColors.primary,
+          size: 30,
         ),
       ),
     );
@@ -439,30 +429,9 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_pinLength, (index) {
-              final isFilled = index < _enteredPin.length;
-              final isActive = index == _enteredPin.length;
-              
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                width: isFilled ? 16 : 14,
-                height: isFilled ? 16 : 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isError
-                      ? AppColors.danger
-                      : isFilled
-                          ? AppColors.primary
-                          : Colors.transparent,
-                  border: Border.all(
-                    color: _isError
-                        ? AppColors.danger
-                        : isActive
-                            ? AppColors.primary
-                            : AppColors.textTertiary,
-                    width: isActive ? 2 : 1,
-                  ),
-                ),
+              return PinDot(
+                filled: index < _enteredPin.length,
+                error: _isError,
               );
             }),
           ),
@@ -471,28 +440,33 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPinPad() {
+  Widget _buildPinPad(L10n l10n) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
       child: Column(
         children: [
-          _buildPinRow(['1', '2', '3']),
+          _buildPinRow(['1', '2', '3'], l10n),
           const SizedBox(height: 16),
-          _buildPinRow(['4', '5', '6']),
+          _buildPinRow(['4', '5', '6'], l10n),
           const SizedBox(height: 16),
-          _buildPinRow(['7', '8', '9']),
+          _buildPinRow(['7', '8', '9'], l10n),
           const SizedBox(height: 16),
-          _buildPinRow(['', '0', 'backspace']),
+          _buildPinRow(['biometric', '0', 'backspace'], l10n),
         ],
       ),
     );
   }
 
-  Widget _buildPinRow(List<String> digits) {
+  Widget _buildPinRow(List<String> digits, L10n l10n) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: digits.map((digit) {
-        if (digit.isEmpty) {
+        if (digit == 'biometric') {
+          // Пад и так скрыт при локауте, поэтому условие — то же, что было у
+          // отдельной кнопки под падом: биометрия включена и нет блокировки.
+          if (_auth.config.isBiometricEnabled && !_auth.config.isLockedOut) {
+            return _buildBiometricButton(l10n);
+          }
           return const SizedBox(width: 72);
         }
         if (digit == 'backspace') {
@@ -504,80 +478,33 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildDigitButton(String digit) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _isLoading ? null : () => _onDigitPressed(digit),
-        borderRadius: BorderRadius.circular(36),
-        splashColor: AppColors.primary.withOpacity(0.12),
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.surface,
-            border: Border.all(
-              color: AppColors.outline,
-              width: 1,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              digit,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 28,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-          ),
-        ),
-      ),
+    return PinPadKey(
+      onTap: _isLoading ? null : () => _onDigitPressed(digit),
+      child: PinPadKey.digit(digit),
     );
   }
 
   Widget _buildBackspaceButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _isLoading ? null : _onBackspacePressed,
-        borderRadius: BorderRadius.circular(36),
-        splashColor: AppColors.danger.withOpacity(0.15),
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.divider,
-              width: 1,
-            ),
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.backspace_outlined,
-              color: AppColors.textSecondary,
-              size: 24,
-            ),
-          ),
-        ),
+    return PinPadKey(
+      plain: true,
+      onTap: _isLoading ? null : _onBackspacePressed,
+      child: const Icon(
+        Icons.backspace_outlined,
+        color: AppColors.textSecondary,
+        size: 22,
       ),
     );
   }
 
   Widget _buildBiometricButton(L10n l10n) {
-    return TextButton.icon(
-      onPressed: _tryBiometricAuth,
-      icon: const Icon(
+    return PinPadKey(
+      plain: true,
+      onTap: _tryBiometricAuth,
+      semanticLabel: l10n.useBiometry,
+      child: const Icon(
         Icons.fingerprint,
         color: AppColors.textSecondary,
-      ),
-      label: Text(
-        l10n.useBiometry,
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-          fontSize: 13,
-        ),
+        size: 28,
       ),
     );
   }

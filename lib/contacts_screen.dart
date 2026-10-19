@@ -22,6 +22,7 @@ import 'package:orpheus_project/widgets/app_states.dart';
 import 'package:orpheus_project/widgets/app_text_field.dart';
 import 'package:orpheus_project/widgets/app_dialog.dart';
 import 'package:orpheus_project/widgets/badge_widget.dart';
+import 'package:orpheus_project/widgets/messenger_ui.dart';
 
 part 'contacts_screen_widgets.dart';
 
@@ -159,19 +160,28 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return AppScaffold(
       safeArea: false,
       appBar: AppBar(
+        centerTitle: false,
+        titleSpacing: AppSpacing.md,
+        titleTextStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 21,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+          letterSpacing: 0.1,
+        ),
         title: Text(l10n.contactsTitle),
         actions: [
-          AppIconButton(
+          HeaderIconButton(
             icon: _isSearching ? Icons.search_off : Icons.search,
             tooltip: l10n.searchContactsHint,
             onPressed: _toggleSearch,
           ),
-          AppIconButton(
+          HeaderIconButton(
             icon: Icons.person_add_outlined,
             tooltip: l10n.addContact,
             onPressed: _showAddContactDialog,
           ),
-          AppIconButton(
+          HeaderIconButton(
             icon: Icons.qr_code_scanner,
             tooltip: l10n.scanQrTooltip,
             onPressed: () async {
@@ -184,11 +194,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
               }
             },
           ),
-          AppIconButton(
+          HeaderIconButton(
             icon: Icons.refresh,
             tooltip: l10n.refreshTooltip,
             onPressed: _refreshContacts,
           ),
+          const SizedBox(width: AppSpacing.sm),
         ],
       ),
       body: Column(
@@ -239,21 +250,41 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Widget _buildSearchField(L10n l10n) {
+    const radius = BorderRadius.all(Radius.circular(10));
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+          AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.xs),
       child: TextField(
         controller: _searchController,
         autofocus: true,
         textInputAction: TextInputAction.search,
         onChanged: (value) => setState(() => _searchQuery = value),
+        style: const TextStyle(
+            fontFamily: 'Inter', fontSize: 15, color: AppColors.textPrimary),
         decoration: InputDecoration(
           hintText: l10n.searchContactsHint,
-          prefixIcon: const Icon(Icons.search, size: 20),
+          hintStyle: const TextStyle(
+              fontFamily: 'Inter', fontSize: 15, color: AppColors.textTertiary),
+          isDense: true,
+          filled: true,
+          fillColor: AppColors.surface,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          prefixIcon: const Icon(Icons.search,
+              size: 19, color: AppColors.textTertiary),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 42, minHeight: 42),
+          border: const OutlineInputBorder(
+              borderRadius: radius, borderSide: BorderSide.none),
+          enabledBorder: const OutlineInputBorder(
+              borderRadius: radius, borderSide: BorderSide.none),
+          focusedBorder: OutlineInputBorder(
+              borderRadius: radius,
+              borderSide: BorderSide(color: AppColors.outline)),
           suffixIcon: _searchQuery.isEmpty
               ? null
               : IconButton(
-                  icon: const Icon(Icons.close, size: 18),
+                  icon: const Icon(Icons.close,
+                      size: 18, color: AppColors.textTertiary),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
@@ -301,32 +332,35 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final itemCount = visible.length + leading;
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.xxl),
+      padding: const EdgeInsets.fromLTRB(0, AppSpacing.xs, 0, AppSpacing.xxl),
       itemCount: itemCount,
       itemBuilder: (context, index) {
         // Первый элемент — Оракул Орфея (AI контакт), кроме режима поиска.
         if (showOracle && index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: _OracleContactRow(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AiAssistantChatScreen(),
-                  ),
-                );
-              },
-            ),
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _OracleContactRow(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AiAssistantChatScreen(),
+                    ),
+                  );
+                },
+              ),
+              if (visible.isNotEmpty) const ListRowDivider(),
+            ],
           );
         }
 
         // Подсказка для добавления контактов (если список пуст)
         if (showHint && index == (showOracle ? 1 : 0)) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 14, top: 8),
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.md),
             child: _AddContactHint(
               onTap: _showAddContactDialog,
             ),
@@ -343,21 +377,25 @@ class _ContactsScreenState extends State<ContactsScreen> {
         final isOnline = presence[c.publicKey] == true;
         final unread = unreadCounts[c.publicKey] ?? 0;
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _ContactRow(
-            contact: c,
-            isOnline: isOnline,
-            unreadCount: unread,
-            onTap: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ChatScreen(contact: c)),
-              );
-              _refreshContacts();
-            },
-            onLongPress: () => _showContactActionsSheet(c),
-          ),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (contactIndex > 0) const ListRowDivider(),
+            _ContactRow(
+              contact: c,
+              isOnline: isOnline,
+              unreadCount: unread,
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => ChatScreen(contact: c)),
+                );
+                _refreshContacts();
+              },
+              onLongPress: () => _showContactActionsSheet(c),
+            ),
+          ],
         );
       },
     );

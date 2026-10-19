@@ -93,12 +93,6 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
-  /// Иконка вкладки с точкой «есть новое», когда [show] == true.
-  Widget _tabIcon(IconData icon, bool show) {
-    final iconWidget = Icon(icon);
-    return show ? Badge(child: iconWidget) : iconWidget;
-  }
-
   Future<bool> _isBetaDisclaimerDismissed() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool(_betaDisclaimerDismissedKey) ?? false;
@@ -351,31 +345,109 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _screens[_currentIndex],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: HomeNavBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: _onTabSelected,
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.monitor_heart_outlined),
-            selectedIcon: const Icon(Icons.monitor_heart),
-            label: l10n.system,
-          ),
-          NavigationDestination(
-            icon: _tabIcon(Icons.chat_bubble_outline, _hasContactUnread),
-            selectedIcon: _tabIcon(Icons.chat_bubble, _hasContactUnread),
-            label: l10n.contacts,
-          ),
-          NavigationDestination(
-            icon: _tabIcon(Icons.forum_outlined, _hasRoomUnread),
-            selectedIcon: _tabIcon(Icons.forum, _hasRoomUnread),
-            label: l10n.rooms,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            selectedIcon: const Icon(Icons.person),
-            label: l10n.profile,
-          ),
-        ],
+        hasContactUnread: _hasContactUnread,
+        hasRoomUnread: _hasRoomUnread,
+        labels: [l10n.system, l10n.contacts, l10n.rooms, l10n.profile],
+      ),
+    );
+  }
+}
+
+/// Нижняя навигация в визуальной системе Orpheus v1: поверхность с тонкой линией
+/// сверху, выбранная вкладка — капсула тёмной мяты с мятной иконкой. Только
+/// оформление: индекс, переходы и метки «есть новое» приходят от [HomeScreen].
+class HomeNavBar extends StatelessWidget {
+  const HomeNavBar({
+    super.key,
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+    required this.hasContactUnread,
+    required this.hasRoomUnread,
+    required this.labels,
+  }) : assert(labels.length == 4);
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+  final bool hasContactUnread;
+  final bool hasRoomUnread;
+
+  /// Подписи вкладок: Система, Контакты, Комнаты, Профиль.
+  final List<String> labels;
+
+  /// Иконка вкладки с точкой «есть новое», когда [show] == true.
+  static Widget _tabIcon(IconData icon, bool show) {
+    final iconWidget = Icon(icon);
+    return show
+        ? Badge(
+            backgroundColor: AppColors.action,
+            smallSize: 7,
+            child: iconWidget,
+          )
+        : iconWidget;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.outline)),
+      ),
+      child: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          backgroundColor: AppColors.surface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          height: 66,
+          indicatorColor: AppColors.actionContainer,
+          indicatorShape: const StadiumBorder(),
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
+            return TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected ? AppColors.textPrimary : AppColors.textTertiary,
+            );
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
+            return IconThemeData(
+              size: 22,
+              color: selected ? AppColors.action : AppColors.textTertiary,
+            );
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          onDestinationSelected: onDestinationSelected,
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.monitor_heart_outlined),
+              selectedIcon: const Icon(Icons.monitor_heart),
+              label: labels[0],
+            ),
+            NavigationDestination(
+              icon: _tabIcon(Icons.chat_bubble_outline, hasContactUnread),
+              selectedIcon: _tabIcon(Icons.chat_bubble, hasContactUnread),
+              label: labels[1],
+            ),
+            NavigationDestination(
+              icon: _tabIcon(Icons.forum_outlined, hasRoomUnread),
+              selectedIcon: _tabIcon(Icons.forum, hasRoomUnread),
+              label: labels[2],
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline),
+              selectedIcon: const Icon(Icons.person),
+              label: labels[3],
+            ),
+          ],
+        ),
       ),
     );
   }

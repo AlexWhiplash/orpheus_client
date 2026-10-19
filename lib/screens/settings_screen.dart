@@ -19,6 +19,7 @@ import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/updates_screen.dart';
 import 'package:orpheus_project/widgets/app_dialog.dart';
 import 'package:orpheus_project/widgets/language_selector.dart';
+import 'package:orpheus_project/widgets/settings_group.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
@@ -246,6 +247,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  /// Мой QR — тот же QrImageView, что раньше стоял карточкой на экране, теперь
+  /// за кнопкой в нижнем листе. Данные те же: публичный ключ.
+  void _showMyQr(String myKey, L10n l10n) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => MyQrSheet(myKey: myKey, l10n: l10n),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
@@ -259,40 +274,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onTap: _handleSecretTap,
           child: Text(l10n.profile),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Center(
-              child: UserBadge(pubkey: myKey, compact: true),
-            ),
-          ),
-        ],
         centerTitle: false,
         automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _QrCard(myKey: myKey, l10n: l10n),
-            const SizedBox(height: 12),
-            _IdCard(
-                myKey: myKey,
-                l10n: l10n,
-                isCopied: _isCopied,
-                onCopy: () => _copyToClipboard(myKey)),
-            const SizedBox(height: 12),
-            _PrimaryActions(
+            ProfileIdentityCard(
               myKey: myKey,
               l10n: l10n,
-              onShare: () =>
-                  SharePlus.instance.share(ShareParams(text: l10n.shareMessage(myKey))),
+              isCopied: _isCopied,
+              onCopy: () => _copyToClipboard(myKey),
+              onShowQr: () => _showMyQr(myKey, l10n),
             ),
             const SizedBox(height: 14),
-            _StatsCard(stats: _stats, l10n: l10n),
+            ProfileStatsGroup(stats: _stats, l10n: l10n),
             const SizedBox(height: 14),
-            _MenuCard(
+            ProfileMenuGroups(
               l10n: l10n,
+              onShare: () => SharePlus.instance
+                  .share(ShareParams(text: l10n.shareMessage(myKey))),
               onBuyPremium: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -325,23 +328,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onExport: _exportAccount,
               onNotifications: _showNotificationSettingsDialog,
-              onLanguageChanged: () => setState(() {}),
+              onLanguage: () => LanguageSelector.showPicker(
+                context,
+                onChanged: () => setState(() {}),
+              ),
             ),
             const SizedBox(height: 14),
-            _VersionCard(
+            ProfileVersionGroup(
               versionLabel: versionLabel,
               l10n: l10n,
               registrationDate: cryptoService.registrationDate,
               onCheckUpdates: () => UpdateService.checkForUpdate(context, showNoUpdateFeedback: true),
             ),
             const SizedBox(height: 18),
-            TextButton.icon(
-              onPressed: _showDeleteAccountDialog,
-              icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-              label: Text(l10n.deleteAccount,
-                  style: const TextStyle(color: AppColors.danger)),
+            Center(
+              child: TextButton.icon(
+                onPressed: _showDeleteAccountDialog,
+                icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                label: Text(l10n.deleteAccount,
+                    style: const TextStyle(color: AppColors.danger)),
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -349,37 +357,193 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-class _QrCard extends StatelessWidget {
-  const _QrCard({required this.myKey, required this.l10n});
+// ─────────────────────────────────────────────────────────────────────────────
+// Части профиля. Публичные (без «_») только ради визуального превью в
+// test/visual_preview: состояние и сервисы остаются в _SettingsScreenState.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Карточка личности: аватар-квадрат, «Ваш ID», ключ моноширинным, кнопка «Мой QR».
+class ProfileIdentityCard extends StatelessWidget {
+  const ProfileIdentityCard({
+    super.key,
+    required this.myKey,
+    required this.l10n,
+    required this.isCopied,
+    required this.onCopy,
+    required this.onShowQr,
+    this.showBadge = true,
+  });
+
+  final String myKey;
+  final L10n l10n;
+  final bool isCopied;
+  final VoidCallback onCopy;
+  final VoidCallback onShowQr;
+
+  /// Превью без BadgeService выключает табличку.
+  final bool showBadge;
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = AppAvatarColors.gradientFromName(myKey);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: AppRadii.sm,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onCopy,
+              borderRadius: BorderRadius.circular(10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: gradient,
+                      ),
+                      boxShadow: AppShadows.bevel(),
+                    ),
+                    child: const Icon(Icons.person_rounded,
+                        color: AppColors.textPrimary, size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                l10n.yourId,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (showBadge) ...[
+                              const SizedBox(width: 8),
+                              UserBadge(pubkey: myKey, compact: true),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          myKey,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.mono(
+                            fontSize: 11.5,
+                            color: AppColors.textTertiary,
+                            letterSpacing: 0.3,
+                          ).copyWith(height: 1.35),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    isCopied ? Icons.check : Icons.copy,
+                    size: 18,
+                    color:
+                        isCopied ? AppColors.success : AppColors.textTertiary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Material(
+            color: AppColors.surface2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: AppColors.outline),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onShowQr,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.qr_code_2,
+                        size: 20, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        l10n.myQrCodeButton,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Нижний лист с моим QR-кодом (тот же QR, что раньше был карточкой на экране).
+class MyQrSheet extends StatelessWidget {
+  const MyQrSheet({super.key, required this.myKey, required this.l10n});
   final String myKey;
   final L10n l10n;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadii.lg,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.qrCode, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(14),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
               decoration: BoxDecoration(
+                color: AppColors.outline,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(l10n.qrCode, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: AppRadii.md,
               ),
               child: QrImageView(
                 data: myKey,
                 version: QrVersions.auto,
-                size: 170,
+                size: 220,
                 backgroundColor: Colors.white,
                 eyeStyle: const QrEyeStyle(
                     eyeShape: QrEyeShape.square, color: AppColors.bg),
@@ -389,181 +553,88 @@ class _QrCard extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IdCard extends StatelessWidget {
-  const _IdCard({
-    required this.myKey,
-    required this.l10n,
-    required this.isCopied,
-    required this.onCopy,
-  });
-
-  final String myKey;
-  final L10n l10n;
-  final bool isCopied;
-  final VoidCallback onCopy;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadii.lg,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.yourId, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 10),
-          InkWell(
-            onTap: onCopy,
-            borderRadius: AppRadii.md,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.surface2,
-                borderRadius: AppRadii.md,
-                border: Border.all(
-                  color: isCopied
-                      ? AppColors.success.withOpacity(0.45)
-                      : AppColors.outline,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      myKey,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontFamily: AppTypography.monoFamily,
-                            color: AppColors.textPrimary,
-                          ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Icon(
-                    isCopied ? Icons.check : Icons.copy,
-                    size: 18,
-                    color:
-                        isCopied ? AppColors.success : AppColors.textSecondary,
-                  ),
-                ],
-              ),
+            const SizedBox(height: 16),
+            Text(
+              myKey,
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(
+                fontSize: 11.5,
+                color: AppColors.textTertiary,
+              ).copyWith(height: 1.4),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _PrimaryActions extends StatelessWidget {
-  const _PrimaryActions({
-    required this.myKey,
-    required this.l10n,
-    required this.onShare,
-  });
-  final String myKey;
-  final L10n l10n;
-  final VoidCallback onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: onShare,
-            icon: const Icon(Icons.share, size: 18),
-            label: Text(l10n.share),
-            // Высота 50 как МИНИМУМ, а не жёстко: при крупном системном шрифте
-            // (font_scale 1.3) фикс. высота обрезала низ букв («Поделиться»).
-            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 50)),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatsCard extends StatelessWidget {
-  const _StatsCard({required this.stats, required this.l10n});
+/// Статистика: три моноширинных числа в группе.
+class ProfileStatsGroup extends StatelessWidget {
+  const ProfileStatsGroup({super.key, required this.stats, required this.l10n});
   final Map<String, int> stats;
   final L10n l10n;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: AppRadii.lg,
-        border: Border.all(color: AppColors.outline),
+        borderRadius: AppRadii.sm,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _stat(context, Icons.people_outline, stats['contacts'] ?? 0,
+          _stat(context, stats['contacts'] ?? 0,
               l10n.contactsCount(stats['contacts'] ?? 0)),
           _divider(),
-          _stat(context, Icons.chat_outlined, stats['messages'] ?? 0,
+          _stat(context, stats['messages'] ?? 0,
               l10n.messagesCount(stats['messages'] ?? 0)),
           _divider(),
-          _stat(context, Icons.send_outlined, stats['sent'] ?? 0, l10n.sentCount),
+          _stat(context, stats['sent'] ?? 0, l10n.sentCount),
         ],
       ),
     );
   }
 
   Widget _divider() =>
-      Container(width: 1, height: 30, color: AppColors.divider);
+      Container(width: 1, height: 28, color: AppColors.divider);
 
-  Widget _stat(BuildContext context, IconData icon, int value, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: AppColors.textSecondary),
-            const SizedBox(width: 6),
-            Text(
-              '$value',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontFamily: AppTypography.monoFamily,
-                    fontWeight: FontWeight.w700,
-                  ),
+  Widget _stat(BuildContext context, int value, String label) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$value',
+            style: AppTypography.mono(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textPrimary,
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context)
-              .textTheme
-              .labelSmall
-              ?.copyWith(color: AppColors.textTertiary),
-        ),
-      ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _MenuCard extends StatelessWidget {
-  const _MenuCard({
+/// Пункты профиля в сгруппированных списках.
+class ProfileMenuGroups extends StatelessWidget {
+  const ProfileMenuGroups({
+    super.key,
     required this.l10n,
+    required this.onShare,
     required this.onBuyPremium,
     required this.onSecurity,
     required this.onSupport,
@@ -571,10 +642,11 @@ class _MenuCard extends StatelessWidget {
     required this.onUpdates,
     required this.onExport,
     required this.onNotifications,
-    required this.onLanguageChanged,
+    required this.onLanguage,
   });
 
   final L10n l10n;
+  final VoidCallback onShare;
   final VoidCallback onBuyPremium;
   final VoidCallback onSecurity;
   final VoidCallback onSupport;
@@ -582,99 +654,87 @@ class _MenuCard extends StatelessWidget {
   final VoidCallback onUpdates;
   final VoidCallback onExport;
   final VoidCallback onNotifications;
-  final VoidCallback onLanguageChanged;
+  final VoidCallback onLanguage;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadii.lg,
-        border: Border.all(color: AppColors.outline),
-      ),
-      // Material-предок между декорированным Container и ListTile'ами:
-      // без него Flutter 3.44 бросает debug-ассерт "ink splashes may be invisible"
-      // (ripple рисуется под непрозрачным фоном карточки). transparency сохраняет фон.
-      child: Material(
-        type: MaterialType.transparency,
-        child: Column(
-          children: [
-            _tile(context, Icons.workspace_premium, l10n.buyLicense, null,
-                onBuyPremium),
-            _divider(),
-            _tile(context, Icons.security, l10n.security, l10n.securityDesc,
-                onSecurity),
-          _divider(),
-          // Выбор языка
-          LanguageSelector(
-            compact: false,
-            onChanged: onLanguageChanged,
-          ),
-          _divider(),
-          _tile(context, Icons.support_agent, l10n.support,
-              l10n.supportDesc, onSupport),
-          _divider(),
-          _tile(context, Icons.help_outline, l10n.howToUse,
-              l10n.howToUseDesc, onHelp),
-          _divider(),
-          _tile(context, Icons.history, l10n.updateHistory, null, onUpdates),
-          _divider(),
-          _tile(context, Icons.shield_outlined, l10n.exportAccount,
-              l10n.exportAccountDesc, onExport,
-              isDanger: true),
-          _divider(),
-          _tile(
-            context,
-            Icons.notifications_none,
-            l10n.notificationSettings,
-            l10n.notificationSettingsDesc,
-            onNotifications,
-          ),
-        ],
-        ),
-      ),
-    );
-  }
+    final isSystem = LocaleService.instance.isSystemLocale;
+    final languageValue = isSystem
+        ? l10n.systemDefault
+        : LocaleService.getLanguageName(LocaleService.instance.effectiveLocale);
 
-  Widget _divider() =>
-      Divider(height: 1, thickness: 1, color: AppColors.divider);
-
-  Widget _tile(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String? subtitle,
-    VoidCallback onTap, {
-    bool isDanger = false,
-  }) {
-    final accent = isDanger ? AppColors.danger : AppColors.accent;
-    return ListTile(
-      onTap: onTap,
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: accent.withOpacity(0.10),
-          borderRadius: AppRadii.sm,
-        ),
-        child: Icon(icon, color: accent, size: 20),
-      ),
-      title: Text(
-        title,
-        style: Theme.of(context)
-            .textTheme
-            .bodyLarge
-            ?.copyWith(fontWeight: FontWeight.w600),
-      ),
-      subtitle: subtitle == null ? null : Text(subtitle),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.textTertiary),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SettingsGroup(children: [
+          SettingsRow(
+            icon: Icons.shield_outlined,
+            label: l10n.security,
+            subtitle: l10n.securityDesc,
+            onTap: onSecurity,
+          ),
+          SettingsRow(
+            icon: Icons.key_outlined,
+            label: l10n.exportAccount,
+            subtitle: l10n.exportAccountDesc,
+            onTap: onExport,
+            tone: AppColors.danger,
+          ),
+          SettingsRow(
+            icon: Icons.share_outlined,
+            label: l10n.share,
+            onTap: onShare,
+          ),
+        ]),
+        const SizedBox(height: 14),
+        SettingsGroup(children: [
+          SettingsRow(
+            icon: Icons.language,
+            label: l10n.language,
+            value: languageValue,
+            onTap: onLanguage,
+          ),
+          SettingsRow(
+            icon: Icons.notifications_none,
+            label: l10n.notificationSettings,
+            subtitle: l10n.notificationSettingsDesc,
+            onTap: onNotifications,
+          ),
+        ]),
+        const SizedBox(height: 14),
+        SettingsGroup(children: [
+          SettingsRow(
+            icon: Icons.support_agent,
+            label: l10n.support,
+            subtitle: l10n.supportDesc,
+            onTap: onSupport,
+          ),
+          SettingsRow(
+            icon: Icons.help_outline,
+            label: l10n.howToUse,
+            subtitle: l10n.howToUseDesc,
+            onTap: onHelp,
+          ),
+          SettingsRow(
+            icon: Icons.history,
+            label: l10n.updateHistory,
+            onTap: onUpdates,
+          ),
+          SettingsRow(
+            icon: Icons.workspace_premium_outlined,
+            label: l10n.buyLicense,
+            onTap: onBuyPremium,
+          ),
+        ]),
+      ],
     );
   }
 }
 
-class _VersionCard extends StatelessWidget {
-  const _VersionCard({
+/// Версия: «Orpheus» + номер сборки моноширинным, дата создания аккаунта, «Проверить».
+class ProfileVersionGroup extends StatelessWidget {
+  const ProfileVersionGroup({
+    super.key,
     required this.versionLabel,
     required this.l10n,
     required this.registrationDate,
@@ -690,48 +750,58 @@ class _VersionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final locale = LocaleService.instance.effectiveLocale.languageCode;
     final dateFormat = locale == 'ru' ? 'dd.MM.yyyy' : 'MMM d, yyyy';
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: AppRadii.lg,
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline,
-              color: AppColors.textSecondary, size: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Orpheus $versionLabel",
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                if (registrationDate != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    l10n.accountCreated(DateFormat(dateFormat).format(registrationDate!)),
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelMedium
-                        ?.copyWith(color: AppColors.textTertiary),
+
+    return SettingsGroup(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline,
+                color: AppColors.textSecondary, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
+                    TextSpan(children: [
+                      const TextSpan(
+                        text: 'Orpheus ',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      TextSpan(
+                        text: versionLabel,
+                        style: AppTypography.mono(
+                          fontSize: 13,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ]),
                   ),
+                  if (registrationDate != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      l10n.accountCreated(
+                          DateFormat(dateFormat).format(registrationDate!)),
+                      style: const TextStyle(
+                        color: AppColors.textTertiary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          TextButton(onPressed: onCheckUpdates, child: Text(l10n.checkUpdates)),
-        ],
+            TextButton(
+                onPressed: onCheckUpdates, child: Text(l10n.checkUpdates)),
+          ],
+        ),
       ),
-    );
+    ]);
   }
 }
 

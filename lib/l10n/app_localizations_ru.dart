@@ -1757,4 +1757,7 @@ class L10nRu extends L10n {
   String serverSwitched(String host) {
     return 'Переключено на $host';
   }
+
+  @override
+  String get myQrCodeButton => 'Мой QR-код — чтобы добавили в контакты';
 }

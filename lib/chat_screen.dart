@@ -19,8 +19,8 @@ import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
 import 'package:orpheus_project/widgets/app_dialog.dart';
 import 'package:orpheus_project/widgets/app_scaffold.dart';
-import 'package:orpheus_project/widgets/app_text_field.dart';
 import 'package:orpheus_project/widgets/badge_widget.dart';
+import 'package:orpheus_project/widgets/messenger_ui.dart';
 
 class ChatScreen extends StatefulWidget {
   final Contact contact;
@@ -203,16 +203,17 @@ class _ChatScreenState extends State<ChatScreen>
   /// LOGIC-3). Теперь отражает реальный статус. Двойная галка (delivered/read)
   /// пока не используется — сервер это релей без квитанций о доставке.
   Widget _buildStatusIcon(MessageStatus status) {
+    final metaColor = AppColors.onActionContainer.withOpacity(0.5);
     switch (status) {
       case MessageStatus.sending:
-        return Icon(Icons.schedule, size: 14, color: AppColors.textTertiary);
+        return Icon(Icons.schedule, size: 13, color: metaColor);
       case MessageStatus.failed:
-        return const Icon(Icons.error_outline, size: 14, color: AppColors.danger);
+        return const Icon(Icons.error_outline, size: 13, color: AppColors.danger);
       case MessageStatus.delivered:
       case MessageStatus.read:
-        return Icon(Icons.done_all, size: 14, color: AppColors.info.withOpacity(0.85));
+        return Icon(Icons.done_all, size: 13, color: metaColor);
       case MessageStatus.sent:
-        return Icon(Icons.done, size: 14, color: AppColors.info.withOpacity(0.85));
+        return Icon(Icons.done, size: 13, color: metaColor);
     }
   }
 
@@ -511,53 +512,52 @@ class _ChatScreenState extends State<ChatScreen>
       safeArea: false,
       appBar: _isSelectionMode ? _buildSelectionAppBar(l10n) : AppBar(
         titleSpacing: 0,
+        centerTitle: false,
+        shape: Border(bottom: BorderSide(color: AppColors.outline)),
         title: StreamBuilder<Map<String, bool>>(
           stream: presenceService.stream,
           initialData: const <String, bool>{},
           builder: (context, snapshot) {
             final isOnline = presenceService.isOnline(widget.contact.publicKey);
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            return Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        widget.contact.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                MessengerAvatar(
+                    name: widget.contact.name, size: 38, radius: 12),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.contact.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          UserBadge(
+                              pubkey: widget.contact.publicKey, compact: true),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: UserBadge(
-                          pubkey: widget.contact.publicKey, compact: true),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isOnline
-                            ? AppColors.success
-                            : AppColors.textTertiary,
-                        shape: BoxShape.circle,
+                      const SizedBox(height: 3),
+                      PresenceLabel(
+                        isOnline: isOnline,
+                        onlineText: l10n.online,
+                        offlineText: l10n.offline,
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isOnline ? l10n.online : l10n.offline,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
-                          ?.copyWith(color: AppColors.textSecondary),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             );
@@ -580,6 +580,7 @@ class _ChatScreenState extends State<ChatScreen>
             tooltip: l10n.menu,
             onPressed: _showChatMenu,
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
@@ -601,7 +602,7 @@ class _ChatScreenState extends State<ChatScreen>
       controller: _scrollController,
       reverse: true,
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+          horizontal: AppSpacing.sm + 2, vertical: AppSpacing.sm),
       itemCount: reversedMessages.length,
       itemBuilder: (context, index) {
         final message = reversedMessages[index];
@@ -624,7 +625,7 @@ class _ChatScreenState extends State<ChatScreen>
           children: [
             if (showDateDivider) _DateDivider(date: message.timestamp),
             _buildMessageItem(message, hideTime: hideTime),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
           ],
         );
       },
@@ -665,74 +666,78 @@ class _ChatScreenState extends State<ChatScreen>
       );
     }
 
+    final metaColor = isMyMessage
+        ? AppColors.onActionContainer.withOpacity(0.5)
+        : AppColors.textTertiary;
+    const tail = Radius.circular(4);
+    const corner = Radius.circular(13);
     final bubble = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 1),
       child: Align(
         alignment: isMyMessage ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(
               maxWidth: MediaQuery.of(context).size.width * 0.78),
-          child: Column(
-            crossAxisAlignment:
-                isMyMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isMyMessage
-                      ? AppColors.actionContainer
-                      : AppColors.surface2,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(18),
-                    topRight: const Radius.circular(18),
-                    bottomLeft: Radius.circular(isMyMessage ? 18 : 8),
-                    bottomRight: Radius.circular(isMyMessage ? 8 : 18),
-                  ),
-                  border: ContainerBorder(isMyMessage: isMyMessage).border,
-                ),
-                child: Text(
-                  message.text,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
+            decoration: BoxDecoration(
+              color: isMyMessage
+                  ? AppColors.actionContainer
+                  : AppColors.surface2,
+              borderRadius: BorderRadius.only(
+                topLeft: corner,
+                topRight: corner,
+                bottomLeft: isMyMessage ? corner : tail,
+                bottomRight: isMyMessage ? tail : corner,
+              ),
+            ),
+            // Время внутри пузыря, справа снизу: IntrinsicWidth сужает пузырь
+            // до текста, а строка времени прижимается к правому краю.
+            child: IntrinsicWidth(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    message.text,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 15.5,
+                      height: 1.4,
                       color: isMyMessage
                           ? AppColors.onActionContainer
-                          : AppColors.textPrimary),
-                ),
-              ),
-              if (!hideTime)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6, left: 6, right: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        timeStr,
-                        style: AppTypography.mono(
-                          fontSize: 11,
-                          color: isMyMessage
-                              ? AppColors.onActionContainer.withOpacity(0.6)
-                              : AppColors.textTertiary,
-                        ),
-                      ),
-                      if (isMyMessage) ...[
-                        const SizedBox(width: 6),
-                        _buildStatusIcon(message.status),
-                      ],
-                      if (isMyMessage &&
-                          message.status == MessageStatus.failed) ...[
-                        const SizedBox(width: 4),
-                        Text(
-                          l10n.notSent,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: AppColors.danger),
-                        ),
-                      ],
-                    ],
+                          : AppColors.textPrimary,
+                    ),
                   ),
-                ),
-            ],
+                  if (!hideTime) ...[
+                    const SizedBox(height: 3),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (isMyMessage &&
+                            message.status == MessageStatus.failed) ...[
+                          Text(
+                            l10n.notSent,
+                            style: AppTypography.mono(
+                                fontSize: 10.5, color: AppColors.danger),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(
+                          timeStr,
+                          style: AppTypography.mono(
+                              fontSize: 10.5, color: metaColor),
+                        ),
+                        if (isMyMessage) ...[
+                          const SizedBox(width: 4),
+                          _buildStatusIcon(message.status),
+                        ],
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -945,34 +950,87 @@ class _ChatScreenState extends State<ChatScreen>
 
   Widget _buildInputBar() {
     final l10n = L10n.of(context);
+    const fieldRadius = BorderRadius.all(Radius.circular(22));
     return Container(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.bg,
-        border: Border(top: BorderSide(color: AppColors.divider)),
-      ),
+          AppSpacing.sm, AppSpacing.xs, AppSpacing.sm, AppSpacing.sm),
+      color: AppColors.bg,
       child: SafeArea(
         top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: AppTextField(
-                controller: _messageController,
-                hintText: l10n.messagePlaceholder,
-                prefixIcon: Icons.lock_outline,
-                maxLines: 4,
-                minLines: 1,
-                textCapitalization: TextCapitalization.sentences,
-                textInputAction: TextInputAction.newline,
+            // Тихая строка о шифровании (раньше — замок в поле ввода).
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock_outline,
+                      size: 12, color: AppColors.textTertiary),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      l10n.e2eActive.toLowerCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.mono(
+                        fontSize: 11,
+                        color: AppColors.textTertiary,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 10),
-            _SendButton(
-              isEncrypting: _isEncrypting,
-              encryptionController: _encryptionController,
-              onTap: _sendMessage,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    maxLines: 4,
+                    minLines: 1,
+                    textCapitalization: TextCapitalization.sentences,
+                    textInputAction: TextInputAction.newline,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 15.5,
+                      color: AppColors.textPrimary,
+                      height: 1.35,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: l10n.messagePlaceholder,
+                      hintStyle: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 15.5,
+                        color: AppColors.textTertiary,
+                      ),
+                      isDense: true,
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      border: const OutlineInputBorder(
+                          borderRadius: fieldRadius,
+                          borderSide: BorderSide.none),
+                      enabledBorder: const OutlineInputBorder(
+                          borderRadius: fieldRadius,
+                          borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: fieldRadius,
+                          borderSide: BorderSide(color: AppColors.outline)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                _SendButton(
+                  isEncrypting: _isEncrypting,
+                  encryptionController: _encryptionController,
+                  onTap: _sendMessage,
+                ),
+              ],
             ),
           ],
         ),
@@ -1083,32 +1141,7 @@ class _DateDivider extends StatelessWidget {
     final label = (context.findAncestorStateOfType<_ChatScreenState>())
             ?._formatDateDivider(date) ??
         '';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: AppColors.divider)),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: const BorderRadius.all(Radius.circular(999)),
-              border: Border.all(color: AppColors.outline),
-            ),
-            child: Text(
-              label,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: AppColors.textSecondary),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(child: Divider(color: AppColors.divider)),
-        ],
-      ),
-    );
+    return ChatDaySeparator(label: label);
   }
 }
 
@@ -1130,14 +1163,14 @@ class _SendButton extends StatelessWidget {
       builder: (context, _) {
         final t = Curves.easeInOut.transform(encryptionController.value);
         return SizedBox(
-          width: 46,
-          height: 46,
+          width: 44,
+          height: 44,
           child: Material(
             color: AppColors.action,
-            borderRadius: const BorderRadius.all(Radius.circular(16)),
+            shape: const CircleBorder(),
             child: InkWell(
               onTap: isEncrypting ? null : onTap,
-              borderRadius: const BorderRadius.all(Radius.circular(16)),
+              customBorder: const CircleBorder(),
               child: Center(
                 child: isEncrypting
                     ? Transform.rotate(
@@ -1145,8 +1178,8 @@ class _SendButton extends StatelessWidget {
                         child: const Icon(Icons.lock,
                             color: AppColors.onAction, size: 20),
                       )
-                    : const Icon(Icons.send_rounded,
-                        color: AppColors.onAction, size: 20),
+                    : const Icon(Icons.arrow_forward_rounded,
+                        color: AppColors.onAction, size: 22),
               ),
             ),
           ),
@@ -1206,8 +1239,8 @@ class _CallStatusPill extends StatelessWidget {
               color: isSelected == true
                   ? AppColors.action.withOpacity(0.10)
                   : AppColors.surface,
-              borderRadius: AppRadii.md,
-              border: Border.all(color: ui.accent.withOpacity(0.25)),
+              borderRadius: const BorderRadius.all(Radius.circular(12)),
+              border: Border.all(color: AppColors.outline),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1240,7 +1273,7 @@ class _CallStatusPill extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(timeStr,
                     style: AppTypography.mono(
-                        fontSize: 11, color: AppColors.textTertiary)),
+                        fontSize: 10.5, color: AppColors.textTertiary)),
               ],
             ),
           ),

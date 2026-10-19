@@ -20,6 +20,7 @@ import 'package:orpheus_project/services/database_service.dart';
 import 'package:orpheus_project/services/identity_directory_service.dart';
 import 'package:orpheus_project/models/chat_message_model.dart';
 import 'package:orpheus_project/widgets/call/background_painters.dart';
+import 'package:orpheus_project/widgets/call/call_identity.dart';
 import 'package:orpheus_project/widgets/call/control_panel.dart';
 import 'package:orpheus_project/widgets/badge_widget.dart';
 import 'package:orpheus_project/services/call_session_controller.dart';
@@ -1015,12 +1016,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     if (_callState == CallState.Connected) {
       return Column(
         children: [
+          // Моноширинная строка статуса: «время · E2E».
           Text(
-            _durationText,
+            '$_durationText · E2E',
             style: AppTypography.mono(
-              color: AppColors.textPrimary,
-              fontSize: 24,
-              fontWeight: FontWeight.w500,
+              color: AppColors.textSecondary,
+              fontSize: 14,
               letterSpacing: 1.2,
             ),
           ),
@@ -1047,7 +1048,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
               const SizedBox(width: 8),
               Text(
                 _getStatusText(),
-                style: AppTypography.mono(color: AppColors.warning, fontSize: 16),
+                style: AppTypography.mono(color: AppColors.warning, fontSize: 14),
               ),
             ],
           ),
@@ -1068,7 +1069,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
         children: [
           Text(
             _getStatusText(),
-            style: AppTypography.mono(color: AppColors.textSecondary, fontSize: 16),
+            style: AppTypography.mono(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -1080,64 +1085,19 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     }
   }
 
-  /// Аватар контакта: стальной диск с фаской, без пульсаций и свечения.
+  /// Аватар контакта: стальной скруглённый квадрат с фаской, без пульсаций и свечения.
   Widget _buildAvatar() {
-    final connected = _callState == CallState.Connected;
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: connected
-              ? AppColors.primaryDark.withOpacity(0.45)
-              : AppColors.outline,
-          width: 1,
-        ),
-        boxShadow: AppShadows.bevel(depth: 2),
-      ),
-      child: CircleAvatar(
-        radius: 60,
-        backgroundColor: connected ? AppColors.surfaceElevated : AppColors.surface2,
-        child: Text(
-          _displayName.isNotEmpty ? _displayName[0].toUpperCase() : "?",
-          style: TextStyle(
-            fontSize: 40,
-            color: connected ? AppColors.textPrimary : AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    return CallAvatar(
+      name: _displayName,
+      connected: _callState == CallState.Connected,
     );
   }
 
-  /// Визуализатор звука (полоски), показывается только в состоянии Connected.
+  /// Индикатор голоса (пять полос знака), показывается только в состоянии Connected.
   Widget _buildAudioVisualizer() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(height: 30),
-        Container(
-          height: 60,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            // Пять вертикальных полос, как в знаке Orpheus (серебро).
-            children: List.generate(5, (index) {
-              final step = _audioWaveData.length ~/ 5;
-              final height = _audioWaveData[index * step] * 50;
-              return Container(
-                width: 4,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                height: height.clamp(6.0, 50.0),
-              );
-            }),
-          ),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.only(top: 30),
+      child: CallVoiceBars(levels: _audioWaveData),
     );
   }
 
@@ -1285,7 +1245,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // Скрытая кнопка логов — только в debug (аудит UI-9)
                 GestureDetector(
@@ -1296,42 +1256,47 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                     "Secure Call",
                     style: AppTypography.mono(
                       color: AppColors.textTertiary,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w500,
                       letterSpacing: 1.5,
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+
+                const Spacer(flex: 2),
+
+                // Аватар — скруглённый квадрат ~74dp
+                _buildAvatar(),
+                const SizedBox(height: 16),
 
                 // Имя контакта
-                Text(
-                  _displayName,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w600,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    _displayName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 
                 // Бейдж пользователя
                 AnimatedUserBadge(pubkey: widget.contactPublicKey),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
 
                 // Статус или Таймер
                 _buildStatusSection(),
 
-                const Spacer(),
-
-                // Аватар с анимацией пульсации
-                _buildAvatar(),
-
-                // Визуализатор звука
+                // Индикатор голоса
                 if (_callState == CallState.Connected) _buildAudioVisualizer(),
 
-                const Spacer(),
+                const Spacer(flex: 3),
 
                 // Панель управления
                 CallControlPanel(
@@ -1347,7 +1312,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                 // Было 60 — на невысоких экранах / крупном шрифте подпись «Завершить»
                 // под кнопкой обрезалась снизу (device-тест). SafeArea уже даёт нижний
                 // отступ от системной навигации.
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
               ],
             ),
           ),

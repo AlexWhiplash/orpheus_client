@@ -10,6 +10,7 @@ import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/message_cleanup_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
+import 'package:orpheus_project/widgets/settings_group.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   final AuthService auth;
@@ -213,7 +214,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     final inactivitySeconds = inactivityOptions.containsKey(config.inactivityLockSeconds)
         ? config.inactivityLockSeconds
         : 60;
-    
+    const sectionGap = SizedBox(height: 24);
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
@@ -225,394 +227,262 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Секция PIN-кода
-            _buildSectionHeader(l10n.pinCodeSection, Icons.lock_outline),
-            const SizedBox(height: 12),
-            
-            if (!isPinEnabled) ...[
-              _buildInfoCard(
-                icon: Icons.info_outline,
-                text: l10n.pinNotSet,
-                color: AppColors.warning,
-              ),
-              const SizedBox(height: 12),
-              _buildActionButton(
-                icon: Icons.add,
-                title: l10n.setPinCode,
-                subtitle: l10n.setPinCodeDesc,
-                onTap: () => _openPinSetup(PinSetupMode.setPin),
-              ),
-            ] else ...[
-              _buildPinStatusCard(config.pinLength, l10n),
-              const SizedBox(height: 12),
-              _buildSelectTile(
-                icon: Icons.timer_outlined,
-                title: l10n.inactivityLockTitle,
-                subtitle: l10n.inactivityLockDesc,
-                value: inactivitySeconds,
-                options: inactivityOptions,
-                onChanged: (value) async {
-                  await _auth.setInactivityLockSeconds(value);
-                  _refresh();
-                },
-              ),
-              // Под duress эти действия скрыты: каждое начинается с «введите
-              // текущий PIN», а текущим для наблюдателя выглядит код принуждения —
-              // и получает «неверный PIN» от кода, которым только что открыли
-              // приложение. Это ДОКАЗУЕМОЕ противоречие. Отсутствие кнопки
-              // наблюдателю проверить не с чем, поэтому убираем кнопки.
-              if (!duressActive) ...[
-                const SizedBox(height: 12),
-                _buildActionButton(
-                  icon: Icons.edit,
-                  title: l10n.changePinCode,
-                  subtitle: l10n.digitCode(config.pinLength),
-                  onTap: () => _openPinSetup(PinSetupMode.changePin),
+            SettingsSectionLabel(l10n.pinCodeSection),
+            SettingsGroup(children: [
+              if (!isPinEnabled) ...[
+                SettingsNote(
+                  icon: Icons.info_outline,
+                  text: l10n.pinNotSet,
+                  color: AppColors.warning,
                 ),
-                const SizedBox(height: 8),
                 _buildActionButton(
-                  icon: Icons.lock_open,
-                  title: l10n.disablePinCode,
-                  isDestructive: true,
-                  onTap: () => _openPinSetup(PinSetupMode.disablePin),
+                  icon: Icons.add,
+                  title: l10n.setPinCode,
+                  subtitle: l10n.setPinCodeDesc,
+                  onTap: () => _openPinSetup(PinSetupMode.setPin),
                 ),
+              ] else ...[
+                _buildPinStatusCard(config.pinLength, l10n),
+                _buildSelectTile(
+                  icon: Icons.timer_outlined,
+                  title: l10n.inactivityLockTitle,
+                  subtitle: l10n.inactivityLockDesc,
+                  value: inactivitySeconds,
+                  options: inactivityOptions,
+                  onChanged: (value) async {
+                    await _auth.setInactivityLockSeconds(value);
+                    _refresh();
+                  },
+                ),
+                // Под duress эти действия скрыты: каждое начинается с «введите
+                // текущий PIN», а текущим для наблюдателя выглядит код принуждения —
+                // и получает «неверный PIN» от кода, которым только что открыли
+                // приложение. Это ДОКАЗУЕМОЕ противоречие. Отсутствие кнопки
+                // наблюдателю проверить не с чем, поэтому убираем кнопки.
+                if (!duressActive) ...[
+                  _buildActionButton(
+                    icon: Icons.edit_outlined,
+                    title: l10n.changePinCode,
+                    subtitle: l10n.digitCode(config.pinLength),
+                    onTap: () => _openPinSetup(PinSetupMode.changePin),
+                  ),
+                  _buildActionButton(
+                    icon: Icons.lock_open,
+                    title: l10n.disablePinCode,
+                    isDestructive: true,
+                    onTap: () => _openPinSetup(PinSetupMode.disablePin),
+                  ),
+                ],
               ],
-            ],
-            
-            const SizedBox(height: 32),
-            
+            ]),
+
+            sectionGap,
+
             // Секция биометрии (только если PIN включен)
             if (isPinEnabled && _canUseBiometrics) ...[
-              _buildSectionHeader(l10n.biometrySection, Icons.fingerprint),
-              const SizedBox(height: 12),
-              _buildSwitchTile(
-                icon: Icons.fingerprint,
-                title: l10n.unlockWithBiometry,
-                subtitle: l10n.quickEntryWithoutPin,
-                value: config.isBiometricEnabled,
-                onChanged: _toggleBiometrics,
-              ),
-              const SizedBox(height: 32),
+              SettingsSectionLabel(l10n.biometrySection),
+              SettingsGroup(children: [
+                _buildSwitchTile(
+                  icon: Icons.fingerprint,
+                  title: l10n.unlockWithBiometry,
+                  subtitle: l10n.quickEntryWithoutPin,
+                  value: config.isBiometricEnabled,
+                  onChanged: _toggleBiometrics,
+                ),
+              ]),
+              sectionGap,
             ],
-            
+
             // Приватность звонка: показывать ли имя звонящего на локскрине
-            _buildSwitchTile(
-              icon: Icons.phonelink_lock,
-              title: l10n.callerNameOnLockTitle,
-              subtitle: l10n.callerNameOnLockDesc,
-              value: _showCallerNameOnLock,
-              onChanged: (v) async {
-                // Этот тумблер пишет в SharedPreferences, а не в гейтированную БД,
-                // поэтому под duress держатель кода принуждения необратимо включал
-                // бы жертве показ имени звонящего на локскрине. Гейт стоит здесь, а
-                // не в DeviceSettingsService: сервис статический и его читает
-                // push-изолят, где свой AuthService с duress == false.
-                if (duressActive) return;
-                await DeviceSettingsService.setShowCallerNameWhenLocked(v);
-                if (mounted) setState(() => _showCallerNameOnLock = v);
-              },
-            ),
-            const SizedBox(height: 32),
+            SettingsGroup(children: [
+              _buildSwitchTile(
+                icon: Icons.phonelink_lock,
+                title: l10n.callerNameOnLockTitle,
+                subtitle: l10n.callerNameOnLockDesc,
+                value: _showCallerNameOnLock,
+                onChanged: (v) async {
+                  // Этот тумблер пишет в SharedPreferences, а не в гейтированную БД,
+                  // поэтому под duress держатель кода принуждения необратимо включал
+                  // бы жертве показ имени звонящего на локскрине. Гейт стоит здесь, а
+                  // не в DeviceSettingsService: сервис статический и его читает
+                  // push-изолят, где свой AuthService с duress == false.
+                  if (duressActive) return;
+                  await DeviceSettingsService.setShowCallerNameWhenLocked(v);
+                  if (mounted) setState(() => _showCallerNameOnLock = v);
+                },
+              ),
+            ]),
+            sectionGap,
 
             // Секция кода принуждения (только если PIN включен).
             // Под duress секции кодов скрыты целиком. Оставить их без кнопок было бы
             // хуже: пустая секция сама рассказывает наблюдателю, что в приложении
             // ЕСТЬ код принуждения — то самое понятие, о котором ему знать незачем.
             if (isPinEnabled && !duressActive) ...[
-              _buildSectionHeader(l10n.duressCodeSection, Icons.shield_outlined),
-              const SizedBox(height: 12),
-              
-              _buildInfoCard(
-                icon: Icons.warning_amber,
-                text: l10n.duressCodeInfo,
-                color: AppColors.warning,
-                isMultiLine: true,
-              ),
-              const SizedBox(height: 12),
-              
-              if (!isDuressEnabled) ...[
-                _buildActionButton(
-                  icon: Icons.add,
-                  title: l10n.setDuressCode,
-                  subtitle: l10n.setDuressCodeDesc(config.pinLength),
-                  onTap: () => _openPinSetup(PinSetupMode.setDuress),
-                  accentColor: AppColors.warning,
-                ),
-              ] else ...[
+              SettingsSectionLabel(l10n.duressCodeSection),
+              SettingsGroup(children: [
                 _buildInfoCard(
-                  icon: Icons.check_circle_outline,
-                  text: l10n.duressCodeSet(config.pinLength),
-                  color: AppColors.success,
+                  icon: Icons.warning_amber,
+                  text: l10n.duressCodeInfo,
+                  color: AppColors.warning,
+                  isMultiLine: true,
                 ),
-                const SizedBox(height: 12),
-                _buildActionButton(
-                  icon: Icons.delete_outline,
-                  title: l10n.disableDuressCode,
-                  isDestructive: true,
-                  onTap: () => _openPinSetup(PinSetupMode.disableDuress),
-                ),
-              ],
-              
-              const SizedBox(height: 32),
+                if (!isDuressEnabled) ...[
+                  _buildActionButton(
+                    icon: Icons.add,
+                    title: l10n.setDuressCode,
+                    subtitle: l10n.setDuressCodeDesc(config.pinLength),
+                    onTap: () => _openPinSetup(PinSetupMode.setDuress),
+                    accentColor: AppColors.warning,
+                  ),
+                ] else ...[
+                  _buildInfoCard(
+                    icon: Icons.check_circle_outline,
+                    text: l10n.duressCodeSet(config.pinLength),
+                    color: AppColors.success,
+                  ),
+                  _buildActionButton(
+                    icon: Icons.delete_outline,
+                    title: l10n.disableDuressCode,
+                    isDestructive: true,
+                    onTap: () => _openPinSetup(PinSetupMode.disableDuress),
+                  ),
+                ],
+              ]),
+              sectionGap,
             ],
 
             // Секция кода удаления (только если PIN включен). Под duress — скрыта,
             // по той же причине, что и секция кода принуждения.
             if (isPinEnabled && !duressActive) ...[
-              _buildSectionHeader(l10n.wipeCodeSection, Icons.delete_forever),
-              const SizedBox(height: 12),
-
-              _buildInfoCard(
-                icon: Icons.warning_amber,
-                text: l10n.wipeCodeInfo,
-                color: AppColors.danger,
-                isMultiLine: true,
-              ),
-              const SizedBox(height: 12),
-
-              if (!isWipeCodeEnabled) ...[
-                _buildActionButton(
-                  icon: Icons.add,
-                  title: l10n.setWipeCode,
-                  subtitle: l10n.setWipeCodeDesc(config.pinLength),
-                  onTap: () => _openPinSetup(PinSetupMode.setWipeCode),
-                  accentColor: AppColors.danger,
-                ),
-              ] else ...[
+              SettingsSectionLabel(l10n.wipeCodeSection),
+              SettingsGroup(children: [
                 _buildInfoCard(
-                  icon: Icons.check_circle_outline,
-                  text: l10n.wipeCodeSet(config.pinLength),
-                  color: AppColors.success,
+                  icon: Icons.warning_amber,
+                  text: l10n.wipeCodeInfo,
+                  color: AppColors.danger,
+                  isMultiLine: true,
                 ),
-                const SizedBox(height: 12),
-                _buildActionButton(
-                  icon: Icons.delete_outline,
-                  title: l10n.disableWipeCode,
-                  isDestructive: true,
-                  onTap: () => _openPinSetup(PinSetupMode.disableWipeCode),
-                ),
-              ],
-
-              const SizedBox(height: 32),
+                if (!isWipeCodeEnabled) ...[
+                  _buildActionButton(
+                    icon: Icons.add,
+                    title: l10n.setWipeCode,
+                    subtitle: l10n.setWipeCodeDesc(config.pinLength),
+                    onTap: () => _openPinSetup(PinSetupMode.setWipeCode),
+                    accentColor: AppColors.danger,
+                  ),
+                ] else ...[
+                  _buildInfoCard(
+                    icon: Icons.check_circle_outline,
+                    text: l10n.wipeCodeSet(config.pinLength),
+                    color: AppColors.success,
+                  ),
+                  _buildActionButton(
+                    icon: Icons.delete_outline,
+                    title: l10n.disableWipeCode,
+                    isDestructive: true,
+                    onTap: () => _openPinSetup(PinSetupMode.disableWipeCode),
+                  ),
+                ],
+              ]),
+              sectionGap,
             ],
-            
+
             // Секция автоматического удаления
             if (isPinEnabled) ...[
-              _buildSectionHeader(l10n.bruteForceProtection, Icons.delete_forever),
-              const SizedBox(height: 12),
-              
+              SettingsSectionLabel(l10n.bruteForceProtection),
+              SettingsGroup(children: [
+                _buildSwitchTile(
+                  icon: Icons.delete_sweep_outlined,
+                  title: l10n.deleteAfterAttempts,
+                  subtitle: l10n.autoWipeOnWrongPin,
+                  value: config.isAutoWipeEnabled,
+                  onChanged: (enabled) async {
+                    await _auth.setAutoWipe(enabled);
+                    _refresh();
+                  },
+                  isDestructive: true,
+                ),
+                if (config.isAutoWipeEnabled)
+                  _buildInfoCard(
+                    icon: Icons.warning_amber,
+                    text: l10n.autoWipeWarning,
+                    color: AppColors.danger,
+                  ),
+              ]),
+              sectionGap,
+            ],
+
+            // Экстренное удаление (жест) — выключено по умолчанию
+            SettingsSectionLabel(l10n.emergencyWipe),
+            SettingsGroup(children: [
               _buildSwitchTile(
-                icon: Icons.delete_sweep,
-                title: l10n.deleteAfterAttempts,
-                subtitle: l10n.autoWipeOnWrongPin,
-                value: config.isAutoWipeEnabled,
+                icon: Icons.touch_app_outlined,
+                title: l10n.enablePanicGesture,
+                subtitle: l10n.panicGestureFullDesc,
+                value: config.isPanicGestureEnabled,
                 onChanged: (enabled) async {
-                  await _auth.setAutoWipe(enabled);
+                  await _auth.setPanicGestureEnabled(enabled);
                   _refresh();
                 },
                 isDestructive: true,
               ),
-              
-              if (config.isAutoWipeEnabled) ...[
-                const SizedBox(height: 8),
-                _buildInfoCard(
-                  icon: Icons.warning,
-                  text: l10n.autoWipeWarning,
-                  color: AppColors.danger,
-                ),
-              ],
-              
-              const SizedBox(height: 32),
-            ],
-            
-            // Экстренное удаление (жест) — выключено по умолчанию
-            _buildSectionHeader(l10n.emergencyWipe, Icons.bolt),
-            const SizedBox(height: 12),
-            _buildSwitchTile(
-              icon: Icons.touch_app,
-              title: l10n.enablePanicGesture,
-              subtitle: l10n.panicGestureFullDesc,
-              value: config.isPanicGestureEnabled,
-              onChanged: (enabled) async {
-                await _auth.setPanicGestureEnabled(enabled);
-                _refresh();
-              },
-              isDestructive: true,
-            ),
-            const SizedBox(height: 10),
-            _buildInfoCard(
-              icon: Icons.info_outline,
-              text: l10n.panicGestureWarning,
-              color: AppColors.warning,
-              isMultiLine: true,
-            ),
-            
-            const SizedBox(height: 32),
-            
+              _buildInfoCard(
+                icon: Icons.info_outline,
+                text: l10n.panicGestureWarning,
+                color: AppColors.warning,
+                isMultiLine: true,
+              ),
+            ]),
+
+            sectionGap,
+
             // Секция автоудаления сообщений
-            _buildSectionHeader(l10n.autoDeleteMessages, Icons.auto_delete),
-            const SizedBox(height: 12),
-            
-            _buildInfoCard(
-              icon: Icons.info_outline,
-              text: l10n.autoDeleteInfo,
-              color: AppColors.info,
-              isMultiLine: true,
-            ),
-            const SizedBox(height: 12),
-            
+            SettingsSectionLabel(l10n.autoDeleteMessages),
             _MessageRetentionSelector(
               currentPolicy: _auth.messageRetention,
               onPolicyChanged: _onRetentionPolicyChanged,
+              info: _buildInfoCard(
+                icon: Icons.info_outline,
+                text: l10n.autoDeleteInfo,
+                color: AppColors.textTertiary,
+                isMultiLine: true,
+              ),
             ),
-            
-            const SizedBox(height: 40),
+
+            const SizedBox(height: 28),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.textTertiary, size: 18),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.textTertiary,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
-      ],
-    );
-  }
-
+  /// Пояснение внутри группы (warning / danger / success / нейтральное).
   Widget _buildInfoCard({
     required IconData icon,
     required String text,
     required Color color,
     bool isMultiLine = false,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(
-        crossAxisAlignment: isMultiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: color.withOpacity(0.9),
-                fontSize: 13,
-                height: isMultiLine ? 1.4 : null,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return SettingsNote(icon: icon, text: text, color: color);
   }
 
-  /// Карточка статуса PIN с индикатором длины — вау-эффект ✨
+  /// Строка статуса PIN: длина кода моноширинным справа (короткий — warning).
   Widget _buildPinStatusCard(int pinLength, L10n l10n) {
-    const color = AppColors.success;
     final isShortPin = pinLength == 4;
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.verified_user,
-              color: color,
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Wrap, а не Row: длинный RU-заголовок + бейдж не влезали в строку —
-                // бейдж «4-значный» уезжал за правый край. Теперь при нехватке места
-                // бейдж переносится под заголовок.
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      l10n.pinCodeSet,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isShortPin 
-                            ? AppColors.warning.withOpacity(0.15)
-                            : color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        l10n.digitCode(pinLength),
-                        style: AppTypography.mono(
-                          color: isShortPin ? AppColors.warning : color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isShortPin 
-                      ? '${l10n.fastEntry} • ~10 000 ${l10n.combinations}'
-                      : '${l10n.enhancedSecurity} • ~1 000 000 ${l10n.combinations}',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    return SettingsRow(
+      icon: Icons.verified_user_outlined,
+      label: l10n.pinCodeSet,
+      subtitle: isShortPin
+          ? '${l10n.fastEntry} • ~10 000 ${l10n.combinations}'
+          : '${l10n.enhancedSecurity} • ~1 000 000 ${l10n.combinations}',
+      value: l10n.digitCode(pinLength),
+      valueColor: isShortPin ? AppColors.warning : AppColors.textTertiary,
     );
   }
 
@@ -624,64 +494,14 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     bool isDestructive = false,
     Color? accentColor,
   }) {
-    final color = accentColor ?? (isDestructive ? AppColors.danger : AppColors.primary);
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDestructive 
-                  ? AppColors.danger.withOpacity(0.2) 
-                  : AppColors.outline,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: isDestructive ? AppColors.danger : AppColors.textPrimary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
-            ],
-          ),
-        ),
-      ),
+    final tone = accentColor ?? (isDestructive ? AppColors.danger : null);
+    return SettingsRow(
+      icon: icon,
+      label: title,
+      subtitle: subtitle,
+      onTap: onTap,
+      tone: tone,
+      labelColor: isDestructive ? AppColors.danger : null,
     );
   }
 
@@ -693,62 +513,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     required ValueChanged<bool> onChanged,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? AppColors.danger : AppColors.primary;
-    
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDestructive 
-              ? AppColors.danger.withOpacity(0.2) 
-              : AppColors.outline,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: isDestructive ? AppColors.danger : AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: isDestructive ? AppColors.danger : AppColors.action,
-            activeTrackColor: (isDestructive ? AppColors.danger : AppColors.action).withOpacity(0.3),
-          ),
-        ],
-      ),
+    return SettingsRow(
+      icon: icon,
+      label: title,
+      subtitle: subtitle,
+      tone: isDestructive ? AppColors.danger : null,
+      trailing: Switch(value: value, onChanged: onChanged),
     );
   }
 
@@ -760,7 +530,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     required Map<int, String> options,
     required ValueChanged<int> onChanged,
   }) {
-    const color = AppColors.primary;
     final items = options.entries
         .map(
           (entry) => DropdownMenuItem<int>(
@@ -771,60 +540,23 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
         .toList(growable: false);
     final effectiveValue = options.containsKey(value) ? value : options.keys.first;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          DropdownButton<int>(
-            value: effectiveValue,
-            items: items,
-            dropdownColor: AppColors.surfaceElevated,
-            underline: const SizedBox.shrink(),
-            style: const TextStyle(color: AppColors.textPrimary),
-            onChanged: (next) {
-              if (next == null) return;
-              onChanged(next);
-            },
-          ),
-        ],
+    return SettingsRow(
+      icon: icon,
+      label: title,
+      subtitle: subtitle,
+      trailing: DropdownButton<int>(
+        value: effectiveValue,
+        items: items,
+        dropdownColor: AppColors.surfaceElevated,
+        underline: const SizedBox.shrink(),
+        isDense: true,
+        icon: const Icon(Icons.expand_more,
+            size: 18, color: AppColors.textTertiary),
+        style: AppTypography.mono(fontSize: 13, color: AppColors.textSecondary),
+        onChanged: (next) {
+          if (next == null) return;
+          onChanged(next);
+        },
       ),
     );
   }
@@ -835,29 +567,24 @@ class _MessageRetentionSelector extends StatelessWidget {
   const _MessageRetentionSelector({
     required this.currentPolicy,
     required this.onPolicyChanged,
+    this.info,
   });
 
   final MessageRetentionPolicy currentPolicy;
   final ValueChanged<MessageRetentionPolicy> onPolicyChanged;
 
+  /// Пояснение первой строкой группы.
+  final Widget? info;
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < MessageRetentionPolicy.values.length; i++) ...[
-            if (i > 0)
-              Divider(height: 1, color: AppColors.divider),
-            _buildOption(MessageRetentionPolicy.values[i], l10n),
-          ],
-        ],
-      ),
+    return SettingsGroup(
+      children: [
+        if (info != null) info!,
+        for (final policy in MessageRetentionPolicy.values)
+          _buildOption(policy, l10n),
+      ],
     );
   }
 
@@ -889,66 +616,15 @@ class _MessageRetentionSelector extends StatelessWidget {
 
   Widget _buildOption(MessageRetentionPolicy policy, L10n l10n) {
     final isSelected = policy == currentPolicy;
-    final icon = _getIconForPolicy(policy);
-    final color = _getColorForPolicy(policy);
-    
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => onPolicyChanged(policy),
-        borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(isSelected ? 0.2 : 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _getDisplayName(policy, l10n),
-                      style: TextStyle(
-                        color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _getSubtitle(policy, l10n),
-                      style: const TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isSelected)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppColors.action.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check,
-                    color: AppColors.action,
-                    size: 16,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+    return SettingsRow(
+      icon: _getIconForPolicy(policy),
+      label: _getDisplayName(policy, l10n),
+      subtitle: _getSubtitle(policy, l10n),
+      labelColor: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+      onTap: () => onPolicyChanged(policy),
+      trailing: isSelected
+          ? const Icon(Icons.check, color: AppColors.action, size: 20)
+          : const SizedBox(width: 20),
     );
   }
 
@@ -957,24 +633,11 @@ class _MessageRetentionSelector extends StatelessWidget {
       case MessageRetentionPolicy.all:
         return Icons.all_inclusive;
       case MessageRetentionPolicy.day:
-        return Icons.today;
+        return Icons.today_outlined;
       case MessageRetentionPolicy.week:
-        return Icons.date_range;
+        return Icons.date_range_outlined;
       case MessageRetentionPolicy.month:
-        return Icons.calendar_month;
-    }
-  }
-
-  Color _getColorForPolicy(MessageRetentionPolicy policy) {
-    switch (policy) {
-      case MessageRetentionPolicy.all:
-        return AppColors.primary;
-      case MessageRetentionPolicy.day:
-        return AppColors.danger;
-      case MessageRetentionPolicy.week:
-        return AppColors.warning;
-      case MessageRetentionPolicy.month:
-        return AppColors.info;
+        return Icons.calendar_month_outlined;
     }
   }
 }

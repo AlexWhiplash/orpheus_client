@@ -8,6 +8,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
+import 'package:orpheus_project/widgets/pin_pad_key.dart';
 
 enum PinSetupMode {
   setPin,        // Установка нового PIN
@@ -448,16 +449,16 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
             // Иконка
             _buildIcon(),
             
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             
             // Заголовок
             Text(
               _getTitle(l10n),
               style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 3,
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 2,
               ),
             ),
             
@@ -488,17 +489,17 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               ),
             ],
             
-            const SizedBox(height: 32),
+            const SizedBox(height: 28),
             
             // PIN индикаторы
             _buildPinIndicators(),
             
-            const Spacer(flex: 1),
+            const Spacer(flex: 2),
             
             // PIN-pad
             _buildPinPad(),
             
-            const Spacer(flex: 2),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -556,15 +557,17 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
         break;
     }
     
+    // Тихая стальная плитка с фаской; цвет режима — только у самой иконки.
     return Container(
-      width: 70,
-      height: 70,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.3), width: 1),
+        borderRadius: BorderRadius.circular(16),
+        color: AppColors.surface2,
+        border: Border.all(color: AppColors.outline, width: 1),
+        boxShadow: AppShadows.bevel(),
       ),
-      child: Icon(icon, color: color, size: 32),
+      child: Icon(icon, color: color, size: 26),
     );
   }
 
@@ -579,27 +582,9 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(_pinLength, (index) {
-              final isFilled = index < _enteredPin.length;
-              
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                width: isFilled ? 16 : 14,
-                height: isFilled ? 16 : 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isError
-                      ? AppColors.danger
-                      : isFilled
-                          ? AppColors.primary
-                          : Colors.transparent,
-                  border: Border.all(
-                    color: _isError
-                        ? AppColors.danger
-                        : AppColors.textTertiary,
-                    width: 1,
-                  ),
-                ),
+              return PinDot(
+                filled: index < _enteredPin.length,
+                error: _isError,
               );
             }),
           ),
@@ -637,56 +622,20 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
   }
 
   Widget _buildDigitButton(String digit) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _isLoading ? null : () => _onDigitPressed(digit),
-        borderRadius: BorderRadius.circular(36),
-        splashColor: AppColors.primary.withOpacity(0.12),
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.surface,
-            border: Border.all(color: AppColors.outline, width: 1),
-          ),
-          child: Center(
-            child: Text(
-              digit,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 28,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-          ),
-        ),
-      ),
+    return PinPadKey(
+      onTap: _isLoading ? null : () => _onDigitPressed(digit),
+      child: PinPadKey.digit(digit),
     );
   }
 
   Widget _buildBackspaceButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _isLoading ? null : _onBackspacePressed,
-        borderRadius: BorderRadius.circular(36),
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.divider, width: 1),
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.backspace_outlined,
-              color: AppColors.textSecondary,
-              size: 24,
-            ),
-          ),
-        ),
+    return PinPadKey(
+      plain: true,
+      onTap: _isLoading ? null : _onBackspacePressed,
+      child: const Icon(
+        Icons.backspace_outlined,
+        color: AppColors.textSecondary,
+        size: 22,
       ),
     );
   }
@@ -739,10 +688,10 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               Text(
                 l10n.selectPinLength,
                 style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3,
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 2,
                 ),
               ),
               
@@ -798,27 +747,19 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.warning.withOpacity(0.2),
-          width: 1,
-        ),
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.all(Radius.circular(14)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.warning.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(
               Icons.info_outline,
               color: AppColors.warning,
-              size: 18,
+              size: 20,
             ),
           ),
           const SizedBox(width: 12),
@@ -876,22 +817,20 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isRecommended ? color.withOpacity(0.3) : AppColors.outline,
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.outline, width: 1),
           ),
           child: Row(
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: AppColors.surface2,
                   borderRadius: BorderRadius.circular(14),
+                  boxShadow: AppShadows.bevel(),
                 ),
-                child: Icon(icon, color: color, size: 28),
+                child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -916,15 +855,16 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: color.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(8),
+                              color: AppColors.actionContainer,
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               l10n.recommended,
-                              style: TextStyle(
-                                color: color,
+                              style: AppTypography.mono(
+                                color: AppColors.onActionContainer,
                                 fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.6,
                               ),
                             ),
                           ),

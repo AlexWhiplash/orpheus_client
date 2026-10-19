@@ -17,6 +17,7 @@ import 'package:orpheus_project/services/rooms_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_dialog.dart';
 import 'package:orpheus_project/widgets/app_scaffold.dart';
+import 'package:orpheus_project/widgets/messenger_ui.dart';
 
 class RoomChatScreen extends StatefulWidget {
   const RoomChatScreen({super.key, required this.room});
@@ -287,26 +288,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
       label = DateFormat.yMMMd(Localizations.localeOf(context).toString())
           .format(date.toLocal());
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: AppRadii.md,
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: AppColors.textSecondary),
-          ),
-        ),
-      ),
-    );
+    return ChatDaySeparator(label: label);
   }
 
   void _scrollToBottom() {
@@ -499,7 +481,28 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     return AppScaffold(
       safeArea: false,
       appBar: AppBar(
-        title: Text(widget.room.name),
+        titleSpacing: 0,
+        centerTitle: false,
+        shape: Border(bottom: BorderSide(color: AppColors.outline)),
+        title: Row(
+          children: [
+            MessengerAvatar(name: widget.room.name, size: 38, radius: 12),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(
+                widget.room.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -631,7 +634,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.xl),
+          AppSpacing.sm + 2, AppSpacing.sm, AppSpacing.sm + 2, AppSpacing.md),
       itemCount: itemCount,
       itemBuilder: (context, index) {
         if (_isLoadingMore && index == 0) {
@@ -649,7 +652,7 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (showDateSep) _buildDateSeparator(context, message.createdAt),
-            _RoomMessageBubble(
+            RoomMessageBubble(
               message: message,
               contactNames: _contactNames,
               aliases: _aliases,
@@ -664,12 +667,11 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
   }
 
   Widget _buildInputBar(L10n l10n) {
+    const fieldRadius = BorderRadius.all(Radius.circular(22));
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.outline)),
-      ),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.sm, AppSpacing.xs, AppSpacing.sm, AppSpacing.sm),
+      color: AppColors.bg,
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -702,19 +704,33 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 15.5,
+                      color: AppColors.textPrimary,
+                      height: 1.35,
+                    ),
                     decoration: InputDecoration(
                       hintText: l10n.messagePlaceholder,
+                      hintStyle: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 15.5,
+                        color: AppColors.textTertiary,
+                      ),
+                      isDense: true,
                       filled: true,
-                      fillColor: AppColors.bg,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
+                      fillColor: AppColors.surface,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
+                          horizontal: 16, vertical: 12),
+                      border: const OutlineInputBorder(
+                          borderRadius: fieldRadius,
+                          borderSide: BorderSide.none),
+                      enabledBorder: const OutlineInputBorder(
+                          borderRadius: fieldRadius,
+                          borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(
+                          borderRadius: fieldRadius,
+                          borderSide: BorderSide(color: AppColors.outline)),
                     ),
                     maxLines: 3,
                     minLines: 1,
@@ -727,6 +743,9 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                     backgroundColor: AppColors.action,
                     disabledBackgroundColor:
                         AppColors.action.withOpacity(0.5),
+                    shape: const CircleBorder(),
+                    fixedSize: const Size(44, 44),
+                    minimumSize: const Size(44, 44),
                   ),
                   icon: _isSending
                       ? const SizedBox(
@@ -735,7 +754,8 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: AppColors.onAction),
                         )
-                      : const Icon(Icons.send, color: AppColors.onAction),
+                      : const Icon(Icons.arrow_forward_rounded,
+                          color: AppColors.onAction, size: 22),
                   onPressed: _isSending ? null : _sendMessage,
                   tooltip: l10n.send,
                 ),
@@ -849,8 +869,9 @@ class _WarningBanner extends StatelessWidget {
   }
 }
 
-class _RoomMessageBubble extends StatelessWidget {
-  const _RoomMessageBubble({
+class RoomMessageBubble extends StatelessWidget {
+  const RoomMessageBubble({
+    super.key,
     required this.message,
     this.contactNames = const {},
     this.aliases = const {},
@@ -904,15 +925,14 @@ class _RoomMessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.outline.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
             systemText,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+            style: AppTypography.mono(
+                fontSize: 11, color: AppColors.textTertiary),
           ),
         ),
       );
@@ -923,8 +943,8 @@ class _RoomMessageBubble extends StatelessWidget {
       child: Container(
         constraints:
             BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: const EdgeInsets.only(bottom: 5),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 7),
         decoration: BoxDecoration(
           color: isMine
               ? AppColors.actionContainer
@@ -932,15 +952,16 @@ class _RoomMessageBubble extends StatelessWidget {
                   ? AppColors.surfaceElevated
                   : AppColors.surface2,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMine ? 16 : 4),
-            bottomRight: Radius.circular(isMine ? 4 : 16),
+            topLeft: const Radius.circular(13),
+            topRight: const Radius.circular(13),
+            bottomLeft: Radius.circular(isMine ? 13 : 4),
+            bottomRight: Radius.circular(isMine ? 4 : 13),
           ),
         ),
-        child: Column(
-          crossAxisAlignment:
-              isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        // Время внутри пузыря справа снизу; IntrinsicWidth сужает пузырь до текста.
+        child: IntrinsicWidth(
+          child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (!isMine) ...[
               GestureDetector(
@@ -956,12 +977,18 @@ class _RoomMessageBubble extends StatelessWidget {
                           size: 14, color: AppColors.primary),
                       const SizedBox(width: 6),
                     ],
-                    Text(
-                      senderLabel,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
-                          ?.copyWith(color: AppColors.textSecondary),
+                    Flexible(
+                      child: Text(
+                        senderLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ),
                     // Подсказка, что имя можно закрепить локально.
                     if (isAliasable) ...[
@@ -976,27 +1003,30 @@ class _RoomMessageBubble extends StatelessWidget {
             ],
             Text(
               message.text,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(
-                      color: isMine
-                          ? AppColors.onActionContainer
-                          : AppColors.textPrimary),
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 15.5,
+                height: 1.4,
+                color: isMine
+                    ? AppColors.onActionContainer
+                    : AppColors.textPrimary,
+              ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               DateFormat.Hm().format(
                 message.createdAt.toUtc().add(const Duration(hours: 3)),
               ),
+              textAlign: TextAlign.right,
               style: AppTypography.mono(
-                fontSize: 11,
+                fontSize: 10.5,
                 color: isMine
-                    ? AppColors.onActionContainer.withOpacity(0.6)
+                    ? AppColors.onActionContainer.withOpacity(0.5)
                     : AppColors.textTertiary,
               ),
             ),
           ],
+          ),
         ),
       ),
     );

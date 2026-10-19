@@ -16,7 +16,12 @@ class LanguageSelector extends StatelessWidget {
   
   /// Callback при смене языка
   final VoidCallback? onChanged;
-  
+
+  /// Открыть выбор языка из своей строки настроек (сгруппированный список профиля).
+  static Future<void> showPicker(BuildContext context, {VoidCallback? onChanged}) =>
+      LanguageSelector(onChanged: onChanged)
+          ._showLanguageDialog(context, L10n.of(context));
+
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);

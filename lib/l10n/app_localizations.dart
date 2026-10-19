@@ -3270,6 +3270,12 @@ abstract class L10n {
   /// In en, this message translates to:
   /// **'Switched to {host}'**
   String serverSwitched(String host);
+
+  /// Profile: button that opens my QR code in a bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'My QR code — so others can add you'**
+  String get myQrCodeButton;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

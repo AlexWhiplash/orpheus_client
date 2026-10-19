@@ -38,9 +38,7 @@ class StatusScreen extends StatefulWidget {
   State<StatusScreen> createState() => _StatusScreenState();
 }
 
-class _StatusScreenState extends State<StatusScreen>
-    with TickerProviderStateMixin {
-  late final AnimationController _pulseController;
+class _StatusScreenState extends State<StatusScreen> {
   Timer? _timer;
   StreamSubscription<void>? _updatesSub;
 
@@ -77,11 +75,6 @@ class _StatusScreenState extends State<StatusScreen>
   void initState() {
     super.initState();
 
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-
     _sessionStart = DateTime.now();
 
     _loadAll();
@@ -99,7 +92,6 @@ class _StatusScreenState extends State<StatusScreen>
   void dispose() {
     _timer?.cancel();
     _updatesSub?.cancel();
-    _pulseController.dispose();
     super.dispose();
   }
 
@@ -266,7 +258,6 @@ class _StatusScreenState extends State<StatusScreen>
           // СОЕДИНЕНИЕ
           // ═══════════════════════════════════════════════════════════
           _ConnectionCard(
-            pulse: _pulseController,
             pendingCount: _pendingCount,
             uptime: _formatUptime(l10n),
             l10n: l10n,
@@ -378,13 +369,11 @@ class _StatusScreenState extends State<StatusScreen>
 
 class _ConnectionCard extends StatelessWidget {
   const _ConnectionCard({
-    required this.pulse,
     required this.pendingCount,
     required this.uptime,
     required this.l10n,
   });
 
-  final Animation<double> pulse;
   final int pendingCount;
   final String uptime;
   final L10n l10n;
@@ -432,18 +421,13 @@ class _ConnectionCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  AnimatedBuilder(
-                    animation: pulse,
-                    builder: (context, _) {
-                      return Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.12 + 0.08 * pulse.value),
-                          borderRadius: AppRadii.sm,
-                        ),
-                        child: Icon(icon, color: color, size: 22),
-                      );
-                    },
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      borderRadius: AppRadii.sm,
+                    ),
+                    child: Icon(icon, color: color, size: 22),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -614,8 +598,10 @@ class _SecurityCard extends StatelessWidget {
                             ?.copyWith(color: AppColors.textTertiary)),
                     const SizedBox(height: 2),
                     Text('X25519 + ChaCha20-Poly1305',
-                        style:
-                            t.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                        style: AppTypography.mono(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary)),
                   ],
                 ),
               ),

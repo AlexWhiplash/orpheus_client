@@ -681,8 +681,8 @@ class _ChatScreenState extends State<ChatScreen>
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
                   color: isMyMessage
-                      ? AppColors.info.withOpacity(0.12)
-                      : AppColors.surface,
+                      ? AppColors.actionContainer
+                      : AppColors.surface2,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(18),
                     topRight: const Radius.circular(18),
@@ -693,10 +693,10 @@ class _ChatScreenState extends State<ChatScreen>
                 ),
                 child: Text(
                   message.text,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(color: AppColors.textPrimary),
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: isMyMessage
+                          ? AppColors.onActionContainer
+                          : AppColors.textPrimary),
                 ),
               ),
               if (!hideTime)
@@ -707,10 +707,12 @@ class _ChatScreenState extends State<ChatScreen>
                     children: [
                       Text(
                         timeStr,
-                        style: Theme.of(context)
-                            .textTheme
-                            .labelSmall
-                            ?.copyWith(color: AppColors.textTertiary),
+                        style: AppTypography.mono(
+                          fontSize: 11,
+                          color: isMyMessage
+                              ? AppColors.onActionContainer.withOpacity(0.6)
+                              : AppColors.textTertiary,
+                        ),
                       ),
                       if (isMyMessage) ...[
                         const SizedBox(width: 6),
@@ -1037,8 +1039,9 @@ class ContainerBorder {
   final bool isMyMessage;
 
   Border get border => Border.all(
-        color:
-            isMyMessage ? AppColors.info.withOpacity(0.20) : AppColors.outline,
+        color: isMyMessage
+            ? AppColors.action.withOpacity(0.18)
+            : AppColors.outline,
         width: 1,
       );
 }
@@ -1130,7 +1133,7 @@ class _SendButton extends StatelessWidget {
           width: 46,
           height: 46,
           child: Material(
-            color: AppColors.accent,
+            color: AppColors.action,
             borderRadius: const BorderRadius.all(Radius.circular(16)),
             child: InkWell(
               onTap: isEncrypting ? null : onTap,
@@ -1140,10 +1143,10 @@ class _SendButton extends StatelessWidget {
                     ? Transform.rotate(
                         angle: t * 6.0,
                         child: const Icon(Icons.lock,
-                            color: Colors.black, size: 20),
+                            color: AppColors.onAction, size: 20),
                       )
                     : const Icon(Icons.send_rounded,
-                        color: Colors.black, size: 20),
+                        color: AppColors.onAction, size: 20),
               ),
             ),
           ),
@@ -1236,10 +1239,8 @@ class _CallStatusPill extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(timeStr,
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: AppColors.textTertiary)),
+                    style: AppTypography.mono(
+                        fontSize: 11, color: AppColors.textTertiary)),
               ],
             ),
           ),

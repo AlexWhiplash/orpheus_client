@@ -35,12 +35,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    ); // Визуальная система v1: без пульсаций и свечения.
     
     _glowController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2500),
-    )..repeat(reverse: true);
+    );
     
     _revealController = AnimationController(
       vsync: this,
@@ -93,9 +93,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.bg,
         title: Row(
           children: [
             AnimatedBuilder(
@@ -104,15 +104,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                 return Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFB0BEC5).withOpacity(0.1),
+                    color: AppColors.surface2,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFFB0BEC5).withOpacity(0.2 + 0.1 * _pulseController.value),
-                    ),
+                    border: Border.all(color: AppColors.outline),
+                    boxShadow: AppShadows.bevel(),
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.update,
-                    color: const Color(0xFFB0BEC5).withOpacity(0.7 + 0.3 * _pulseController.value),
+                    color: AppColors.primary,
                     size: 18,
                   ),
                 );
@@ -128,7 +127,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFB0BEC5)),
+              child: CircularProgressIndicator(color: AppColors.primary),
             );
           }
 
@@ -195,24 +194,12 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                             height: isLatest ? 16 : 12,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isLatest
-                                  ? const Color(0xFF6AD394).withOpacity(0.8 + 0.2 * _pulseController.value)
-                                  : const Color(0xFF3A3A3A),
+                              color: isLatest ? AppColors.primary : AppColors.surface2,
                               border: Border.all(
-                                color: isLatest
-                                    ? const Color(0xFF6AD394)
-                                    : const Color(0xFF5A5A5A),
-                                width: 2,
+                                color: isLatest ? AppColors.primaryLight : AppColors.outline,
+                                width: isLatest ? 2 : 1,
                               ),
-                              boxShadow: isLatest
-                                  ? [
-                                      BoxShadow(
-                                        color: const Color(0xFF6AD394).withOpacity(0.4 + 0.2 * _pulseController.value),
-                                        blurRadius: 10,
-                                        spreadRadius: 2,
-                                      ),
-                                    ]
-                                  : null,
+                              boxShadow: AppShadows.bevel(),
                             ),
                           );
                         },
@@ -228,9 +215,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                               end: Alignment.bottomCenter,
                               colors: [
                                 isLatest
-                                    ? const Color(0xFF6AD394).withOpacity(0.5)
-                                    : const Color(0xFF3A3A3A),
-                                const Color(0xFF3A3A3A).withOpacity(0.3),
+                                    ? AppColors.primaryDark.withOpacity(0.5)
+                                    : AppColors.outline,
+                                AppColors.divider,
                               ],
                             ),
                           ),
@@ -244,23 +231,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 20),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF121212),
+                      color: isLatest ? AppColors.surfaceElevated : AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isLatest
-                            ? const Color(0xFF6AD394).withOpacity(0.2 + 0.1 * _glowController.value)
-                            : Colors.white.withOpacity(0.05),
-                        width: isLatest ? 1.5 : 1,
+                        color: isLatest ? AppColors.outline : AppColors.divider,
+                        width: 1,
                       ),
-                      boxShadow: isLatest
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF6AD394).withOpacity(0.1 * _glowController.value),
-                                blurRadius: 20,
-                                spreadRadius: -5,
-                              ),
-                            ]
-                          : null,
+                      boxShadow: isLatest ? AppShadows.bevel() : null,
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -278,29 +255,27 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       margin: const EdgeInsets.only(right: 10),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF6AD394).withOpacity(0.15),
+                                        color: AppColors.surface2,
                                         borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: const Color(0xFF6AD394).withOpacity(0.3),
-                                        ),
+                                        border: Border.all(color: AppColors.outline),
                                       ),
-                                      child: const Text(
+                                      child: Text(
                                         "LATEST",
-                                        style: TextStyle(
-                                          color: Color(0xFF6AD394),
+                                        style: AppTypography.mono(
+                                          color: AppColors.primary,
                                           fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 1,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 1.6,
                                         ),
                                       ),
                                     ),
                                   ],
                                   Text(
                                     version,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: isLatest ? const Color(0xFF6AD394) : Colors.white,
+                                    style: AppTypography.mono(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w500,
+                                      color: isLatest ? AppColors.textPrimary : AppColors.textSecondary,
                                     ),
                                   ),
                                 ],
@@ -308,15 +283,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF1E1E1E),
+                                  color: AppColors.surface2,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
                                   date,
-                                  style: TextStyle(
+                                  style: AppTypography.mono(
                                     fontSize: 11,
-                                    color: Colors.grey.shade500,
-                                    fontFamily: AppTypography.monoFamily,
+                                    color: AppColors.textTertiary,
                                   ),
                                 ),
                               ),
@@ -332,9 +306,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                               gradient: LinearGradient(
                                 colors: [
                                   Colors.transparent,
-                                  isLatest
-                                      ? const Color(0xFF6AD394).withOpacity(0.3)
-                                      : Colors.white.withOpacity(0.1),
+                                  AppColors.outline,
                                   Colors.transparent,
                                 ],
                               ),
@@ -368,8 +340,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                                             margin: const EdgeInsets.only(top: 6, right: 10),
                                             decoration: BoxDecoration(
                                               color: isLatest
-                                                  ? const Color(0xFF6AD394).withOpacity(0.6)
-                                                  : const Color(0xFFB0BEC5).withOpacity(0.4),
+                                                  ? AppColors.accent
+                                                  : AppColors.textTertiary,
                                               shape: BoxShape.circle,
                                             ),
                                           ),
@@ -379,7 +351,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> with TickerProviderStateM
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 height: 1.4,
-                                                color: Colors.grey.shade300,
+                                                color: AppColors.textSecondary,
                                               ),
                                             ),
                                           ),

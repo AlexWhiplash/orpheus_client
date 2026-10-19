@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-10-19 — Визуальная система Orpheus v1, этап 2: экраны без неона (тест-сборка 1.1.8+53) [wl/visual-system]
+
+**Контекст.** Этап 2 плана: убрать свечение/пульсы/частицы и перевести захардкоженные цвета на токены.
+Работа поделена на три непересекающиеся группы файлов (три агента параллельно, только визуальные правки;
+логика, ключи, l10n, duress-гейты не трогались).
+
+**Сделано (захардкоженные цвета вне AppColors, до → после):**
+- A: security_settings 57→2, pin_setup 44→4, lock_screen 39→4 (удалены `_pulseController` и
+  `_LockParticlesPainter`; `_wipeConfirm`, удержание с таймером и анимации тряски/появления не тронуты),
+  settings 4→2 (белая подложка QR — намеренно, для сканирования), status (снят декоративный пульс),
+  home 1→0.
+- B: contacts_widgets 16→6, qr_scan 28→6 (оставлены линия сканирования и уголки, без свечения),
+  rooms 5→1, ai_chat 5→1, chat 3→1, room_chat 2→0, welcome 2→0. Свои пузыри — `actionContainer`,
+  чужие — `surface2`, «Отправить» — `action`/`onAction`; время — `AppTypography.mono`. Welcome: знак 104dp
+  без подложки, ORPHEUS + METODEX (semanticsLabel = l10n.appName), строка E2E внизу.
+- C: call_screen 26→1 (снят `repeat()` у трёх декоративных контроллеров, фон статичный, визуализатор — пять
+  полос из `_audioWaveData`), control_panel 13→2, background_painters 6→0 (`ParticlesPainter`/`WavePainter`
+  ничего не рисуют, классы оставлены — их проверяет `call_background_painters_test`), updates 31→2,
+  support_chat 31→0, debug_logs 35→1, badge_widget 47→10 и badge_service 10→5 (бейджи — стальные таблички
+  из `AppBadgeMetals`; `GlassColors`, `backgroundColor` и «GLASS COLLECTION» в витрине оставлены — их
+  проверяют `badge_widget_test`/`badge_service_test`, переименовать отдельно).
+- Тест `welcome_screen_test.dart:37`: `find.text('Orpheus')` → `'ORPHEUS'` (утверждённая подпись).
+- Иконка: подложка на ступень светлее (`#2B3440`→`#171C23`), иначе сливалась с тёмными обоями.
+
+**Измерено:** `flutter analyze` — 0 errors, 0 warnings; `flutter test` — 444 passed; APK 105.2 МБ.
+
+**Статус:** собрано, на устройство ставится (телефон был заблокирован в момент записи). Дальше — этап 3
+(экраны по приоритету: PIN/лок → контакты/чаты → звонок → профиль) и переименование «стеклянных» имён
+в тестах бейджей.
+
+---
+
 ## 2026-10-18 — Визуальная система Orpheus v1, этап 1: бренд (тест-сборка 1.1.8+52) [wl/visual-system]
 
 **Контекст.** Владелец утвердил переоформление клиента под визуальную систему Orpheus (общую с Orpheus OS

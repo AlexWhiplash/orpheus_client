@@ -86,10 +86,10 @@ class _ContactRow extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         subtitle,
-                        style:
-                            Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: AppColors.textTertiary,
-                                ),
+                        style: AppTypography.mono(
+                          fontSize: 12,
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ],
                   ],
@@ -143,7 +143,7 @@ class _Avatar extends StatelessWidget {
             letter,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   shadows: [
                     Shadow(
                       color: Colors.black.withOpacity(0.3),
@@ -188,7 +188,7 @@ class _UnreadPill extends StatelessWidget {
       child: Text(
         '$count',
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.black,
+              color: AppColors.bg,
               fontWeight: FontWeight.w700,
             ),
       ),
@@ -390,7 +390,7 @@ class _ContactActionsSheet extends StatelessWidget {
                           : '?',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                           ),
                     ),
                   ),
@@ -568,208 +568,126 @@ class _OracleContactRow extends StatefulWidget {
   State<_OracleContactRow> createState() => _OracleContactRowState();
 }
 
-class _OracleContactRowState extends State<_OracleContactRow>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _glowController;
-  late Animation<double> _glowAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    )..repeat(reverse: true);
-
-    _glowAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _glowController.dispose();
-    super.dispose();
-  }
-
+class _OracleContactRowState extends State<_OracleContactRow> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
 
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, child) {
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: AppRadii.md,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
             borderRadius: AppRadii.md,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                // Градиентный фон
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.action.withOpacity(0.08 + 0.04 * _glowAnimation.value),
-                    AppColors.surface,
-                    const Color(0xFF1A2530).withOpacity(0.95),
-                  ],
-                  stops: const [0.0, 0.4, 1.0],
-                ),
-                borderRadius: AppRadii.md,
-                border: Border.all(
-                  color: AppColors.action.withOpacity(0.25 + 0.15 * _glowAnimation.value),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.action.withOpacity(0.15 * _glowAnimation.value),
-                    blurRadius: 20 * _glowAnimation.value,
-                    spreadRadius: -2,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  // Анимированный AI аватар
-                  _OracleAvatar(animation: _glowAnimation),
-                  const SizedBox(width: 14),
-                  // Информация
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            border: Border.all(color: AppColors.outline),
+            boxShadow: AppShadows.bevel(),
+          ),
+          child: Row(
+            children: [
+              const _OracleAvatar(),
+              const SizedBox(width: 14),
+              // Информация
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            // Имя Оракула: FittedBox(scaleDown) — при крупном
-                            // системном шрифте «Оракул Орфея» ужимается, а не режется в «...».
-                            Flexible(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  l10n.aiAssistantName,
-                                  maxLines: 1,
-                                  softWrap: false,
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                ),
-                              ),
+                        // Имя Оракула: FittedBox(scaleDown) — при крупном
+                        // системном шрифте «Оракул Орфея» ужимается, а не режется в «...».
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              l10n.aiAssistantName,
+                              maxLines: 1,
+                              softWrap: false,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
                             ),
-                            const SizedBox(width: 8),
-                            // AI Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    AppColors.action.withOpacity(0.9),
-                                    AppColors.actionDark,
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.action.withOpacity(0.3 * _glowAnimation.value),
-                                    blurRadius: 6,
-                                    spreadRadius: -1,
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.auto_awesome,
-                                    size: 10,
-                                    color: Colors.black.withOpacity(0.8),
-                                  ),
-                                  const SizedBox(width: 3),
-                                  const Text(
-                                    'AI',
-                                    style: TextStyle(
-                                      color: Colors.black87,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                        // Статус "Всегда онлайн" 
-                        Row(
-                          children: [
-                            // Пульсирующая точка
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.success,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.success.withOpacity(0.5 * _glowAnimation.value),
-                                    blurRadius: 6 * _glowAnimation.value,
-                                    spreadRadius: 1 * _glowAnimation.value,
-                                  ),
-                                ],
+                        const SizedBox(width: 8),
+                        // AI Badge — стальная табличка
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.outline),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome,
+                                size: 10,
+                                color: AppColors.primary,
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              l10n.aiAssistantOnline,
-                              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: AppColors.success,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                            ),
-                          ],
+                              const SizedBox(width: 3),
+                              Text(
+                                'AI',
+                                style: AppTypography.mono(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Стрелка с эффектом
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.action.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 4),
+                    // Статус "Всегда онлайн"
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.success,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          l10n.aiAssistantOnline,
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
+                      ],
                     ),
-                    child: Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      color: AppColors.action.withOpacity(0.6 + 0.4 * _glowAnimation.value),
-                      size: 16,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: AppColors.textTertiary,
+                size: 16,
+              ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-/// Анимированный аватар Оракула.
+/// Аватар Оракула: стальная плитка с серебряной иконкой.
 class _OracleAvatar extends StatelessWidget {
-  const _OracleAvatar({required this.animation});
-
-  final Animation<double> animation;
+  const _OracleAvatar();
 
   @override
   Widget build(BuildContext context) {
@@ -778,48 +696,13 @@ class _OracleAvatar extends StatelessWidget {
       height: 52,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.action.withOpacity(0.7 + 0.3 * animation.value),
-            AppColors.actionDark,
-            const Color(0xFF2E7D4F),
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.action.withOpacity(0.35 * animation.value),
-            blurRadius: 14 * animation.value,
-            spreadRadius: 1,
-          ),
-        ],
-        border: Border.all(
-          color: AppColors.actionLight.withOpacity(0.4 + 0.2 * animation.value),
-          width: 1.5,
-        ),
+        color: AppColors.surfaceElevated,
+        border: Border.all(color: AppColors.outline),
       ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Иконка мозга/AI
-          Icon(
-            Icons.psychology,
-            color: Colors.white.withOpacity(0.95),
-            size: 28,
-          ),
-          // Искры сверху-справа
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Icon(
-              Icons.auto_awesome,
-              color: Colors.white.withOpacity(0.6 + 0.4 * animation.value),
-              size: 12,
-            ),
-          ),
-        ],
+      child: const Icon(
+        Icons.psychology,
+        color: AppColors.primary,
+        size: 28,
       ),
     );
   }

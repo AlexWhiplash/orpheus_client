@@ -8,7 +8,6 @@ import 'package:orpheus_project/services/identity_directory_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
 import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/widgets/app_button.dart';
-import 'package:orpheus_project/widgets/app_card.dart';
 import 'package:orpheus_project/widgets/app_text_field.dart';
 import 'package:orpheus_project/widgets/language_selector.dart';
 
@@ -26,8 +25,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   Timer? _revealTimer;
   late final AnimationController _introController;
-  late final AnimationController _haloController;
-  bool _animationsStarted = false;
 
   late final Animation<double> _logoOpacity;
   late final Animation<double> _logoScale;
@@ -43,11 +40,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _introController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1050),
-    );
-
-    _haloController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 9),
     );
 
     _logoOpacity = CurvedAnimation(
@@ -98,23 +90,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_animationsStarted) return;
-    _animationsStarted = true;
-
-    final disableAnimations = MediaQuery.of(context).disableAnimations;
-    if (!disableAnimations) {
-      _haloController.repeat(reverse: true);
-    }
-  }
-
-  @override
   void dispose() {
     _revealTimer?.cancel();
     _importController.dispose();
     _introController.dispose();
-    _haloController.dispose();
     LocaleService.instance.removeListener(_onLocaleChanged);
     super.dispose();
   }
@@ -188,7 +167,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     final l10n = L10n.of(context);
-    final disableAnimations = MediaQuery.of(context).disableAnimations;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -201,47 +179,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
+                    AppColors.surface,
                     AppColors.bg,
-                    AppColors.bg.withOpacity(0.94),
-                    const Color(0xFF06070A),
                   ],
                 ),
               ),
             ),
           ),
-
-          // Дышащий нимб у логотипа
-          if (!disableAnimations)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Center(
-                  child: RepaintBoundary(
-                    child: AnimatedBuilder(
-                      animation: _haloController,
-                      builder: (context, _) {
-                        final v =
-                            Curves.easeInOut.transform(_haloController.value);
-                        return Container(
-                          width: 320 + 26 * v,
-                          height: 320 + 26 * v,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                AppColors.accent.withOpacity(0.10 + 0.05 * v),
-                                AppColors.info.withOpacity(0.06 + 0.04 * v),
-                                Colors.transparent,
-                              ],
-                              stops: const [0.0, 0.45, 1.0],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ),
 
           // Кнопка выбора языка в правом верхнем углу
           Positioned(
@@ -271,42 +215,19 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         opacity: _logoOpacity.value,
                         child: Transform.scale(
                           scale: _logoScale.value,
-                          child: Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface.withOpacity(0.72),
-                              borderRadius:
-                                  const BorderRadius.all(Radius.circular(28)),
-                              border: Border.all(
-                                  color: AppColors.outline.withOpacity(0.85)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.accent.withOpacity(0.12),
-                                  blurRadius: 26,
-                                  spreadRadius: -12,
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius:
-                                  const BorderRadius.all(Radius.circular(20)),
-                              child: Image.asset(
-                                'assets/images/logo_mark.png',
-                                height: 88,
-                                width: 88,
-                                fit: BoxFit.contain,
-                                errorBuilder: (c, e, s) {
-                                  return Container(
-                                    width: 88,
-                                    height: 88,
-                                    color: AppColors.surface2,
-                                    alignment: Alignment.center,
-                                    child: const Icon(Icons.shield,
-                                        size: 44, color: AppColors.accent),
-                                  );
-                                },
-                              ),
-                            ),
+                          child: Image.asset(
+                            'assets/images/logo_mark.png',
+                            height: 104,
+                            width: 104,
+                            fit: BoxFit.contain,
+                            errorBuilder: (c, e, s) {
+                              return const SizedBox(
+                                width: 104,
+                                height: 104,
+                                child: Icon(Icons.shield,
+                                    size: 52, color: AppColors.accent),
+                              );
+                            },
                           ),
                         ),
                       );
@@ -322,14 +243,29 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           opacity: _titleOpacity.value,
                           child: Column(
                             children: [
+                              // Brand wordmark (logo, not a translatable string).
                               Text(
-                                l10n.appName,
-                                style: t.displaySmall?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.6,
+                                'ORPHEUS',
+                                semanticsLabel: l10n.appName,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 26 * 0.3,
+                                  color: AppColors.primary,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 4),
+                              Text(
+                                'METODEX',
+                                style: AppTypography.mono(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 10 * 0.28,
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
                               Text(
                                 l10n.welcomeSubtitle,
                                 style: t.bodyMedium
@@ -366,34 +302,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 onPressed: _isCreating ? null : _showImportDialog,
                               ),
                               const SizedBox(height: 16),
-                              AppCard(
-                                radius: AppRadii.lg,
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppColors.success.withOpacity(0.12),
-                                        borderRadius: AppRadii.sm,
-                                        border: Border.all(
-                                            color: AppColors.success
-                                                .withOpacity(0.22)),
-                                      ),
-                                      child: const Icon(Icons.lock_outline,
-                                          color: AppColors.success, size: 18),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        l10n.e2eEncryption,
-                                        style: t.bodyMedium?.copyWith(
-                                            fontWeight: FontWeight.w600),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.lock_outline,
+                                      color: AppColors.textTertiary, size: 14),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      l10n.e2eEncryption,
+                                      style: AppTypography.mono(
+                                        fontSize: 12,
+                                        color: AppColors.textTertiary,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

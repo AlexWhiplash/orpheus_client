@@ -74,27 +74,24 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
   Color _getLevelColor(LogLevel level) {
     switch (level) {
       case LogLevel.info:
-        return Colors.blue;
+        return AppColors.info;
       case LogLevel.warning:
-        return Colors.orange;
+        return AppColors.warning;
       case LogLevel.error:
-        return Colors.red;
+        return AppColors.danger;
       case LogLevel.success:
-        return Colors.green;
+        return AppColors.success;
     }
   }
 
   Color _getTagColor(String tag) {
     final hash = tag.hashCode;
-    final colors = [
-      Colors.purple,
-      Colors.teal,
-      Colors.amber,
-      Colors.cyan,
-      Colors.pink,
-      Colors.lime,
-      Colors.indigo,
-      Colors.deepOrange,
+    // Стальная гамма вместо радуги: теги различаются оттенком серебра.
+    const colors = [
+      AppColors.primary,
+      AppColors.accent,
+      AppColors.primaryDark,
+      AppColors.textSecondary,
     ];
     return colors[hash.abs() % colors.length];
   }
@@ -105,18 +102,19 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
     final logs = _filteredLogs;
     
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
         title: const Text(
           'DEBUG LOGS',
           style: TextStyle(
             fontFamily: AppTypography.monoFamily,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             letterSpacing: 2,
+            color: AppColors.danger,
           ),
         ),
-        backgroundColor: const Color(0xFF1A0000),
-        foregroundColor: Colors.red,
+        backgroundColor: AppColors.surface,
+        foregroundColor: AppColors.textPrimary,
         actions: [
           // Тумблер отправки телеметрии на сервер (opt-in, только для отладки).
           // Даже включённая, телеметрия НЕ шлёт личности контактов и отпечаток
@@ -124,7 +122,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
           IconButton(
             icon: Icon(
               TelemetryService.instance.isEnabled ? Icons.cloud_upload : Icons.cloud_off,
-              color: TelemetryService.instance.isEnabled ? Colors.orange : Colors.grey,
+              color: TelemetryService.instance.isEnabled ? AppColors.warning : AppColors.textTertiary,
             ),
             tooltip: 'Отправка телеметрии на сервер (для отладки)',
             onPressed: () async {
@@ -137,7 +135,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                   content: Text(newValue
                       ? 'Телеметрия включена (без данных контактов и устройства)'
                       : 'Телеметрия выключена'),
-                  backgroundColor: newValue ? Colors.orange : Colors.grey,
+                  backgroundColor: newValue ? AppColors.warning : AppColors.surfaceElevated,
                 ),
               );
             },
@@ -146,7 +144,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
           IconButton(
             icon: Icon(
               _autoScroll ? Icons.vertical_align_bottom : Icons.vertical_align_center,
-              color: _autoScroll ? Colors.green : Colors.grey,
+              color: _autoScroll ? AppColors.action : AppColors.textTertiary,
             ),
             tooltip: l10n.autoScroll,
             onPressed: () {
@@ -163,7 +161,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(l10n.logsCopied),
-                  backgroundColor: Colors.green,
+                  backgroundColor: AppColors.success,
                 ),
               );
             },
@@ -201,8 +199,8 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  backgroundColor: const Color(0xFF1E1E1E),
-                  title: Text(l10n.clearLogsQuestion, style: const TextStyle(color: Colors.white)),
+                  backgroundColor: AppColors.surfaceElevated,
+                  title: Text(l10n.clearLogsQuestion, style: const TextStyle(color: AppColors.textPrimary)),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
@@ -213,7 +211,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                         DebugLogger.clear();
                         Navigator.pop(ctx);
                       },
-                      child: Text(l10n.clearLogs, style: const TextStyle(color: Colors.red)),
+                      child: Text(l10n.clearLogs, style: const TextStyle(color: AppColors.danger)),
                     ),
                   ],
                 ),
@@ -227,7 +225,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
           // Панель фильтров
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            color: const Color(0xFF1A1A1A),
+            color: AppColors.surface,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -238,10 +236,10 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                     child: FilterChip(
                       label: Text('${l10n.all} (${DebugLogger.logs.length})'),
                       selected: _selectedTag == null,
-                      selectedColor: Colors.white24,
-                      checkmarkColor: Colors.white,
-                      labelStyle: TextStyle(
-                        color: _selectedTag == null ? Colors.white : Colors.grey,
+                      selectedColor: AppColors.surfaceElevated,
+                      checkmarkColor: AppColors.textPrimary,
+                      labelStyle: AppTypography.mono(
+                        color: _selectedTag == null ? AppColors.textPrimary : AppColors.textSecondary,
                         fontSize: 11,
                       ),
                       onSelected: (_) {
@@ -257,10 +255,10 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                       child: FilterChip(
                         label: Text('$tag ($count)'),
                         selected: _selectedTag == tag,
-                        selectedColor: _getTagColor(tag).withOpacity(0.3),
+                        selectedColor: AppColors.surfaceElevated,
                         checkmarkColor: _getTagColor(tag),
-                        labelStyle: TextStyle(
-                          color: _selectedTag == tag ? _getTagColor(tag) : Colors.grey,
+                        labelStyle: AppTypography.mono(
+                          color: _selectedTag == tag ? _getTagColor(tag) : AppColors.textSecondary,
                           fontSize: 11,
                         ),
                         onSelected: (_) {
@@ -277,15 +275,15 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
           // Статус-бар
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            color: const Color(0xFF0A0A0A),
+            color: AppColors.surface2,
             child: Row(
               children: [
-                const Icon(Icons.circle, size: 8, color: Colors.green),
+                const Icon(Icons.circle, size: 8, color: AppColors.success),
                 const SizedBox(width: 6),
                 Text(
                   '${l10n.entries}: ${logs.length}',
                   style: const TextStyle(
-                    color: Colors.grey,
+                    color: AppColors.textSecondary,
                     fontSize: 11,
                     fontFamily: AppTypography.monoFamily,
                   ),
@@ -293,8 +291,8 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                 const Spacer(),
                 Text(
                   'Real-time logging',
-                  style: TextStyle(
-                    color: Colors.green.withOpacity(0.7),
+                  style: const TextStyle(
+                    color: AppColors.textTertiary,
                     fontSize: 11,
                     fontFamily: AppTypography.monoFamily,
                   ),
@@ -309,7 +307,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
                 ? Center(
                     child: Text(
                       l10n.noLogs,
-                      style: const TextStyle(color: Colors.grey),
+                      style: const TextStyle(color: AppColors.textSecondary),
                     ),
                   )
                 : ListView.builder(
@@ -343,7 +341,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: index % 2 == 0 ? Colors.transparent : const Color(0xFF0A0A0A),
+          color: index % 2 == 0 ? Colors.transparent : AppColors.surface,
           border: Border(
             left: BorderSide(
               color: levelColor.withOpacity(0.5),
@@ -360,7 +358,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
               child: Text(
                 entry.timeString,
                 style: const TextStyle(
-                  color: Colors.grey,
+                  color: AppColors.textTertiary,
                   fontSize: 10,
                   fontFamily: AppTypography.monoFamily,
                 ),
@@ -370,15 +368,16 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
-                color: tagColor.withOpacity(0.2),
+                color: AppColors.surface2,
                 borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AppColors.outline),
               ),
               child: Text(
                 entry.tag,
                 style: TextStyle(
                   color: tagColor,
                   fontSize: 9,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w500,
                   fontFamily: AppTypography.monoFamily,
                 ),
               ),
@@ -389,7 +388,7 @@ class _DebugLogsScreenState extends State<DebugLogsScreen> {
               child: Text(
                 entry.message,
                 style: TextStyle(
-                  color: levelColor == Colors.red ? Colors.red : Colors.white,
+                  color: levelColor == AppColors.danger ? AppColors.danger : AppColors.textPrimary,
                   fontSize: 11,
                   fontFamily: AppTypography.monoFamily,
                 ),

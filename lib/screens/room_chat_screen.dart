@@ -723,13 +723,19 @@ class _RoomChatScreenState extends State<RoomChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 IconButton(
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.action,
+                    disabledBackgroundColor:
+                        AppColors.action.withOpacity(0.5),
+                  ),
                   icon: _isSending
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: AppColors.onAction),
                         )
-                      : const Icon(Icons.send, color: AppColors.primary),
+                      : const Icon(Icons.send, color: AppColors.onAction),
                   onPressed: _isSending ? null : _sendMessage,
                   tooltip: l10n.send,
                 ),
@@ -921,10 +927,10 @@ class _RoomMessageBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isMine
-              ? AppColors.actionDark
+              ? AppColors.actionContainer
               : isOfficial
-                  ? AppColors.primary.withOpacity(0.12)
-                  : AppColors.surface,
+                  ? AppColors.surfaceElevated
+                  : AppColors.surface2,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -973,21 +979,22 @@ class _RoomMessageBubble extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .bodyMedium
-                  ?.copyWith(color: isMine ? Colors.white : AppColors.textPrimary),
+                  ?.copyWith(
+                      color: isMine
+                          ? AppColors.onActionContainer
+                          : AppColors.textPrimary),
             ),
             const SizedBox(height: 4),
             Text(
               DateFormat.Hm().format(
                 message.createdAt.toUtc().add(const Duration(hours: 3)),
               ),
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(
-                    color: isMine
-                        ? Colors.white.withOpacity(0.7)
-                        : AppColors.textTertiary,
-                  ),
+              style: AppTypography.mono(
+                fontSize: 11,
+                color: isMine
+                    ? AppColors.onActionContainer.withOpacity(0.6)
+                    : AppColors.textTertiary,
+              ),
             ),
           ],
         ),

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/services/auth_service.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 enum PinSetupMode {
   setPin,        // Установка нового PIN
@@ -403,12 +404,12 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.check_circle, color: Color(0xFF6AD394), size: 20),
+            const Icon(Icons.check_circle, color: AppColors.success, size: 20),
             const SizedBox(width: 8),
             Text(message),
           ],
         ),
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: AppColors.surfaceElevated,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -426,9 +427,9 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
     }
     
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.bg,
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context, false),
@@ -453,7 +454,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
             Text(
               _getTitle(l10n),
               style: const TextStyle(
-                color: Colors.grey,
+                color: AppColors.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 3,
@@ -468,8 +469,8 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               child: Text(
                 _getSubtitle(l10n),
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
+                style: const TextStyle(
+                  color: AppColors.textTertiary,
                   fontSize: 13,
                 ),
               ),
@@ -480,8 +481,8 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               const SizedBox(height: 12),
               Text(
                 _errorMessage!,
-                style: TextStyle(
-                  color: Colors.red.shade400,
+                style: const TextStyle(
+                  color: AppColors.danger,
                   fontSize: 13,
                 ),
               ),
@@ -531,27 +532,27 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
       case PinSetupMode.setPin:
       case PinSetupMode.changePin:
         icon = Icons.lock_outline;
-        color = const Color(0xFFB0BEC5);
+        color = AppColors.primary;
         break;
       case PinSetupMode.disablePin:
         icon = Icons.lock_open;
-        color = Colors.orange;
+        color = AppColors.warning;
         break;
       case PinSetupMode.setDuress:
         icon = Icons.shield_outlined;
-        color = Colors.amber;
+        color = AppColors.warning;
         break;
       case PinSetupMode.disableDuress:
         icon = Icons.shield_outlined;
-        color = Colors.orange;
+        color = AppColors.warning;
         break;
       case PinSetupMode.setWipeCode:
         icon = Icons.delete_forever;
-        color = Colors.red;
+        color = AppColors.danger;
         break;
       case PinSetupMode.disableWipeCode:
         icon = Icons.delete_forever;
-        color = Colors.orange;
+        color = AppColors.warning;
         break;
     }
     
@@ -561,7 +562,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color.withOpacity(0.1),
-        border: Border.all(color: color.withOpacity(0.3), width: 2),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
       ),
       child: Icon(icon, color: color, size: 32),
     );
@@ -588,14 +589,14 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _isError
-                      ? Colors.red.shade400
+                      ? AppColors.danger
                       : isFilled
-                          ? const Color(0xFFB0BEC5)
+                          ? AppColors.primary
                           : Colors.transparent,
                   border: Border.all(
                     color: _isError
-                        ? Colors.red.shade400
-                        : Colors.grey.shade700,
+                        ? AppColors.danger
+                        : AppColors.textTertiary,
                     width: 1,
                   ),
                 ),
@@ -641,19 +642,20 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
       child: InkWell(
         onTap: _isLoading ? null : () => _onDigitPressed(digit),
         borderRadius: BorderRadius.circular(36),
-        splashColor: const Color(0xFFB0BEC5).withOpacity(0.3),
+        splashColor: AppColors.primary.withOpacity(0.12),
         child: Container(
           width: 72,
           height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1),
+            color: AppColors.surface,
+            border: Border.all(color: AppColors.outline, width: 1),
           ),
           child: Center(
             child: Text(
               digit,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 28,
                 fontWeight: FontWeight.w300,
               ),
@@ -675,12 +677,12 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
           height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
+            border: Border.all(color: AppColors.divider, width: 1),
           ),
-          child: Center(
+          child: const Center(
             child: Icon(
               Icons.backspace_outlined,
-              color: Colors.grey.shade500,
+              color: AppColors.textSecondary,
               size: 24,
             ),
           ),
@@ -692,9 +694,9 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
   /// Экран выбора длины PIN-кода (только для setPin)
   Widget _buildLengthSelectionScreen(L10n l10n) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.bg,
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context, false),
@@ -718,15 +720,16 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
                 height: 80,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFFB0BEC5).withOpacity(0.1),
+                  color: AppColors.surface2,
                   border: Border.all(
-                    color: const Color(0xFFB0BEC5).withOpacity(0.3),
-                    width: 2,
+                    color: AppColors.outline,
+                    width: 1,
                   ),
+                  boxShadow: AppShadows.bevel(),
                 ),
                 child: const Icon(
                   Icons.pin_outlined,
-                  color: Color(0xFFB0BEC5),
+                  color: AppColors.primary,
                   size: 36,
                 ),
               ),
@@ -736,7 +739,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               Text(
                 l10n.selectPinLength,
                 style: const TextStyle(
-                  color: Colors.grey,
+                  color: AppColors.textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 3,
@@ -748,8 +751,8 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               Text(
                 l10n.shorterPinFaster,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
+                style: const TextStyle(
+                  color: AppColors.textTertiary,
                   fontSize: 14,
                   height: 1.4,
                 ),
@@ -796,10 +799,10 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.08),
+        color: AppColors.warning.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Colors.amber.withOpacity(0.2),
+          color: AppColors.warning.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -809,12 +812,12 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.15),
+              color: AppColors.warning.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
+            child: const Icon(
               Icons.info_outline,
-              color: Colors.amber.shade600,
+              color: AppColors.warning,
               size: 18,
             ),
           ),
@@ -825,8 +828,8 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
               children: [
                 Text(
                   l10n.securityLevel,
-                  style: TextStyle(
-                    color: Colors.amber.shade600,
+                  style: const TextStyle(
+                    color: AppColors.warning,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
@@ -834,10 +837,9 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
                 const SizedBox(height: 4),
                 Text(
                   '${l10n.fourDigitCombinations}\n${l10n.sixDigitCombinations}',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
+                  style: AppTypography.mono(
+                    color: AppColors.textSecondary,
                     fontSize: 12,
-                    height: 1.4,
                   ),
                 ),
               ],
@@ -857,7 +859,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
     required L10n l10n,
   }) {
     final isRecommended = length == 6;
-    final color = isRecommended ? const Color(0xFF6AD394) : const Color(0xFFB0BEC5);
+    final color = isRecommended ? AppColors.action : AppColors.primary;
     
     return Material(
       color: Colors.transparent,
@@ -873,10 +875,10 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: const Color(0xFF121212),
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: color.withOpacity(0.3),
+              color: isRecommended ? color.withOpacity(0.3) : AppColors.outline,
               width: 1,
             ),
           ),
@@ -901,7 +903,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
                         Text(
                           title,
                           style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.textPrimary,
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
                           ),
@@ -932,17 +934,17 @@ class _PinSetupScreenState extends State<PinSetupScreen> with SingleTickerProvid
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
                         fontSize: 13,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
+              const Icon(
                 Icons.chevron_right,
-                color: Colors.grey.shade600,
+                color: AppColors.textTertiary,
                 size: 24,
               ),
             ],

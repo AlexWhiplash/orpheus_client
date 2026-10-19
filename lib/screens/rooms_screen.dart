@@ -282,131 +282,67 @@ class _VaultRow extends StatefulWidget {
   State<_VaultRow> createState() => _VaultRowState();
 }
 
-class _VaultRowState extends State<_VaultRow> with SingleTickerProviderStateMixin {
-  late final AnimationController _glowController;
-  late final Animation<double> _glowAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2800),
-    )..repeat(reverse: true);
-    _glowAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _glowController.dispose();
-    super.dispose();
-  }
-
+class _VaultRowState extends State<_VaultRow> {
   @override
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
-    return AnimatedBuilder(
-      animation: _glowAnimation,
-      builder: (context, _) {
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: widget.onTap,
+        borderRadius: AppRadii.md,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surface2,
             borderRadius: AppRadii.md,
-            child: Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.action.withOpacity(0.08 + 0.06 * _glowAnimation.value),
-                    AppColors.surface,
-                    const Color(0xFF1A2033).withOpacity(0.95),
-                  ],
-                  stops: const [0.0, 0.4, 1.0],
-                ),
-                borderRadius: AppRadii.md,
-                border: Border.all(
-                  color: AppColors.action.withOpacity(0.25 + 0.12 * _glowAnimation.value),
-                  width: 1.4,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.action.withOpacity(0.18 * _glowAnimation.value),
-                    blurRadius: 18 * _glowAnimation.value,
-                    spreadRadius: -2,
-                  ),
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      borderRadius: AppRadii.sm,
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppColors.action.withOpacity(0.8),
-                          AppColors.actionDark,
-                          const Color(0xFF2E7D4F),
-                        ],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.action.withOpacity(0.35 * _glowAnimation.value),
-                          blurRadius: 10 * _glowAnimation.value,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.lock, color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.notesVaultTitle,
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          l10n.notesVaultDesc,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelMedium
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 16,
-                    color:
-                        AppColors.action.withOpacity(0.6 + 0.3 * _glowAnimation.value),
-                  ),
-                ],
-              ),
-            ),
+            border: Border.all(color: AppColors.outline),
+            boxShadow: AppShadows.bevel(),
           ),
-        );
-      },
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: AppRadii.sm,
+                  color: AppColors.surfaceElevated,
+                  border: Border.all(color: AppColors.outline),
+                ),
+                child: const Icon(Icons.lock, color: AppColors.primary, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.notesVaultTitle,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.notesVaultDesc,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelMedium
+                          ?.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: AppColors.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

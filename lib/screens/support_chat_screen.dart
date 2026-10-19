@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/main.dart' show websocketService;
 import 'package:orpheus_project/models/support_message.dart';
@@ -118,7 +119,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(l10n.messageNotSent),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.danger,
           ),
         );
         // Восстанавливаем текст
@@ -137,11 +138,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: Text(l10n.sendLogsQuestion, style: const TextStyle(color: Colors.white)),
+        backgroundColor: AppColors.surfaceElevated,
+        title: Text(l10n.sendLogsQuestion, style: const TextStyle(color: AppColors.textPrimary)),
         content: Text(
           l10n.logsWillBeSent(logsCount),
-          style: const TextStyle(color: Colors.grey),
+          style: const TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
@@ -150,7 +151,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(l10n.send, style: const TextStyle(color: Colors.green)),
+            child: Text(l10n.send, style: const TextStyle(color: AppColors.action)),
           ),
         ],
       ),
@@ -168,7 +169,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(success ? l10n.logsSent : l10n.logsError),
-          backgroundColor: success ? Colors.green : Colors.red,
+          backgroundColor: success ? AppColors.success : AppColors.danger,
         ),
       );
     }
@@ -178,9 +179,9 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   Widget build(BuildContext context) {
     final l10n = L10n.of(context);
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.bg,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -190,7 +191,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             ),
             Text(
               l10n.willReply,
-              style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.normal),
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
             ),
           ],
         ),
@@ -219,7 +220,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   Widget _buildMessagesList(L10n l10n) {
     if (_service.isLoading && _service.messages.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(color: Colors.grey),
+        child: CircularProgressIndicator(color: AppColors.primary),
       );
     }
     
@@ -228,11 +229,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const Icon(Icons.error_outline, color: AppColors.danger, size: 48),
             const SizedBox(height: 16),
             Text(
               _service.error!,
-              style: const TextStyle(color: Colors.grey),
+              style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             TextButton(
@@ -254,20 +255,22 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1A),
+                  color: AppColors.surface2,
                   borderRadius: BorderRadius.circular(50),
+                  border: Border.all(color: AppColors.outline),
+                  boxShadow: AppShadows.bevel(),
                 ),
                 child: const Icon(
                   Icons.support_agent,
                   size: 48,
-                  color: Colors.grey,
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 24),
               Text(
                 l10n.writeToUs,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.textPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -276,7 +279,7 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
               Text(
                 l10n.questionsProblemsIdeas,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
+                style: const TextStyle(color: AppColors.textSecondary),
               ),
             ],
           ),
@@ -309,10 +312,11 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isSystem
-              ? const Color(0xFF2A3A2A)
+              ? AppColors.surface2
               : isAdmin 
-                  ? const Color(0xFF2A2A2A) 
-                  : const Color(0xFFA91B47),
+                  ? AppColors.surfaceElevated
+                  : AppColors.actionContainer,
+          border: isSystem || isAdmin ? Border.all(color: AppColors.outline) : null,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -325,8 +329,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           children: [
             Text(
               message.message,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: isSystem || isAdmin
+                    ? AppColors.textPrimary
+                    : AppColors.onActionContainer,
                 fontSize: 14,
                 height: 1.4,
               ),
@@ -338,8 +344,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                 if (isAdmin) ...[
                   Text(
                     l10n.developer,
-                    style: const TextStyle(
-                      color: Colors.grey,
+                    style: AppTypography.mono(
+                      color: AppColors.textTertiary,
                       fontSize: 10,
                     ),
                   ),
@@ -347,8 +353,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                 ],
                 Text(
                   _formatTime(message.createdAt, l10n),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                  style: AppTypography.mono(
+                    color: isSystem || isAdmin
+                        ? AppColors.textTertiary
+                        : AppColors.onActionContainer.withOpacity(0.6),
                     fontSize: 10,
                   ),
                 ),
@@ -363,10 +371,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   Widget _buildInputPanel(L10n l10n) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
         border: Border(
-          top: BorderSide(color: Color(0xFF333333)),
+          top: BorderSide(color: AppColors.divider),
         ),
       ),
       child: SafeArea(
@@ -380,10 +388,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Colors.grey,
+                        color: AppColors.textSecondary,
                       ),
                     )
-                  : const Icon(Icons.attach_file, color: Colors.grey),
+                  : const Icon(Icons.attach_file, color: AppColors.textSecondary),
               onPressed: _isSendingLogs ? null : _sendLogs,
               tooltip: l10n.sendLogs,
             ),
@@ -392,12 +400,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             Expanded(
               child: TextField(
                 controller: _messageController,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: AppColors.textPrimary),
                 decoration: InputDecoration(
                   hintText: l10n.messagePlaceholder,
-                  hintStyle: const TextStyle(color: Colors.grey),
+                  hintStyle: const TextStyle(color: AppColors.textTertiary),
                   filled: true,
-                  fillColor: const Color(0xFF252525),
+                  fillColor: AppColors.surface2,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
@@ -423,10 +431,10 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFFA91B47),
+                        color: AppColors.action,
                       ),
                     )
-                  : const Icon(Icons.send, color: Color(0xFFA91B47)),
+                  : const Icon(Icons.send, color: AppColors.action),
               onPressed: _isSending ? null : _sendMessage,
             ),
           ],

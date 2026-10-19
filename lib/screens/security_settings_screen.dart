@@ -9,6 +9,7 @@ import 'package:orpheus_project/screens/pin_setup_screen.dart';
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/device_settings_service.dart';
 import 'package:orpheus_project/services/message_cleanup_service.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   final AuthService auth;
@@ -95,11 +96,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1A1A1A),
+          backgroundColor: AppColors.surface,
           title: Text(l10n.confirmation),
           content: Text(
             l10n.willDeleteMessages(toDelete),
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
           actions: [
             TextButton(
@@ -108,7 +109,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
               child: Text(l10n.delete),
             ),
           ],
@@ -214,9 +215,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
         : 60;
     
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.bg,
         title: Text(
           l10n.securityTitle,
           style: const TextStyle(fontSize: 16, letterSpacing: 1),
@@ -236,7 +237,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
               _buildInfoCard(
                 icon: Icons.info_outline,
                 text: l10n.pinNotSet,
-                color: Colors.orange,
+                color: AppColors.warning,
               ),
               const SizedBox(height: 12),
               _buildActionButton(
@@ -328,7 +329,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
               _buildInfoCard(
                 icon: Icons.warning_amber,
                 text: l10n.duressCodeInfo,
-                color: Colors.amber,
+                color: AppColors.warning,
                 isMultiLine: true,
               ),
               const SizedBox(height: 12),
@@ -339,13 +340,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   title: l10n.setDuressCode,
                   subtitle: l10n.setDuressCodeDesc(config.pinLength),
                   onTap: () => _openPinSetup(PinSetupMode.setDuress),
-                  accentColor: Colors.amber,
+                  accentColor: AppColors.warning,
                 ),
               ] else ...[
                 _buildInfoCard(
                   icon: Icons.check_circle_outline,
                   text: l10n.duressCodeSet(config.pinLength),
-                  color: const Color(0xFF6AD394),
+                  color: AppColors.success,
                 ),
                 const SizedBox(height: 12),
                 _buildActionButton(
@@ -368,7 +369,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
               _buildInfoCard(
                 icon: Icons.warning_amber,
                 text: l10n.wipeCodeInfo,
-                color: Colors.red,
+                color: AppColors.danger,
                 isMultiLine: true,
               ),
               const SizedBox(height: 12),
@@ -379,13 +380,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   title: l10n.setWipeCode,
                   subtitle: l10n.setWipeCodeDesc(config.pinLength),
                   onTap: () => _openPinSetup(PinSetupMode.setWipeCode),
-                  accentColor: Colors.red,
+                  accentColor: AppColors.danger,
                 ),
               ] else ...[
                 _buildInfoCard(
                   icon: Icons.check_circle_outline,
                   text: l10n.wipeCodeSet(config.pinLength),
-                  color: const Color(0xFF6AD394),
+                  color: AppColors.success,
                 ),
                 const SizedBox(height: 12),
                 _buildActionButton(
@@ -421,7 +422,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                 _buildInfoCard(
                   icon: Icons.warning,
                   text: l10n.autoWipeWarning,
-                  color: Colors.red,
+                  color: AppColors.danger,
                 ),
               ],
               
@@ -446,7 +447,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             _buildInfoCard(
               icon: Icons.info_outline,
               text: l10n.panicGestureWarning,
-              color: Colors.orange,
+              color: AppColors.warning,
               isMultiLine: true,
             ),
             
@@ -459,7 +460,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             _buildInfoCard(
               icon: Icons.info_outline,
               text: l10n.autoDeleteInfo,
-              color: Colors.blue,
+              color: AppColors.info,
               isMultiLine: true,
             ),
             const SizedBox(height: 12),
@@ -479,12 +480,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
   Widget _buildSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, color: Colors.grey.shade500, size: 18),
+        Icon(icon, color: AppColors.textTertiary, size: 18),
         const SizedBox(width: 8),
         Text(
           title,
-          style: TextStyle(
-            color: Colors.grey.shade500,
+          style: const TextStyle(
+            color: AppColors.textTertiary,
             fontSize: 11,
             fontWeight: FontWeight.bold,
             letterSpacing: 2,
@@ -529,22 +530,15 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
 
   /// Карточка статуса PIN с индикатором длины — вау-эффект ✨
   Widget _buildPinStatusCard(int pinLength, L10n l10n) {
-    const color = Color(0xFF6AD394);
+    const color = AppColors.success;
     final isShortPin = pinLength == 4;
     
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            color.withOpacity(0.15),
-            color.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: AppColors.outline),
       ),
       child: Row(
         children: [
@@ -552,7 +546,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
+              color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -577,7 +571,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                     Text(
                       l10n.pinCodeSet,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
                       ),
@@ -589,14 +583,14 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                       ),
                       decoration: BoxDecoration(
                         color: isShortPin 
-                            ? Colors.amber.withOpacity(0.2)
-                            : color.withOpacity(0.2),
+                            ? AppColors.warning.withOpacity(0.15)
+                            : color.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         l10n.digitCode(pinLength),
-                        style: TextStyle(
-                          color: isShortPin ? Colors.amber : color,
+                        style: AppTypography.mono(
+                          color: isShortPin ? AppColors.warning : color,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -609,8 +603,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   isShortPin 
                       ? '${l10n.fastEntry} • ~10 000 ${l10n.combinations}'
                       : '${l10n.enhancedSecurity} • ~1 000 000 ${l10n.combinations}',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -630,7 +624,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     bool isDestructive = false,
     Color? accentColor,
   }) {
-    final color = accentColor ?? (isDestructive ? Colors.red.shade400 : const Color(0xFFB0BEC5));
+    final color = accentColor ?? (isDestructive ? AppColors.danger : AppColors.primary);
     
     return Material(
       color: Colors.transparent,
@@ -640,12 +634,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF121212),
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isDestructive 
-                  ? Colors.red.withOpacity(0.2) 
-                  : Colors.white.withOpacity(0.05),
+                  ? AppColors.danger.withOpacity(0.2) 
+                  : AppColors.outline,
             ),
           ),
           child: Row(
@@ -666,7 +660,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                     Text(
                       title,
                       style: TextStyle(
-                        color: isDestructive ? Colors.red.shade300 : Colors.white,
+                        color: isDestructive ? AppColors.danger : AppColors.textPrimary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -674,8 +668,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
+                        style: const TextStyle(
+                          color: AppColors.textTertiary,
                           fontSize: 12,
                         ),
                       ),
@@ -683,7 +677,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.grey.shade700, size: 20),
+              const Icon(Icons.chevron_right, color: AppColors.textTertiary, size: 20),
             ],
           ),
         ),
@@ -699,17 +693,17 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     required ValueChanged<bool> onChanged,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? Colors.red.shade400 : const Color(0xFFB0BEC5);
+    final color = isDestructive ? AppColors.danger : AppColors.primary;
     
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF121212),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDestructive 
-              ? Colors.red.withOpacity(0.2) 
-              : Colors.white.withOpacity(0.05),
+              ? AppColors.danger.withOpacity(0.2) 
+              : AppColors.outline,
         ),
       ),
       child: Row(
@@ -730,7 +724,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                 Text(
                   title,
                   style: TextStyle(
-                    color: isDestructive ? Colors.red.shade300 : Colors.white,
+                    color: isDestructive ? AppColors.danger : AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -738,8 +732,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
                       fontSize: 12,
                     ),
                   ),
@@ -750,8 +744,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: isDestructive ? Colors.red : const Color(0xFF6AD394),
-            activeTrackColor: (isDestructive ? Colors.red : const Color(0xFF6AD394)).withOpacity(0.3),
+            activeColor: isDestructive ? AppColors.danger : AppColors.action,
+            activeTrackColor: (isDestructive ? AppColors.danger : AppColors.action).withOpacity(0.3),
           ),
         ],
       ),
@@ -766,7 +760,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     required Map<int, String> options,
     required ValueChanged<int> onChanged,
   }) {
-    final color = const Color(0xFFB0BEC5);
+    const color = AppColors.primary;
     final items = options.entries
         .map(
           (entry) => DropdownMenuItem<int>(
@@ -780,9 +774,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF121212),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: AppColors.outline),
       ),
       child: Row(
         children: [
@@ -802,7 +796,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                 Text(
                   title,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -810,8 +804,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
                       fontSize: 12,
                     ),
                   ),
@@ -822,9 +816,9 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> with Si
           DropdownButton<int>(
             value: effectiveValue,
             items: items,
-            dropdownColor: const Color(0xFF1A1A1A),
+            dropdownColor: AppColors.surfaceElevated,
             underline: const SizedBox.shrink(),
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppColors.textPrimary),
             onChanged: (next) {
               if (next == null) return;
               onChanged(next);
@@ -851,15 +845,15 @@ class _MessageRetentionSelector extends StatelessWidget {
     final l10n = L10n.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF121212),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: AppColors.outline),
       ),
       child: Column(
         children: [
           for (var i = 0; i < MessageRetentionPolicy.values.length; i++) ...[
             if (i > 0)
-              Divider(height: 1, color: Colors.white.withOpacity(0.05)),
+              Divider(height: 1, color: AppColors.divider),
             _buildOption(MessageRetentionPolicy.values[i], l10n),
           ],
         ],
@@ -923,15 +917,15 @@ class _MessageRetentionSelector extends StatelessWidget {
                     Text(
                       _getDisplayName(policy, l10n),
                       style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.white70,
+                        color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
                         fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       _getSubtitle(policy, l10n),
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
+                      style: const TextStyle(
+                        color: AppColors.textTertiary,
                         fontSize: 12,
                       ),
                     ),
@@ -942,12 +936,12 @@ class _MessageRetentionSelector extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF6AD394).withOpacity(0.2),
+                    color: AppColors.action.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
                     Icons.check,
-                    color: Color(0xFF6AD394),
+                    color: AppColors.action,
                     size: 16,
                   ),
                 ),
@@ -974,13 +968,13 @@ class _MessageRetentionSelector extends StatelessWidget {
   Color _getColorForPolicy(MessageRetentionPolicy policy) {
     switch (policy) {
       case MessageRetentionPolicy.all:
-        return const Color(0xFFB0BEC5);
+        return AppColors.primary;
       case MessageRetentionPolicy.day:
-        return Colors.red.shade400;
+        return AppColors.danger;
       case MessageRetentionPolicy.week:
-        return Colors.orange.shade400;
+        return AppColors.warning;
       case MessageRetentionPolicy.month:
-        return Colors.blue.shade400;
+        return AppColors.info;
     }
   }
 }

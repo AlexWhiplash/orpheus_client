@@ -34,7 +34,7 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
 
       // Заголовок
-      expect(find.text('Orpheus'), findsOneWidget);
+      expect(find.text('ORPHEUS'), findsOneWidget);
 
       // Кнопки
       expect(find.text('Создать аккаунт'), findsOneWidget);

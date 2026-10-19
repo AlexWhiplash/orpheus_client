@@ -197,12 +197,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
-    )..repeat(reverse: false);
+    ); // Визуальная система v1: без пульсирующих колец.
 
     _particlesController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 8),
-    )..repeat();
+    ); // Фон статичный: частицы убраны.
 
     _waveController = AnimationController(
       vsync: this,
@@ -368,10 +368,10 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       final proceed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          backgroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: AppColors.surfaceElevated,
           title: Text(
             isRu ? 'Звук звонка в Bluetooth' : 'Bluetooth call audio',
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppColors.textPrimary),
           ),
           content: Text(
             isRu
@@ -384,7 +384,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                     'ask for the "Nearby devices" permission. Orpheus uses it ONLY to '
                     'connect to your headset — it does not scan for devices or track your '
                     'location. You can skip this; calls still work via the speaker/earpiece.',
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.textSecondary),
           ),
           actions: [
             TextButton(
@@ -742,7 +742,6 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
     _controller.onConnected();
 
     if (mounted) {
-      _waveController.repeat();
       _attachRemoteStream();
     }
 
@@ -974,15 +973,15 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
 
     if (_networkState == NetworkState.offline) {
       message = "No network";
-      color = Colors.red;
+      color = AppColors.danger;
       icon = Icons.signal_wifi_off;
     } else if (_wsStatus == ConnectionStatus.Connecting) {
       message = "Reconnecting...";
-      color = Colors.orange;
+      color = AppColors.warning;
       icon = Icons.sync;
     } else if (_wsStatus == ConnectionStatus.Disconnected) {
       message = "Connection lost";
-      color = Colors.red;
+      color = AppColors.danger;
       icon = Icons.cloud_off;
     } else {
       return const SizedBox.shrink();
@@ -992,9 +991,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: AppColors.surface2,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1003,7 +1002,7 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           const SizedBox(width: 6),
           Text(
             message,
-            style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
+            style: AppTypography.mono(color: color, fontSize: 12, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -1018,10 +1017,11 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
         children: [
           Text(
             _durationText,
-            style: const TextStyle(
-              color: Color(0xFF6AD394),
+            style: AppTypography.mono(
+              color: AppColors.textPrimary,
               fontSize: 24,
-              fontFamily: "monospace",
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1.2,
             ),
           ),
           // Показываем предупреждение при проблемах с сетью
@@ -1041,25 +1041,25 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.warning),
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 _getStatusText(),
-                style: const TextStyle(color: Colors.orange, fontSize: 18),
+                style: AppTypography.mono(color: AppColors.warning, fontSize: 16),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
             _debugStatus,
-            style: const TextStyle(color: Colors.orange, fontSize: 12),
+            style: AppTypography.mono(color: AppColors.warning, fontSize: 12),
           ),
           const SizedBox(height: 8),
           Text(
             "Attempt $_reconnectAttempts of $_maxReconnectAttempts",
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+            style: AppTypography.mono(color: AppColors.textTertiary, fontSize: 11),
           ),
         ],
       );
@@ -1068,84 +1068,44 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
         children: [
           Text(
             _getStatusText(),
-            style: const TextStyle(color: Colors.grey, fontSize: 18),
+            style: AppTypography.mono(color: AppColors.textSecondary, fontSize: 16),
           ),
           const SizedBox(height: 4),
           Text(
             _debugStatus,
-            style: const TextStyle(color: Colors.red, fontSize: 10),
+            style: AppTypography.mono(color: AppColors.danger, fontSize: 10),
           ),
         ],
       );
     }
   }
 
-  /// Аватар контакта с пульсирующими кольцами (кроме Failed/Rejected).
+  /// Аватар контакта: стальной диск с фаской, без пульсаций и свечения.
   Widget _buildAvatar() {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        if (_callState != CallState.Failed && _callState != CallState.Rejected)
-          ...List.generate(3, (index) {
-            return ScaleTransition(
-              scale: Tween(begin: 1.0, end: 1.8 + index * 0.3).animate(
-                CurvedAnimation(
-                  parent: _pulseController,
-                  curve: Interval(index * 0.2, 1.0, curve: Curves.easeOut),
-                ),
-              ),
-              child: FadeTransition(
-                opacity: Tween(begin: 0.4 - index * 0.1, end: 0.0).animate(
-                  CurvedAnimation(
-                    parent: _pulseController,
-                    curve: Interval(index * 0.2, 1.0, curve: Curves.easeOut),
-                  ),
-                ),
-                child: Container(
-                  width: 150 + index * 30,
-                  height: 150 + index * 30,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF6AD394).withOpacity(0.3 - index * 0.1),
-                      width: 2 - index * 0.3,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: _callState == CallState.Connected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF6AD394).withOpacity(0.5),
-                      blurRadius: 30,
-                      spreadRadius: 5,
-                    ),
-                  ]
-                : [],
-          ),
-          child: CircleAvatar(
-            radius: 60,
-            backgroundColor: _callState == CallState.Connected
-                ? const Color(0xFF6AD394).withOpacity(0.2)
-                : Colors.grey[800],
-            child: Text(
-              _displayName.isNotEmpty ? _displayName[0].toUpperCase() : "?",
-              style: TextStyle(
-                fontSize: 40,
-                color: _callState == CallState.Connected
-                    ? const Color(0xFF6AD394)
-                    : Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+    final connected = _callState == CallState.Connected;
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: connected
+              ? AppColors.primaryDark.withOpacity(0.45)
+              : AppColors.outline,
+          width: 1,
+        ),
+        boxShadow: AppShadows.bevel(depth: 2),
+      ),
+      child: CircleAvatar(
+        radius: 60,
+        backgroundColor: connected ? AppColors.surfaceElevated : AppColors.surface2,
+        child: Text(
+          _displayName.isNotEmpty ? _displayName[0].toUpperCase() : "?",
+          style: TextStyle(
+            fontSize: 40,
+            color: connected ? AppColors.textPrimary : AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -1161,16 +1121,18 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: List.generate(_audioWaveData.length, (index) {
-              final height = _audioWaveData[index] * 50;
+            // Пять вертикальных полос, как в знаке Orpheus (серебро).
+            children: List.generate(5, (index) {
+              final step = _audioWaveData.length ~/ 5;
+              final height = _audioWaveData[index * step] * 50;
               return Container(
-                width: 3,
-                margin: const EdgeInsets.symmetric(horizontal: 2),
+                width: 4,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6AD394),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(2),
                 ),
-                height: height.clamp(5.0, 50.0),
+                height: height.clamp(6.0, 50.0),
               );
             }),
           ),
@@ -1190,12 +1152,16 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   "DEBUG LOGS",
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  style: AppTypography.mono(
+                    color: AppColors.danger,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.5,
+                  ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white),
+                  icon: const Icon(Icons.close, color: AppColors.textPrimary),
                   onPressed: () => setState(() => _showDebugLogs = false),
                 )
               ],
@@ -1209,10 +1175,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                     padding: const EdgeInsets.symmetric(vertical: 2),
                     child: Text(
                       _debugLogs[index],
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: AppTypography.mono(
+                        color: AppColors.textSecondary,
                         fontSize: 10,
-                        fontFamily: AppTypography.monoFamily,
                       ),
                     ),
                   );
@@ -1307,27 +1272,12 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.bg,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Анимированный фон
+          // Тихий стальной радиальный фон (без частиц и волн — визуальная система v1)
           CallBackground(controller: _particlesController),
-
-          // 2. Частицы
-          CustomPaint(
-            painter: ParticlesPainter(_particlesController.value),
-            child: Container(),
-          ),
-
-          // 3. Волны (только если Connected)
-          if (_callState == CallState.Connected)
-            AnimatedBuilder(
-              animation: _waveController,
-              builder: (context, child) => CustomPaint(
-                painter: WavePainter(_waveController.value),
-                child: Container(),
-              ),
-            ),
 
           // Скрытый VideoView для аудио
           SizedBox(height: 0, width: 0, child: RTCVideoView(_renderer)),
@@ -1342,12 +1292,13 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                   onTap: kDebugMode
                       ? () => setState(() => _showDebugLogs = !_showDebugLogs)
                       : null,
-                  child: const Text(
+                  child: Text(
                     "Secure Call",
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 14,
-                      decoration: TextDecoration.underline,
+                    style: AppTypography.mono(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 1.5,
                     ),
                   ),
                 ),
@@ -1357,9 +1308,9 @@ class _CallScreenState extends State<CallScreen> with TickerProviderStateMixin {
                 Text(
                   _displayName,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textPrimary,
                     fontSize: 32,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
                 ),

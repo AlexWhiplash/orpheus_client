@@ -10,6 +10,7 @@ import 'package:orpheus_project/l10n/app_localizations.dart';
 import 'package:orpheus_project/models/security_config.dart';
 import 'package:orpheus_project/services/auth_service.dart';
 import 'package:orpheus_project/services/locale_service.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 class LockScreen extends StatefulWidget {
   final VoidCallback onUnlocked;
@@ -59,7 +60,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   
   // Анимации
   late AnimationController _shakeController;
-  late AnimationController _pulseController;
   late AnimationController _revealController;
   late Animation<double> _shakeAnimation;
 
@@ -77,11 +77,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
     );
     
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-    
     _revealController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -97,7 +92,6 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _shakeController.dispose();
-    _pulseController.dispose();
     _revealController.dispose();
     _lockoutTimer?.cancel();
     // Экран снят, пока висело подтверждение — не оставляем висеть await.
@@ -318,18 +312,9 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
     _ensureLockoutTimer();
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.bg,
       body: Stack(
         children: [
-          // Фоновые частицы
-          AnimatedBuilder(
-            animation: _pulseController,
-            builder: (context, child) => CustomPaint(
-              size: Size.infinite,
-              painter: _LockParticlesPainter(_pulseController.value),
-            ),
-          ),
-          
           // Основной контент
           SafeArea(
             child: FadeTransition(
@@ -349,7 +334,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                         ? (isRu ? 'ЗАБЛОКИРОВАНО' : 'LOCKED') 
                         : (isRu ? 'ВВЕДИТЕ PIN' : 'ENTER PIN'),
                     style: TextStyle(
-                      color: isLockedOut ? Colors.red.shade400 : Colors.grey,
+                      color: isLockedOut ? AppColors.danger : AppColors.textSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 3,
@@ -364,16 +349,16 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                       isRu 
                           ? 'Повтор через ${_formatDuration(timeUntilUnlock)}'
                           : 'Retry in ${_formatDuration(timeUntilUnlock)}',
-                      style: TextStyle(
-                        color: Colors.red.shade400,
+                      style: AppTypography.mono(
+                        color: AppColors.danger,
                         fontSize: 14,
                       ),
                     )
                   else if (_errorMessage != null)
                     Text(
                       _errorMessage!,
-                      style: TextStyle(
-                        color: Colors.red.shade400,
+                      style: const TextStyle(
+                        color: AppColors.danger,
                         fontSize: 14,
                       ),
                     ),
@@ -418,42 +403,28 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildLogo() {
-    return AnimatedBuilder(
-      animation: _pulseController,
-      builder: (context, child) {
-        return Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF121212),
-            border: Border.all(
-              color: const Color(0xFFB0BEC5).withOpacity(0.2 + 0.1 * _pulseController.value),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFB0BEC5).withOpacity(0.1 + 0.05 * _pulseController.value),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.surface2,
+        border: Border.all(color: AppColors.outline, width: 1),
+        boxShadow: AppShadows.bevel(),
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          'assets/images/logo_mark.png',
+          width: 60,
+          height: 60,
+          fit: BoxFit.contain,
+          errorBuilder: (c, e, s) => const Icon(
+            Icons.shield,
+            color: AppColors.primary,
+            size: 40,
           ),
-          child: ClipOval(
-            child: Image.asset(
-              'assets/images/logo_mark.png',
-              width: 60,
-              height: 60,
-              fit: BoxFit.contain,
-              errorBuilder: (c, e, s) => const Icon(
-                Icons.shield,
-                color: Color(0xFFB0BEC5),
-                size: 40,
-              ),
-            ),
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 
@@ -479,26 +450,18 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _isError
-                      ? Colors.red.shade400
+                      ? AppColors.danger
                       : isFilled
-                          ? const Color(0xFFB0BEC5)
+                          ? AppColors.primary
                           : Colors.transparent,
                   border: Border.all(
                     color: _isError
-                        ? Colors.red.shade400
+                        ? AppColors.danger
                         : isActive
-                            ? const Color(0xFFB0BEC5)
-                            : Colors.grey.shade700,
+                            ? AppColors.primary
+                            : AppColors.textTertiary,
                     width: isActive ? 2 : 1,
                   ),
-                  boxShadow: isFilled && !_isError
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFFB0BEC5).withOpacity(0.3),
-                            blurRadius: 8,
-                          ),
-                        ]
-                      : null,
                 ),
               );
             }),
@@ -546,14 +509,15 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       child: InkWell(
         onTap: _isLoading ? null : () => _onDigitPressed(digit),
         borderRadius: BorderRadius.circular(36),
-        splashColor: const Color(0xFFB0BEC5).withOpacity(0.3),
+        splashColor: AppColors.primary.withOpacity(0.12),
         child: Container(
           width: 72,
           height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
+            color: AppColors.surface,
             border: Border.all(
-              color: Colors.grey.withOpacity(0.2),
+              color: AppColors.outline,
               width: 1,
             ),
           ),
@@ -561,7 +525,7 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
             child: Text(
               digit,
               style: const TextStyle(
-                color: Colors.white,
+                color: AppColors.textPrimary,
                 fontSize: 28,
                 fontWeight: FontWeight.w300,
               ),
@@ -578,21 +542,21 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
       child: InkWell(
         onTap: _isLoading ? null : _onBackspacePressed,
         borderRadius: BorderRadius.circular(36),
-        splashColor: Colors.red.withOpacity(0.2),
+        splashColor: AppColors.danger.withOpacity(0.15),
         child: Container(
           width: 72,
           height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.grey.withOpacity(0.1),
+              color: AppColors.divider,
               width: 1,
             ),
           ),
-          child: Center(
+          child: const Center(
             child: Icon(
               Icons.backspace_outlined,
-              color: Colors.grey.shade500,
+              color: AppColors.textSecondary,
               size: 24,
             ),
           ),
@@ -604,14 +568,14 @@ class _LockScreenState extends State<LockScreen> with TickerProviderStateMixin {
   Widget _buildBiometricButton(L10n l10n) {
     return TextButton.icon(
       onPressed: _tryBiometricAuth,
-      icon: Icon(
+      icon: const Icon(
         Icons.fingerprint,
-        color: Colors.grey.shade500,
+        color: AppColors.textSecondary,
       ),
       label: Text(
         l10n.useBiometry,
-        style: TextStyle(
-          color: Colors.grey.shade500,
+        style: const TextStyle(
+          color: AppColors.textSecondary,
           fontSize: 13,
         ),
       ),
@@ -697,26 +661,26 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
     final isRu = Localizations.localeOf(context).languageCode == 'ru';
 
     return AlertDialog(
-      backgroundColor: const Color(0xFF120505),
+      backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: Colors.red.withOpacity(0.35)),
+        side: BorderSide(color: AppColors.danger.withOpacity(0.35)),
       ),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.18),
+              color: AppColors.danger.withOpacity(0.15),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+            child: const Icon(Icons.delete_forever, color: AppColors.danger, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               isRu ? 'УДАЛИТЬ ВСЕ ДАННЫЕ?' : 'DELETE ALL DATA?',
-              style: const TextStyle(color: Colors.red, fontSize: 14, letterSpacing: 1),
+              style: const TextStyle(color: AppColors.danger, fontSize: 14, letterSpacing: 1),
             ),
           ),
         ],
@@ -727,7 +691,7 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
         children: [
           Text(
             l10n.deleteAccountWarning,
-            style: const TextStyle(color: Colors.white70, height: 1.35),
+            style: const TextStyle(color: AppColors.textSecondary, height: 1.35),
           ),
           const SizedBox(height: 14),
           ClipRRect(
@@ -735,8 +699,8 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
             child: LinearProgressIndicator(
               value: _progress,
               minHeight: 10,
-              backgroundColor: Colors.white.withOpacity(0.06),
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.red.withOpacity(0.9)),
+              backgroundColor: AppColors.outline,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.danger),
             ),
           ),
           const SizedBox(height: 10),
@@ -744,7 +708,7 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
             _isHolding 
                 ? (isRu ? 'Удерживайте...' : 'Hold...')
                 : (isRu ? 'Удерживайте кнопку ниже 2 секунды' : 'Hold the button below for 2 seconds'),
-            style: TextStyle(color: Colors.red.shade200, fontSize: 12),
+            style: TextStyle(color: AppColors.danger.withOpacity(0.8), fontSize: 12),
           ),
         ],
       ),
@@ -755,7 +719,7 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
             Expanded(
               child: TextButton(
                 onPressed: () => widget.onResult(false),
-                child: Text(l10n.cancel, style: const TextStyle(color: Colors.grey)),
+                child: Text(l10n.cancel, style: const TextStyle(color: AppColors.textSecondary)),
               ),
             ),
             const SizedBox(width: 10),
@@ -766,13 +730,13 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade700,
+                    color: AppColors.danger,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
                     child: Text(
                       isRu ? 'УДЕРЖИВАТЬ' : 'HOLD',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1),
+                      style: const TextStyle(color: AppColors.bg, fontWeight: FontWeight.bold, letterSpacing: 1),
                     ),
                   ),
                 ),
@@ -783,33 +747,4 @@ class _HoldToWipeDialogState extends State<_HoldToWipeDialog> {
       ],
     );
   }
-}
-
-// Частицы на фоне экрана блокировки
-class _LockParticlesPainter extends CustomPainter {
-  final double animationValue;
-  _LockParticlesPainter(this.animationValue);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    final random = Random(42);
-    
-    for (int i = 0; i < 30; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = random.nextDouble() * size.height;
-      final particleSize = 1.0 + random.nextDouble() * 2;
-      
-      final opacity = 0.05 + 0.08 * sin(animationValue * pi * 2 + i * 0.3);
-      
-      canvas.drawCircle(
-        Offset(x, y),
-        particleSize,
-        paint..color = const Color(0xFFB0BEC5).withOpacity(opacity.clamp(0.02, 0.15)),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

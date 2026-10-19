@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:orpheus_project/config.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 /// Тип бейджа пользователя
 enum BadgeType {
@@ -18,7 +19,13 @@ enum BadgeType {
 class BadgeInfo {
   final BadgeType type;
   final String label;
+
+  /// Legacy identity colour of the status (kept for API/tests compatibility).
+  /// The steel tablet does not paint it: the plate is always
+  /// [AppColors.surfaceElevated], the status is told apart by [textColor].
   final Color backgroundColor;
+
+  /// Metal of the status (dot + engraved label), from [AppBadgeMetals].
   final Color textColor;
 
   const BadgeInfo({
@@ -37,31 +44,31 @@ class BadgeInfo {
       type: BadgeType.core,
       label: 'CORE',
       backgroundColor: Color(0xFFA91B47),
-      textColor: Color(0xFFFFFFFF),
+      textColor: AppBadgeMetals.core,
     ),
     BadgeType.owner: BadgeInfo(
       type: BadgeType.owner,
       label: 'OWNER',
       backgroundColor: Color(0xFF1E3A8A),  // Королевский синий
-      textColor: Color(0xFFFFFFFF),
+      textColor: AppBadgeMetals.owner,
     ),
     BadgeType.patron: BadgeInfo(
       type: BadgeType.patron,
       label: 'PATRON',
       backgroundColor: Color(0xFF6B4E9E),
-      textColor: Color(0xFFE8E0F0),
+      textColor: AppBadgeMetals.patron,
     ),
     BadgeType.benefactor: BadgeInfo(
       type: BadgeType.benefactor,
       label: 'BENEFACTOR',
       backgroundColor: Color(0xFFFFB300),  // Золотой
-      textColor: Color(0xFF1A1A1A),         // Тёмный текст на золоте
+      textColor: AppBadgeMetals.benefactor,
     ),
     BadgeType.early: BadgeInfo(
       type: BadgeType.early,
       label: 'EARLY',
       backgroundColor: Color(0xFF4A4E54),
-      textColor: Color(0xFFB0B8C0),
+      textColor: AppBadgeMetals.early,
     ),
   };
 

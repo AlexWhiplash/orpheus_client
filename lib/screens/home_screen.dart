@@ -181,7 +181,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       });
                     },
                     activeColor: AppColors.primary,
-                    checkColor: Colors.white,
+                    checkColor: AppColors.bg,
                     title: Text(
                       isRu ? 'Больше не показывать' : "Don't show again",
                       style: Theme.of(context).textTheme.bodyMedium,

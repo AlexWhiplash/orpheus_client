@@ -382,10 +382,10 @@ class _QrCard extends StatelessWidget {
                 size: 170,
                 backgroundColor: Colors.white,
                 eyeStyle: const QrEyeStyle(
-                    eyeShape: QrEyeShape.square, color: Color(0xFF111111)),
+                    eyeShape: QrEyeShape.square, color: AppColors.bg),
                 dataModuleStyle: const QrDataModuleStyle(
                   dataModuleShape: QrDataModuleShape.square,
-                  color: Color(0xFF111111),
+                  color: AppColors.bg,
                 ),
               ),
             ),

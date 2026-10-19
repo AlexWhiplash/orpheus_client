@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:orpheus_project/l10n/app_localizations.dart';
+import 'package:orpheus_project/theme/app_tokens.dart';
 
 class CallControlPanel extends StatelessWidget {
   final bool isIncoming;
@@ -30,8 +31,8 @@ class CallControlPanel extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildActionBtn(Icons.call_end, Colors.red, l10n.decline.toUpperCase(), onEndCall),
-            _buildActionBtn(Icons.call, Colors.green, l10n.answerCall.toUpperCase(), onAcceptCall),
+            _buildActionBtn(Icons.call_end, AppColors.danger, l10n.decline.toUpperCase(), onEndCall),
+            _buildActionBtn(Icons.call, AppColors.action, l10n.answerCall.toUpperCase(), onAcceptCall),
           ],
         ),
       );
@@ -57,7 +58,7 @@ class CallControlPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-        _buildActionBtn(Icons.call_end, Colors.redAccent, l10n.endCall.toUpperCase(), onEndCall),
+        _buildActionBtn(Icons.call_end, AppColors.danger, l10n.endCall.toUpperCase(), onEndCall),
       ],
     );
   }
@@ -78,27 +79,29 @@ class CallControlPanel extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isActive ? Colors.white : Colors.white.withOpacity(0.1),
+              color: isActive ? AppColors.actionContainer : AppColors.surface2,
               border: Border.all(
                 color: isActive
-                    ? const Color(0xFF6AD394).withOpacity(0.5)
-                    : Colors.white.withOpacity(0.2),
-                width: 2,
+                    ? AppColors.action.withOpacity(0.45)
+                    : AppColors.outline,
+                width: 1,
               ),
-              boxShadow: isActive
-                  ? [BoxShadow(color: const Color(0xFF6AD394).withOpacity(0.4), blurRadius: 20, spreadRadius: 2)]
-                  : [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 10, spreadRadius: 1)],
+              boxShadow: AppShadows.bevel(),
             ),
-            child: Icon(icon, size: 28, color: isActive ? Colors.black : Colors.white),
+            child: Icon(
+              icon,
+              size: 28,
+              color: isActive ? AppColors.action : AppColors.textPrimary,
+            ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           label,
           style: TextStyle(
-            color: isActive ? const Color(0xFF6AD394) : Colors.grey,
+            color: isActive ? AppColors.action : AppColors.textSecondary,
             fontSize: 12,
-            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
       ],
@@ -115,18 +118,27 @@ class CallControlPanel extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: color,
-              border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-              boxShadow: [
-                BoxShadow(color: color.withOpacity(0.5), blurRadius: 25, spreadRadius: 3)
-              ],
+              border: Border.all(color: Colors.white.withOpacity(0.12), width: 1),
+              boxShadow: AppShadows.bevel(depth: 2),
             ),
-            child: Icon(icon, size: 36, color: Colors.white),
+            // Белая иконка допустима только на насыщенной заливке (danger);
+            // на мятной кнопке — тёмная onAction.
+            child: Icon(
+              icon,
+              size: 36,
+              color: color == AppColors.action ? AppColors.onAction : Colors.white,
+            ),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           label,
-          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+          style: AppTypography.mono(
+            color: AppColors.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 1.2,
+          ),
         ),
       ],
     );

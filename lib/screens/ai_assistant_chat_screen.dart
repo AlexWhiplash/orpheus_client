@@ -2,7 +2,6 @@
 // Экран чата с AI помощником Orpheus — "Оракул Орфея"
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,8 +23,7 @@ class AiAssistantChatScreen extends StatefulWidget {
   State<AiAssistantChatScreen> createState() => _AiAssistantChatScreenState();
 }
 
-class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
-    with TickerProviderStateMixin {
+class _AiAssistantChatScreenState extends State<AiAssistantChatScreen> {
   final AiAssistantService _service = AiAssistantService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -34,10 +32,6 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
   StreamSubscription<bool>? _loadingSub;
 
   bool _isLoading = false;
-
-  // Анимация для аватара AI
-  late AnimationController _avatarPulseController;
-  late Animation<double> _avatarPulseAnimation;
 
   @override
   void initState() {
@@ -58,19 +52,6 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
       }
     });
 
-    // Анимация пульсации аватара
-    _avatarPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-
-    _avatarPulseAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _avatarPulseController,
-        curve: Curves.easeInOut,
-      ),
-    );
-
     _service.init();
   }
 
@@ -80,7 +61,6 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
     _loadingSub?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
-    _avatarPulseController.dispose();
     _service.dispose();
     super.dispose();
   }
@@ -120,7 +100,7 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
       appBar: AppBar(
         title: Row(
           children: [
-            _AiAvatarSmall(animation: _avatarPulseAnimation),
+            const _AiAvatarSmall(),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -150,9 +130,10 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
                       const SizedBox(width: 8),
                       Text(
                         l10n.aiMemoryIndicator(memoryLimit),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: AppColors.textTertiary,
-                            ),
+                        style: AppTypography.mono(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ],
                   ),
@@ -219,8 +200,8 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
         children: [
           const SizedBox(height: 40),
           
-          // Большой аватар AI с анимацией
-          _AiAvatarLarge(animation: _avatarPulseAnimation),
+          // Большой аватар AI
+          const _AiAvatarLarge(),
           
           const SizedBox(height: 24),
           
@@ -408,98 +389,49 @@ class _AiAssistantChatScreenState extends State<AiAssistantChatScreen>
 // ВИДЖЕТЫ
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Маленький аватар AI для AppBar.
+/// Маленький аватар AI для AppBar: стальная плитка.
 class _AiAvatarSmall extends StatelessWidget {
-  const _AiAvatarSmall({required this.animation});
-
-  final Animation<double> animation;
+  const _AiAvatarSmall();
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        return Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.action.withOpacity(0.8 * animation.value),
-                AppColors.primary.withOpacity(0.6 * animation.value),
-                AppColors.action.withOpacity(0.9 * animation.value),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.action.withOpacity(0.3 * animation.value),
-                blurRadius: 8,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.auto_awesome,
-            color: Colors.white,
-            size: 20,
-          ),
-        );
-      },
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: AppColors.surfaceElevated,
+        border: Border.all(color: AppColors.outline),
+      ),
+      child: const Icon(
+        Icons.auto_awesome,
+        color: AppColors.primary,
+        size: 20,
+      ),
     );
   }
 }
 
-/// Большой аватар AI для welcome screen.
+/// Большой аватар AI для welcome screen: стальной круг с фаской.
 class _AiAvatarLarge extends StatelessWidget {
-  const _AiAvatarLarge({required this.animation});
-
-  final Animation<double> animation;
+  const _AiAvatarLarge();
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        return Container(
-          width: 100,
-          height: 100,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: SweepGradient(
-              colors: [
-                AppColors.action,
-                AppColors.primary,
-                AppColors.action.withOpacity(0.7),
-                AppColors.actionLight,
-                AppColors.action,
-              ],
-              transform: GradientRotation(animation.value * math.pi * 2),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.action.withOpacity(0.4 * animation.value),
-                blurRadius: 20,
-                spreadRadius: 4,
-              ),
-            ],
-          ),
-          child: Container(
-            margin: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.surface,
-            ),
-            child: const Icon(
-              Icons.psychology,
-              color: AppColors.action,
-              size: 48,
-            ),
-          ),
-        );
-      },
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.surface2,
+        border: Border.all(color: AppColors.outline),
+        boxShadow: AppShadows.bevel(),
+      ),
+      child: const Icon(
+        Icons.psychology,
+        color: AppColors.primary,
+        size: 48,
+      ),
     );
   }
 }
@@ -559,7 +491,7 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.action.withOpacity(0.12),
+          color: AppColors.surface2,
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(18),
             topRight: Radius.circular(18),
@@ -580,7 +512,7 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
                       width: 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: AppColors.action.withOpacity(
+                        color: AppColors.textSecondary.withOpacity(
                           0.5 + 0.5 * _animations[i].value,
                         ),
                         shape: BoxShape.circle,
@@ -594,9 +526,10 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
             const SizedBox(width: 8),
             Text(
               L10n.of(context).aiThinking,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: AppColors.action,
-                  ),
+              style: AppTypography.mono(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -627,10 +560,10 @@ class _MessageBubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: isUser
-              ? AppColors.actionDark
+              ? AppColors.actionContainer
               : isError
                   ? AppColors.danger.withOpacity(0.15)
-                  : AppColors.action.withOpacity(0.12),
+                  : AppColors.surface2,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -650,7 +583,7 @@ class _MessageBubble extends StatelessWidget {
               Text(
                 message.content,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.white,
+                      color: AppColors.onActionContainer,
                     ),
               )
             else
@@ -671,13 +604,14 @@ class _MessageBubble extends StatelessWidget {
             // Время
             Text(
               DateFormat.Hm().format(message.createdAt),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: isUser
-                        ? Colors.white.withOpacity(0.7)
-                        : isError
-                            ? AppColors.danger
-                            : AppColors.textTertiary,
-                  ),
+              style: AppTypography.mono(
+                fontSize: 11,
+                color: isUser
+                    ? AppColors.onActionContainer.withOpacity(0.6)
+                    : isError
+                        ? AppColors.danger
+                        : AppColors.textTertiary,
+              ),
             ),
           ],
         ),
@@ -693,7 +627,8 @@ class _MessageBubble extends StatelessWidget {
     final textColor = isError ? AppColors.danger : AppColors.textPrimary;
     final secondaryColor =
         isError ? AppColors.danger.withOpacity(0.8) : AppColors.textSecondary;
-    final accentColor = isError ? AppColors.danger : AppColors.action;
+    final accentColor = isError ? AppColors.danger : AppColors.primary;
+    final linkColor = isError ? AppColors.danger : AppColors.action;
 
     return MarkdownStyleSheet(
       p: Theme.of(context).textTheme.bodyMedium?.copyWith(color: textColor),
@@ -730,7 +665,7 @@ class _MessageBubble extends StatelessWidget {
       listBullet:
           Theme.of(context).textTheme.bodyMedium?.copyWith(color: textColor),
       a: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: accentColor,
+            color: linkColor,
             decoration: TextDecoration.underline,
           ),
     );
@@ -753,21 +688,8 @@ class _SendButton extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isLoading
-              ? [AppColors.surface2, AppColors.surface2]
-              : [AppColors.action, AppColors.actionDark],
-        ),
+        color: isLoading ? AppColors.surface2 : AppColors.action,
         borderRadius: BorderRadius.circular(22),
-        boxShadow: isLoading
-            ? null
-            : [
-                BoxShadow(
-                  color: AppColors.action.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -786,7 +708,7 @@ class _SendButton extends StatelessWidget {
                   )
                 : const Icon(
                     Icons.send_rounded,
-                    color: Colors.white,
+                    color: AppColors.onAction,
                     size: 20,
                   ),
           ),
